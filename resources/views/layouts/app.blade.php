@@ -312,9 +312,9 @@
                         <a href="{{ route('vente.journee.cloture') }}" class="menu-item {{ request()->routeIs('vente.journee.cloture') ? 'active' : '' }}">Clôture Journée</a>
                     </li>
                     <li>
-                        <a href="#" class="menu-item">Etat Journée</a>
-                    </li>
-                    <li>
+                        <a href="{{ route('vente.journee.etat') }}" class="menu-item">
+                            Etat Journée
+                        </a>
                         <a href="#" class="menu-item">Consultation Journées</a>
                     </li>
                 </ul>

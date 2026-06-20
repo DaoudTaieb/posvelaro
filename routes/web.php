@@ -37,6 +37,8 @@ Route::middleware('auth')->group(function () {
         // Journée
         Route::get('/journee/ouverture', [JourneeController::class, 'ouverture'])->name('journee.ouverture');
         Route::post('/journee/ouverture', [JourneeController::class, 'storeOuverture'])->name('journee.ouverture.store');
+        Route::get('/journee/etat', [JourneeController::class, 'etat'])->name('journee.etat');
+        Route::get('/journee/etat/filter', [JourneeController::class, 'etatFilter'])->name('journee.etat.filter');
         Route::get('/journee/cloture', [JourneeController::class, 'cloture'])->name('journee.cloture');
         Route::post('/journee/cloture', [JourneeController::class, 'storeCloture'])->name('journee.cloture.store');
         
