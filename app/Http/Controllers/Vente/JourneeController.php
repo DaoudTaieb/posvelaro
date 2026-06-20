@@ -10,6 +10,174 @@ use Illuminate\Support\Facades\Auth;
 class JourneeController extends Controller
 {
     /**
+     * Affiche la liste des journées de caisse.
+     */
+    public function index(Request $request)
+    {
+        $query = DB::table('journalcaisses')
+            ->leftJoin('users', 'journalcaisses.userid', '=', 'users.userid')
+            ->leftJoin('sites', 'journalcaisses.siteid', '=', 'sites.siteid')
+            ->select(
+                'journalcaisses.*',
+                'users.login as caissier_nom',
+                'sites.libelle as agence_nom'
+            );
+
+        // Filtre par site par défaut (sauf si admin)
+        $user = Auth::user();
+        if ($user->siteid) {
+            $query->where('journalcaisses.siteid', $user->siteid);
+        }
+
+        // Filtre par date
+        $dateDu = $request->input('date_du', now()->format('Y-m-d'));
+        $dateAu = $request->input('date_au', now()->format('Y-m-d'));
+
+        if ($dateDu) {
+            $query->whereDate('journalcaisses.dateouverture', '>=', $dateDu);
+        }
+        if ($dateAu) {
+            $query->whereDate('journalcaisses.dateouverture', '<=', $dateAu);
+        }
+
+        $journees = $query->orderBy('journalcaisses.journalcaisseid', 'desc')->get();
+
+        return view('vente.journee.index', compact('journees', 'dateDu', 'dateAu'));
+    }
+
+    /**
+     * Affiche le ticket de clôture d'une journée.
+     */
+    public function show($id)
+    {
+        $journee = DB::table('journalcaisses')
+            ->leftJoin('users', 'journalcaisses.userid', '=', 'users.userid')
+            ->leftJoin('caisses', 'journalcaisses.caisseid', '=', 'caisses.caisseid')
+            ->select(
+                'journalcaisses.*',
+                'users.login as caissier_nom',
+                'caisses.numero as caisse_numero'
+            )
+            ->where('journalcaisseid', $id)
+            ->first();
+
+        if (!$journee) {
+            abort(404);
+        }
+
+        // Si l'utilisateur a une restriction de site
+        $user = Auth::user();
+        if ($user->siteid && $journee->siteid != $user->siteid) {
+            abort(403, 'Accès non autorisé.');
+        }
+
+        return view('vente.journee.show', compact('journee'));
+    }
+
+    /**
+     * Affiche le ticket de détails d'une journée (Détails Ventes Journée).
+     */
+    public function details($id)
+    {
+        $journee = DB::table('journalcaisses')
+            ->leftJoin('sites', 'journalcaisses.siteid', '=', 'sites.siteid')
+            ->leftJoin('caisses', 'journalcaisses.caisseid', '=', 'caisses.caisseid')
+            ->select(
+                'journalcaisses.*',
+                'sites.libelle as agence_nom',
+                'caisses.numero as caisse_numero',
+                'caisses.libelle as caisse_nom'
+            )
+            ->where('journalcaisseid', $id)
+            ->first();
+
+        if (!$journee) {
+            abort(404);
+        }
+
+        // Restriction site
+        $user = Auth::user();
+        if ($user->siteid && $journee->siteid != $user->siteid) {
+            abort(403, 'Accès non autorisé.');
+        }
+
+        // Récupération des lignes de tickets de la journée
+        $lines = DB::table('detctickets')
+            ->join('ctickets', 'detctickets.cticketid', '=', 'ctickets.cticketid')
+            ->leftJoin('produits', 'detctickets.produitid', '=', 'produits.produitid')
+            ->leftJoin('produit2s', 'detctickets.produit2id', '=', 'produit2s.produit2id')
+            ->leftJoin('familles', 'produits.familleid', '=', 'familles.familleid')
+            ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
+            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
+            ->leftJoin('users', 'ctickets.userid', '=', 'users.userid')
+            ->where('ctickets.journalcaisseid', $id)
+            ->where('detctickets.qte', '!=', 0) // Ignorer les lignes vides
+            ->select(
+                'detctickets.qte',
+                'produits.produitlibelle',
+                'produits.produitcode',
+                'familles.famillelibelle',
+                'sousfamilles.sousfamillelibelle',
+                'couleurs.couleurlibelle',
+                'users.login as vendeur_nom'
+            )
+            ->get();
+
+        $totalQte = $lines->sum('qte');
+        $chiffre = $journee->recettebrut ?? 0;
+
+        // 1. Agrégation par Famille > SousFamille > Produit
+        $groupedByFamille = [];
+        foreach ($lines as $line) {
+            $famille = $line->famillelibelle ?: 'SANS FAMILLE';
+            $sousFamille = $line->sousfamillelibelle ?: 'SANS SOUS-FAMILLE';
+            $produit = $line->produitcode . ' ' . $line->produitlibelle;
+
+            if (!isset($groupedByFamille[$famille])) {
+                $groupedByFamille[$famille] = ['total_qte' => 0, 'sous_familles' => []];
+            }
+            if (!isset($groupedByFamille[$famille]['sous_familles'][$sousFamille])) {
+                $groupedByFamille[$famille]['sous_familles'][$sousFamille] = ['total_qte' => 0, 'produits' => []];
+            }
+            if (!isset($groupedByFamille[$famille]['sous_familles'][$sousFamille]['produits'][$produit])) {
+                $groupedByFamille[$famille]['sous_familles'][$sousFamille]['produits'][$produit] = 0;
+            }
+
+            $groupedByFamille[$famille]['sous_familles'][$sousFamille]['produits'][$produit] += $line->qte;
+            $groupedByFamille[$famille]['sous_familles'][$sousFamille]['total_qte'] += $line->qte;
+            $groupedByFamille[$famille]['total_qte'] += $line->qte;
+        }
+
+        // 2. Agrégation par Couleur
+        $groupedByCouleur = [];
+        foreach ($lines as $line) {
+            $couleur = $line->couleurlibelle ?: 'SANS COULEUR';
+            if (!isset($groupedByCouleur[$couleur])) {
+                $groupedByCouleur[$couleur] = 0;
+            }
+            $groupedByCouleur[$couleur] += $line->qte;
+        }
+
+        // 3. Agrégation par Vendeur
+        $groupedByVendeur = [];
+        foreach ($lines as $line) {
+            $vendeur = $line->vendeur_nom ?: 'Inconnu';
+            if (!isset($groupedByVendeur[$vendeur])) {
+                $groupedByVendeur[$vendeur] = 0;
+            }
+            $groupedByVendeur[$vendeur] += $line->qte;
+        }
+
+        return view('vente.journee.details', compact(
+            'journee', 
+            'totalQte', 
+            'chiffre', 
+            'groupedByFamille', 
+            'groupedByCouleur', 
+            'groupedByVendeur'
+        ));
+    }
+    /**
      * Affiche l'interface d'ouverture de journée.
      */
     public function ouverture()
@@ -203,9 +371,9 @@ class JourneeController extends Controller
             'autres' => (float) ($reglements->get(12)->total ?? 0),
         ];
         
-        $recetteNette = array_sum($recettes) - $recettes['depense'] * 2; // Adjust since depense is positive but shouldn't add to sum
-        // More accurate Recette Nette calculation
-        $recetteBrute = $recettes['espece'] + $recettes['cheque'] + $recettes['carte_credit'] + $recettes['bon_achats'] + $recettes['cheque_cadeau'] + $recettes['autres'];
+        $totalRecettesDetails = $recettes['espece'] + $recettes['cheque'] + $recettes['carte_credit'] + $recettes['bon_achats'] + $recettes['cheque_cadeau'] + $recettes['autres'];
+        $recetteBrute = $totalRecettesDetails;
+        $recetteNette = $recetteBrute - $recettes['depense'];
         
         $caisseTotaux = [
             'ventes_reglees' => $recetteBrute,
@@ -215,14 +383,14 @@ class JourneeController extends Controller
             'depenses_divers' => $recettes['depense'],
             'acomptes_personnels' => 0,
             'commissions' => 0,
-            'recette_nette' => $recetteBrute - $recettes['depense'],
+            'recette_nette' => $recetteNette,
         ];
 
         return view('vente.journee.etat', compact(
             'journalCaisse', 'caisse', 'adminName',
             'ventesRaw', 'totalVentesQte', 'totalVentesMontant', 'totalRetourQte', 'totalRetourMontant',
             'caSousFamilles', 'caVendeur', 'totalVendeurMontant',
-            'recettes', 'caisseTotaux'
+            'recettes', 'caisseTotaux', 'totalRecettesDetails'
         ));
     }
 
@@ -412,10 +580,11 @@ class JourneeController extends Controller
         $recettenet      = $recettebrut;
         $ventereglee     = (float) ($ticketsTotals->ventereglee ?? 0);
         $montanttheorique = $totalEspece + $fondCaisse;
+        $totalTheoriqueTousModes = $montanttheorique + $totalCheque + $totalTpe + $totalContrebon + $totalBonConv + $totalAvoir + $totalAutre;
         $recettephysique = $especePhys + $chequePhys + $tpePhys + $contrebonPhys + $bonConvPhys + $avoirPhys + $autrePhys;
         $montantcloture  = $especePhys;
-        $ecart           = $recettephysique - $montanttheorique;
-        $totalecart      = $especePhys - ($totalEspece + $fondCaisse);
+        $ecart           = $recettephysique - $totalTheoriqueTousModes;
+        $totalecart      = $especePhys - $montanttheorique;
 
         // Mise à jour de l'enregistrement journalcaisses
         DB::table('journalcaisses')
@@ -442,7 +611,7 @@ class JourneeController extends Controller
                 'totalcontrebonphys'    => $contrebonPhys,
                 'totalbonconventionphys' => $bonConvPhys,
                 'totalregavoirphys'     => $avoirPhys,
-                'totalregautrephys'     => $autrePhys + $fondCaisse,
+                'totalregautrephys'     => $autrePhys,
 
                 // Agrégats
                 'montantcloture'    => $montantcloture,

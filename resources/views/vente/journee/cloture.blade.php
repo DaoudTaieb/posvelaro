@@ -25,6 +25,24 @@
     </div>
     @endif
 
+    @if($errors->any())
+    <div style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 12px; font-weight: 600; margin-bottom: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            Veuillez corriger les erreurs suivantes :
+        </div>
+        <ul style="margin: 0; padding-left: 36px; color: var(--danger); font-size: 14px;">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+
     <div style="background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden;">
         
         {{-- En-tête --}}
@@ -276,7 +294,7 @@
                     </svg>
                     Fermeture de la journée de vente
                 </div>
-                <button type="submit" id="submitCloture" style="background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                <button type="submit" id="submitCloture" onclick="return confirm('Êtes-vous sûr de vouloir clôturer cette journée de vente ?')" style="background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                         <polyline points="17 21 17 13 7 13 7 21"></polyline>
@@ -367,12 +385,5 @@
         btn.classList.add('copied');
         setTimeout(() => btn.classList.remove('copied'), 800);
     }
-
-    // Confirmation avant clôture
-    document.getElementById('clotureForm').addEventListener('submit', function(e) {
-        if (!confirm('Êtes-vous sûr de vouloir clôturer cette journée de vente ?')) {
-            e.preventDefault();
-        }
-    });
 </script>
 @endsection

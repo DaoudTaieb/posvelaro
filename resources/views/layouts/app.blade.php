@@ -315,7 +315,65 @@
                         <a href="{{ route('vente.journee.etat') }}" class="menu-item">
                             Etat Journée
                         </a>
-                        <a href="#" class="menu-item">Consultation Journées</a>
+                        <a href="{{ route('vente.journee.index') }}" class="menu-item {{ request()->routeIs('vente.journee.index') ? 'active' : '' }}">Consultation Journées</a>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="menu-group">
+                <div class="menu-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    Stock
+                </div>
+                <ul class="menu-list">
+                    <li>
+                        <a href="{{ route('stock.articles.index') }}" class="menu-item {{ request()->routeIs('stock.articles.*') ? 'active' : '' }}">Articles</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('stock.consultation.index') }}" class="menu-item {{ request()->routeIs('stock.consultation.*') ? 'active' : '' }}">Consultation Stock</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('stock.detaille.index') }}" class="menu-item {{ request()->routeIs('stock.detaille.*') ? 'active' : '' }}">Stock Détaillé</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('stock.mouvements.index') }}" class="menu-item {{ request()->routeIs('stock.mouvements.*') ? 'active' : '' }}">Mouvements Articles</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('stock.etat.index') }}" class="menu-item {{ request()->routeIs('stock.etat.*') ? 'active' : '' }}">Etat de Stock</a>
+                    </li>
+                </ul>
+            </div>
+            <!-- Section Transfert -->
+            <div class="menu-section">
+                <div class="menu-header" onclick="toggleMenu('transfert-menu')">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        <span>Transfert</span>
+                    </div>
+                    <svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+                <ul class="menu-list" id="transfert-menu">
+                    <li>
+                        <a href="{{ route('transfert.demande_envoye.index') }}" class="menu-item {{ request()->routeIs('transfert.demande_envoye.*') ? 'active' : '' }}">Demande Trans Envoyé</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('transfert.demande_recu.index') }}" class="menu-item {{ request()->routeIs('transfert.demande_recu.*') ? 'active' : '' }}">Demande Trans reçu</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('transfert.envoye.index') }}" class="menu-item {{ request()->routeIs('transfert.envoye.*') ? 'active' : '' }}">Transfert Envoyé</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('transfert.recu.index') }}" class="menu-item {{ request()->routeIs('transfert.recu.*') ? 'active' : '' }}">Transfert reçu</a>
                     </li>
                 </ul>
             </div>

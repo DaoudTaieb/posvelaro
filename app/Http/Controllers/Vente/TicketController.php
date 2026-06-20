@@ -44,7 +44,10 @@ class TicketController extends Controller
             $query->where('ctickets.clientid', $request->client);
         }
         if ($request->filled('caissier')) {
-            $query->where('ctickets.caissierid', $request->caissier);
+            $query->where(function($q) use ($request) {
+                $q->where('ctickets.caissierid', $request->caissier)
+                  ->orWhere('ctickets.userid', $request->caissier);
+            });
         }
         if ($request->filled('vendeur')) {
             $query->where('ctickets.employeeid', $request->vendeur);
@@ -101,7 +104,7 @@ class TicketController extends Controller
 
                 $totalQte = (clone $query)->sum('ctickets.totalqte');
                 $totalBrutHt = (clone $query)->sum('ctickets.totalbrutht');
-                $totalRemise = (clone $query)->sum('ctickets.remise');
+                $totalRemise = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('ctickets.totalbrutht - ctickets.totalnetht'));
                 $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
                 $totalTva = (clone $query)->sum('ctickets.totaltva');
                 $totalTtc = (clone $query)->sum('ctickets.totalttc');
@@ -147,10 +150,98 @@ class TicketController extends Controller
     }
 
     /**
-     * Affiche les détails d'un ticket spécifique.
+     * Affiche les détails d'un ticket spécifique (receipt format).
      */
     public function show($id)
     {
-        // Logique pour afficher les détails du ticket
+        $ticket = \Illuminate\Support\Facades\DB::table('ctickets')
+            ->where('cticketid', $id)
+            ->first();
+
+        if (!$ticket) {
+            abort(404, 'Ticket non trouvé');
+        }
+
+        // Get company info
+        $societe = \Illuminate\Support\Facades\DB::table('societes')->first();
+
+        // Get caisse
+        $caisse = \Illuminate\Support\Facades\DB::table('caisses')
+            ->where('caisseid', $ticket->caisseid)
+            ->first();
+
+        // Get caissier name
+        $caissier = \Illuminate\Support\Facades\DB::table('users')
+            ->where('userid', $ticket->caissierid)
+            ->first();
+        $caissier_nom = $caissier->login ?? '';
+
+        // If caissierid is 0, try userid
+        if (empty($caissier_nom) || $ticket->caissierid == 0) {
+            $userCreator = \Illuminate\Support\Facades\DB::table('users')
+                ->where('userid', $ticket->userid)
+                ->first();
+            $caissier_nom = $userCreator->login ?? '';
+        }
+
+        // Get vendeur name
+        $vendeur = \Illuminate\Support\Facades\DB::table('employees')
+            ->where('employeeid', $ticket->employeeid)
+            ->first();
+        // Avoid duplicate if nom == prenom
+        $vNom = $vendeur->nom ?? '';
+        $vPrenom = $vendeur->prenom ?? '';
+        $vendeur_nom = (strtolower(trim($vNom)) === strtolower(trim($vPrenom)))
+            ? trim($vNom)
+            : trim("$vNom $vPrenom");
+
+        // Get client name
+        $client = \Illuminate\Support\Facades\DB::table('clients')
+            ->where('clientid', $ticket->clientid)
+            ->first();
+        $client_nom = trim(($client->nom ?? '') . ' ' . ($client->prenom ?? ''));
+        if (empty(trim($client_nom))) {
+            $client_nom = 'PASSAGER';
+        }
+
+        // Get detail lines with product info + variant (produit2s: couleur/taille)
+        $lignes = \Illuminate\Support\Facades\DB::table('detctickets')
+            ->leftJoin('produits', 'detctickets.produitid', '=', 'produits.produitid')
+            ->leftJoin('produit2s', 'detctickets.produit2id', '=', 'produit2s.produit2id')
+            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
+            ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+            ->where('detctickets.cticketid', $id)
+            ->select(
+                'detctickets.*',
+                'produits.produitlibelle as produit_libelle',
+                'produits.reference as produit_ref',
+                'produits.produitcode as produit_code',
+                'couleurs.couleurlibelle as couleur_libelle',
+                'tailles.taillelibelle as taille_libelle'
+            )
+            ->get();
+
+        $total_articles = $lignes->count();
+
+        // Compute remise amount (remise field is a PERCENTAGE, not an amount)
+        $remise_montant = (float)($ticket->totalbrutht ?? 0) - (float)($ticket->totalttc ?? 0);
+
+        // Get payment details
+        $reglements = \Illuminate\Support\Facades\DB::table('creglementdets')
+            ->leftJoin('creglements', 'creglementdets.creglementid', '=', 'creglements.creglementid')
+            ->leftJoin('modereglements', 'creglements.modereglementid', '=', 'modereglements.modereglementid')
+            ->where('creglementdets.documentid', $id)
+            ->where('creglementdets.typeid', 1)
+            ->select(
+                'creglementdets.montant',
+                'creglements.date',
+                'modereglements.libelle as mode_libelle'
+            )
+            ->get();
+
+        return view('vente.tickets.show', compact(
+            'ticket', 'societe', 'caisse', 'caissier_nom', 'vendeur_nom',
+            'client_nom', 'lignes', 'total_articles', 'reglements', 'remise_montant'
+        ));
     }
 }

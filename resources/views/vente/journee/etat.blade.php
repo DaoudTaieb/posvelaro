@@ -210,7 +210,7 @@
                         <tr><td style="padding: 4px 6px; border-right: 1px solid #e2e8f0;">Bon D'Achats</td><td style="text-align: right; padding: 4px 6px;">{{ number_format($recettes['bon_achats'], 3, '.', '') }}</td></tr>
                         <tr><td style="padding: 4px 6px; border-right: 1px solid #e2e8f0;">Chèque Cadeau</td><td style="text-align: right; padding: 4px 6px;">{{ number_format($recettes['cheque_cadeau'], 3, '.', '') }}</td></tr>
                         <tr><td style="padding: 4px 6px; border-right: 1px solid #e2e8f0;">Autres</td><td style="text-align: right; padding: 4px 6px;">{{ number_format($recettes['autres'], 3, '.', '') }}</td></tr>
-                        <tr style="font-weight: 700; border-top: 1px solid #e2e8f0;"><td style="padding: 6px; border-right: 1px solid #e2e8f0;">Total</td><td style="text-align: right; padding: 6px;">{{ number_format(array_sum($recettes), 3, '.', '') }}</td></tr>
+                        <tr style="font-weight: 700; border-top: 1px solid #e2e8f0;"><td style="padding: 6px; border-right: 1px solid #e2e8f0;">Total</td><td style="text-align: right; padding: 6px;">{{ number_format($totalRecettesDetails, 3, '.', '') }}</td></tr>
                     </tbody>
                 </table>
             </div>

@@ -2,6 +2,76 @@
 
 @section('title', 'Velaro POS — Dashboard')
 
+@section('styles')
+<style>
+    .welcome-section {
+        margin-bottom: 32px;
+    }
+    
+    .welcome-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
+    }
+    
+    .welcome-title span {
+        color: var(--primary);
+    }
+    
+    .welcome-subtitle {
+        font-size: 15px;
+        color: var(--text-secondary);
+    }
+    
+    .status-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    
+    .status-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--success-bg);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.1);
+    }
+    
+    .status-icon svg {
+        width: 40px;
+        height: 40px;
+        color: var(--success);
+    }
+    
+    .status-title {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 12px;
+    }
+    
+    .status-text {
+        font-size: 15px;
+        color: var(--text-secondary);
+        line-height: 1.6;
+    }
+</style>
+@endsection
+
 @section('content')
 <div class="main-content-inner">
     <div class="welcome-section">

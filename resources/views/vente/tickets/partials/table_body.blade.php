@@ -1,5 +1,5 @@
 @forelse($tickets as $ticket)
-<tr class="ticket-row">
+<tr class="ticket-row" data-id="{{ $ticket->cticketid }}" style="cursor: pointer;" title="Double-cliquez pour voir le ticket">
     <td>{{ isset($ticket->cticketdate) ? \Carbon\Carbon::parse($ticket->cticketdate)->format('d/m/Y') : '' }}</td>
     <td>{{ $ticket->numerointerne ?? $ticket->cticketnumero ?? '' }}</td>
     <td>

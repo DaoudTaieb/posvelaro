@@ -20,14 +20,7 @@
                 </svg>
                 Consultation des Tickets
             </h2>
-            <div class="actions">
-                <button class="btn-icon" style="background: none; border: none; cursor: pointer; color: var(--text-secondary);">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
+            <!-- The actions div with the close button has been removed -->
         </div>
 
         <!-- Advanced Filters Area -->
@@ -36,16 +29,16 @@
                 <!-- Dates -->
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Du</label>
-                    <input type="date" class="form-control filter-date" name="date_du" id="filter_date_du" value="" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+                    <input type="date" class="form-control filter-date" name="date_du" id="filter_date_du" value="{{ request('date_du') }}" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Au</label>
-                    <input type="date" class="form-control filter-date" name="date_au" id="filter_date_au" value="" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+                    <input type="date" class="form-control filter-date" name="date_au" id="filter_date_au" value="{{ request('date_au', now()->format('Y-m-d')) }}" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Statut</label>
                     <select class="form-control filter-dropdown" name="statut" id="filter_statut" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
-                        <option value="">Tous les statuts</option>
+                        <option value=""></option>
                         @foreach($statuts as $st)
                             <option value="{{ $st->statutdocumentid }}" {{ request('statut') == $st->statutdocumentid ? 'selected' : '' }}>{{ $st->libelle }}</option>
                         @endforeach
@@ -54,9 +47,9 @@
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Client</label>
                     <select class="form-control filter-dropdown" name="client" id="filter_client" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
-                        <option value="">Tous les clients</option>
+                        <option value=""></option>
                         @foreach($clients as $c)
-                            <option value="{{ $c->clientid }}">{{ $c->nom }}</option>
+                            <option value="{{ $c->clientid }}" {{ request('client') == $c->clientid ? 'selected' : '' }}>{{ $c->nom }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -65,18 +58,18 @@
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Caissier</label>
                     <select class="form-control filter-dropdown" name="caissier" id="filter_caissier" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
-                        <option value="">Tous les caissiers</option>
+                        <option value=""></option>
                         @foreach($caissiers as $c)
-                            <option value="{{ $c->userid }}">{{ $c->login }}</option>
+                            <option value="{{ $c->userid }}" {{ request('caissier', Auth::id()) == $c->userid ? 'selected' : '' }}>{{ $c->login }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Vendeur</label>
                     <select class="form-control filter-dropdown" name="vendeur" id="filter_vendeur" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
-                        <option value="">Tous les vendeurs</option>
+                        <option value=""></option>
                         @foreach($vendeurs as $v)
-                            <option value="{{ $v->employeeid }}">{{ $v->nom }}</option>
+                            <option value="{{ $v->employeeid }}" {{ request('vendeur') == $v->employeeid ? 'selected' : '' }}>{{ $v->nom }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -173,6 +166,20 @@
         <!-- Pagination -->
         <div class="pagination-wrapper" id="paginationWrapper" style="padding: 12px 16px; border-top: 1px solid var(--border);">
             {{ $tickets->links() }}
+        </div>
+    </div>
+</div>
+
+<!-- Ticket Modal -->
+<div id="ticketModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 8px; padding: 20px; max-width: 380px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <button id="closeTicketModal" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        <button id="printTicketBtn" style="position: absolute; top: 10px; left: 10px; background: var(--primary, #0ea5e9); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            Imprimer
+        </button>
+        <div id="ticketModalContent" style="margin-top: 30px; display: flex; justify-content: center;">
+            <!-- Receipt content goes here -->
         </div>
     </div>
 </div>
@@ -433,6 +440,45 @@
             input.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') fetchFilteredData();
             });
+        });
+
+        // Double click on table row to show ticket
+        tableBody.addEventListener('dblclick', function(e) {
+            const row = e.target.closest('.ticket-row');
+            if (row && row.dataset.id) {
+                const ticketId = row.dataset.id;
+                fetch(`/vente/tickets/${ticketId}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(res => res.text())
+                .then(html => {
+                    document.getElementById('ticketModalContent').innerHTML = html;
+                    document.getElementById('ticketModal').style.display = 'flex';
+                })
+                .catch(err => console.error('Error fetching ticket details:', err));
+            }
+        });
+
+        document.getElementById('closeTicketModal').addEventListener('click', function() {
+            document.getElementById('ticketModal').style.display = 'none';
+        });
+
+        document.getElementById('ticketModal').addEventListener('click', function(e) {
+            if (e.target === this) this.style.display = 'none';
+        });
+
+        document.getElementById('printTicketBtn').addEventListener('click', function() {
+            const content = document.getElementById('ticketModalContent').innerHTML;
+            const printWindow = window.open('', '_blank', 'width=800,height=600');
+            printWindow.document.write('<html><head><title>Imprimer Ticket</title></head><body style="margin:0; padding:0; display:flex; justify-content:center;">');
+            printWindow.document.write(content);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
         });
 
         function attachPaginationEvents() {
