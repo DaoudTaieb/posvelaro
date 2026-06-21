@@ -282,7 +282,7 @@
                 </div>
                 <ul class="menu-list">
                     <li>
-                        <a href="{{ route('vente.caisse.index') }}" class="menu-item {{ request()->routeIs('vente.caisse.*') ? 'active' : '' }}">Caisse</a>
+                        <a href="{{ route('vente.caisse.pos') }}" class="menu-item {{ request()->routeIs('vente.caisse.*') ? 'active' : '' }}">Caisse</a>
                     </li>
                     <li>
                         <a href="{{ route('vente.tickets.index') }}" class="menu-item {{ request()->routeIs('vente.tickets.*') ? 'active' : '' }}">Consultation Tickets</a>
@@ -375,6 +375,24 @@
                     <li>
                         <a href="{{ route('transfert.recu.index') }}" class="menu-item {{ request()->routeIs('transfert.recu.*') ? 'active' : '' }}">Transfert reçu</a>
                     </li>
+            </div>
+
+            <!-- Section Paramètres -->
+            <div class="menu-group">
+                <div class="menu-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    Parametres
+                </div>
+                <ul class="menu-list">
+                    <li><a href="{{ route('parametre.configuration.general') }}" class="menu-item {{ request()->routeIs('parametre.configuration.general') ? 'active' : '' }}">General</a></li>
+                    <li><a href="{{ route('parametre.caisse.index') }}" class="menu-item {{ request()->routeIs('parametre.caisse.index') ? 'active' : '' }}">Caisse</a></li>
+                    <li><a href="{{ route('parametre.utilisateur.index') }}" class="menu-item {{ request()->routeIs('parametre.utilisateur.*') ? 'active' : '' }}">Gestion des utilisateur</a></li>
+                    <li><a href="{{ route('parametre.droit.index') }}" class="menu-item {{ request()->routeIs('parametre.droit.*') ? 'active' : '' }}">Gestion des Droits</a></li>
+                    <li><a href="{{ route('parametre.vendeur.index') }}" class="menu-item {{ request()->routeIs('parametre.vendeur.*') ? 'active' : '' }}">Gestion des Vendeurs</a></li>
+                    <li><a href="{{ route('parametre.caisse.liberation') }}" class="menu-item {{ request()->routeIs('parametre.caisse.liberation') ? 'active' : '' }}">Libération de caisse</a></li>
                 </ul>
             </div>
         </aside>

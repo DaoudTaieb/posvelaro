@@ -53,10 +53,41 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/recu', [\App\Http\Controllers\Transfert\TransfertRecuController::class, 'index'])->name('transfert.recu.index');
     });
 
+    // -- Section PARAMETRES --
+    Route::prefix('parametre')->name('parametre.')->group(function () {
+        Route::post('/caisse/liberer/{id}', [\App\Http\Controllers\Parametre\CaisseController::class, 'liberer'])->name('caisse.liberer');
+        
+        Route::get('/vendeur', [\App\Http\Controllers\Parametre\VendeurController::class, 'index'])->name('vendeur.index');
+        Route::post('/vendeur', [\App\Http\Controllers\Parametre\VendeurController::class, 'store'])->name('vendeur.store');
+        Route::put('/vendeur/{id}', [\App\Http\Controllers\Parametre\VendeurController::class, 'update'])->name('vendeur.update');
+        Route::delete('/vendeur/{id}', [\App\Http\Controllers\Parametre\VendeurController::class, 'destroy'])->name('vendeur.destroy');
+
+        Route::get('/configuration/general', [\App\Http\Controllers\Parametre\ConfigurationController::class, 'general'])->name('configuration.general');
+        Route::post('/configuration/general', [\App\Http\Controllers\Parametre\ConfigurationController::class, 'updateGeneral'])->name('configuration.general.update');
+
+        Route::get('/caisse/configuration', [\App\Http\Controllers\Parametre\CaisseController::class, 'index'])->name('caisse.index');
+        Route::post('/caisse/configuration', [\App\Http\Controllers\Parametre\CaisseController::class, 'store'])->name('caisse.store');
+        Route::put('/caisse/configuration/{id}', [\App\Http\Controllers\Parametre\CaisseController::class, 'update'])->name('caisse.update');
+        Route::delete('/caisse/configuration/{id}', [\App\Http\Controllers\Parametre\CaisseController::class, 'destroy'])->name('caisse.destroy');
+
+        Route::get('/caisse/liberation', [\App\Http\Controllers\Parametre\CaisseController::class, 'liberation'])->name('caisse.liberation');
+        
+        Route::get('/droit', [\App\Http\Controllers\Parametre\DroitController::class, 'index'])->name('droit.index');
+        Route::post('/droit/role', [\App\Http\Controllers\Parametre\DroitController::class, 'storeRole'])->name('droit.role.store');
+        Route::put('/droit/role/{id}', [\App\Http\Controllers\Parametre\DroitController::class, 'updateRole'])->name('droit.role.update');
+        Route::delete('/droit/role/{id}', [\App\Http\Controllers\Parametre\DroitController::class, 'destroyRole'])->name('droit.role.destroy');
+        Route::post('/droit/permissions/{id}', [\App\Http\Controllers\Parametre\DroitController::class, 'updatePermissions'])->name('droit.permissions.update');
+
+        Route::get('/utilisateur', [\App\Http\Controllers\Parametre\UtilisateurController::class, 'index'])->name('utilisateur.index');
+        Route::post('/utilisateur', [\App\Http\Controllers\Parametre\UtilisateurController::class, 'store'])->name('utilisateur.store');
+        Route::put('/utilisateur/{id}', [\App\Http\Controllers\Parametre\UtilisateurController::class, 'update'])->name('utilisateur.update');
+        Route::delete('/utilisateur/{id}', [\App\Http\Controllers\Parametre\UtilisateurController::class, 'destroy'])->name('utilisateur.destroy');
+    });
+
     // -- Section VENTE --
     Route::prefix('vente')->name('vente.')->group(function () {
         // Caisse
-        Route::get('/caisse', [CaisseController::class, 'index'])->name('caisse.index');
+        Route::get('/caisse/pos', [\App\Http\Controllers\PosController::class, 'index'])->name('caisse.pos');
         Route::post('/caisse', [CaisseController::class, 'store'])->name('caisse.store');
         
         // Consultation Tickets
