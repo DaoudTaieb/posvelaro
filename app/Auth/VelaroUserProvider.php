@@ -26,4 +26,13 @@ class VelaroUserProvider extends EloquentUserProvider
         // Fallback to plain text comparison
         return $plain === $storedPassword;
     }
+
+    /**
+     * Disable automatic password rehashing on login.
+     * This prevents Laravel from converting plain text passwords to bcrypt hashes.
+     */
+    public function rehashPasswordIfRequired(Authenticatable $user, array $credentials, bool $force = false): void
+    {
+        // Do nothing to prevent password from being modified in the database
+    }
 }
