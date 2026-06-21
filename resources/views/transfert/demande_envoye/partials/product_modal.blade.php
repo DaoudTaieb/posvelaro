@@ -11,28 +11,28 @@
             <!-- Filters -->
             <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                 <div class="form-group" style="flex-direction: row; align-items: center;">
-                    <label style="width: 80px;">Sous Famille</label>
+                    <label>Sous Famille</label>
                     <select id="filter-sf" class="form-control" style="width: 150px;">
                         <option value=""></option>
                         @foreach($sousFamilles as $sf) <option value="{{$sf->sousfamilleid}}">{{$sf->sousfamillelibelle}}</option> @endforeach
                     </select>
                 </div>
                 <div class="form-group" style="flex-direction: row; align-items: center;">
-                    <label style="width: 45px;">Famille</label>
+                    <label>Famille</label>
                     <select id="filter-f" class="form-control" style="width: 150px;">
                         <option value=""></option>
                         @foreach($familles as $f) <option value="{{$f->familleid}}">{{$f->famillelibelle}}</option> @endforeach
                     </select>
                 </div>
                 <div class="form-group" style="flex-direction: row; align-items: center;">
-                    <label style="width: 40px;">Saison</label>
+                    <label>Saison</label>
                     <select id="filter-s" class="form-control" style="width: 150px;">
                         <option value=""></option>
                         @foreach($saisons as $s) <option value="{{$s->category4id}}">{{$s->category4libelle}}</option> @endforeach
                     </select>
                 </div>
                 <div class="form-group" style="flex-direction: row; align-items: center;">
-                    <label style="width: 55px;">Catégorie</label>
+                    <label>Catégorie</label>
                     <select id="filter-c" class="form-control" style="width: 150px;">
                         <option value=""></option>
                         @foreach($categories as $c) <option value="{{$c->categoryid}}">{{$c->categorylibelle}}</option> @endforeach
@@ -42,7 +42,7 @@
                 <div style="flex-basis: 100%; height: 0;"></div> <!-- Force new line -->
                 
                 <div class="form-group" style="flex-direction: row; align-items: center;">
-                    <label style="width: 70px;">Marque</label>
+                    <label>Marque</label>
                     <select id="filter-m" class="form-control" style="width: 150px;">
                         <option value=""></option>
                         @foreach($marques as $m) <option value="{{$m->category2id}}">{{$m->category2libelle}}</option> @endforeach

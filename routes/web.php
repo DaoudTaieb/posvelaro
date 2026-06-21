@@ -86,9 +86,23 @@ Route::middleware(['auth'])->group(function () {
 
     // -- Section VENTE --
     Route::prefix('vente')->name('vente.')->group(function () {
-        // Caisse
         Route::get('/caisse/pos', [\App\Http\Controllers\PosController::class, 'index'])->name('caisse.pos');
-        Route::post('/caisse', [CaisseController::class, 'store'])->name('caisse.store');
+        Route::get('/caisse/pos/search-products', [\App\Http\Controllers\PosController::class, 'searchProducts'])->name('caisse.pos.search_products');
+        Route::get('/caisse/pos/scan-product', [\App\Http\Controllers\PosController::class, 'scanProduct'])->name('caisse.pos.scan_product');
+        Route::get('/caisse/pos/variants', [\App\Http\Controllers\PosController::class, 'getProductVariants'])->name('caisse.pos.variants');
+        Route::get('/caisse/pos/search-clients', [\App\Http\Controllers\PosController::class, 'searchClients'])->name('caisse.pos.search_clients');
+        Route::post('/caisse/pos/store-client', [\App\Http\Controllers\PosController::class, 'storeClient'])->name('caisse.pos.store_client');
+        Route::get('/caisse/pos/client/{id}', [\App\Http\Controllers\PosController::class, 'getClient'])->name('caisse.pos.get_client');
+        Route::post('/caisse/pos/client/{id}', [\App\Http\Controllers\PosController::class, 'updateClient'])->name('caisse.pos.update_client');
+        Route::get('/caisse/pos/search-vendeurs', [\App\Http\Controllers\PosController::class, 'searchVendeurs'])->name('caisse.pos.search_vendeurs');
+        Route::get('/caisse/pos/client-history/{id}', [\App\Http\Controllers\PosController::class, 'clientHistory'])->name('caisse.pos.client_history');
+        Route::get('/caisse/pos/article-history', [\App\Http\Controllers\PosController::class, 'searchArticleHistory'])->name('caisse.pos.article_history');
+        Route::post('/caisse/pos/send-sms', [\App\Http\Controllers\PosController::class, 'sendSms'])->name('caisse.pos.send_sms');
+        Route::get('/caisse/pos/check-stock/{produit2id}', [\App\Http\Controllers\PosController::class, 'checkStock'])->name('caisse.pos.check_stock');
+        Route::get('/caisse/pos/advanced-check-stock', [\App\Http\Controllers\PosController::class, 'advancedCheckStock'])->name('caisse.pos.advanced_check_stock');
+        Route::post('/caisse', [\App\Http\Controllers\Vente\CaisseController::class, 'store'])->name('caisse.store');
+        Route::get('/caisse/en-attente', [\App\Http\Controllers\Vente\CaisseController::class, 'getEnAttente'])->name('caisse.en_attente');
+        Route::get('/caisse/reprise/{id}', [\App\Http\Controllers\Vente\CaisseController::class, 'reprise'])->name('caisse.reprise');
         
         // Consultation Tickets
         Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
