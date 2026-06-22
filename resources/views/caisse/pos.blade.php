@@ -6,6 +6,12 @@
     <title>Caisse VELARO</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: #0ea5e9;
+            --primary-light: #e0f2fe;
+            --border: #e2e8f0;
+            --text-secondary: #64748b;
+        }
         * {
             box-sizing: border-box;
             font-family: Arial, sans-serif;
@@ -321,6 +327,64 @@
         }
         .btn-save:hover { background: #f3f4f6; }
         
+        .cart-row:hover { background-color: #f1f5f9; }
+        
+        /* Pagination Styles for Modal */
+        .pagination-wrapper {
+            padding: 10px;
+            background: #fff;
+            border-top: 1px solid #e5e7eb;
+        }
+        .pagination-wrapper svg {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+        .pagination-wrapper nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .pagination-wrapper nav > div:first-child {
+            display: none;
+        }
+        .pagination-wrapper nav > div:last-child {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            align-items: center;
+        }
+        .pagination-wrapper p {
+            margin: 0;
+            color: #64748b;
+        }
+        .pagination-wrapper span.relative,
+        .pagination-wrapper a.relative {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            margin-left: -1px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .pagination-wrapper a.relative:hover {
+            background: #f1f5f9;
+            color: #0ea5e9;
+        }
+        .pagination-wrapper span[aria-current="page"] > span {
+            background: #e0f2fe;
+            color: #0ea5e9;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border: 1px solid #e2e8f0;
+            margin-left: -1px;
+        }
+        
         .modal-content .table-container table {
             width: 100%;
             border-collapse: collapse;
@@ -488,9 +552,9 @@
         <!-- COL 3: Services -->
         <div class="grid-col">
             <div class="grid-header">Services</div>
-            <button class="grid-btn" onclick="miseEnAttente()">Mise en attente du ticket</button>
+            <button class="grid-btn" onclick="window.miseEnAttente()">Mise en attente du ticket</button>
             <button class="grid-btn" onclick="openRepriseModal()">Reprise d'un ticket en attente</button>
-            <button class="grid-btn" onclick="window.open('{{ route('vente.tickets.index') }}', '_blank')">Consultation Tickets</button>
+            <button class="grid-btn" onclick="openConsultationModal()">Consultation Tickets</button>
             <button class="grid-btn" onclick="openArticleHistoryModal()">Consultation Articles</button>
             <button class="grid-btn" onclick="openSmsModal()">Envoyer SMS</button>
         </div>
@@ -507,8 +571,8 @@
                 <button class="grid-btn" onclick="openPaymentModal(5, 'Chèque Cadeau')">Chq.Cad</button>
             </div>
             <div class="split-col">
-                <button class="grid-btn" onclick="openPaymentModal(9, 'Retour')">Retour</button>
-                <button class="grid-btn" onclick="openPaymentModal(9, 'Retour2')">Retour2</button>
+                <button class="grid-btn" onclick="openRetourModal()">Retour</button>
+                <button class="grid-btn" onclick="handleRetour2Click()">Retour2</button>
             </div>
             <div class="split-col">
                 <button class="grid-btn" onclick="openPaymentModal(12, 'Crédit')">Crédit</button>
@@ -953,6 +1017,74 @@
 
 <!-- JAVASCRIPT FOR LOGIC -->
 <script>
+    console.log("=== VELARO POS SCRIPT START ===");
+    
+    // Global functions definition at the very top
+    window.submitTicketToBackend = function(data) {
+        fetch(`{{ route('vente.caisse.store') }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                closePaymentModal();
+                alert(res.message);
+                if (res.print_url) {
+                    window.open(res.print_url, '_blank').focus();
+                }
+                ticketLines = [];
+                currentClientId = {{ $client ? $client->clientid : 1 }};
+                document.getElementById('clientName').innerText = 'PASSAGER';
+                document.getElementById('clientSoldeInfo').style.display = 'none';
+                document.getElementById('clientCode').value = '4110001';
+                
+                // Keep the same currentVendeurId (vendor persists across tickets)
+                
+                renderTable();
+                
+                fetch(`{{ route('vente.caisse.en_attente') }}`)
+                    .then(r => r.json())
+                    .then(r => { console.log('En attente count:', r.count); })
+                    .catch(e => console.error(e));
+            } else {
+                alert("Erreur : " + res.message);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Une erreur est survenue lors de l'enregistrement.");
+        });
+    };
+
+    window.executeMiseEnAttente = function() {
+        let data = {
+            clientid: currentClientId,
+            vendeurid: currentVendeurId,
+            en_attente: true,
+            lignes: ticketLines
+        };
+        window.submitTicketToBackend(data);
+    };
+
+    window.miseEnAttente = function() {
+        try {
+            if (ticketLines.length === 0) {
+                alert("Le ticket est vide.");
+                return;
+            }
+            pendingAction = 'miseEnAttente';
+            openVendeurModal();
+        } catch (e) {
+            console.error("Error in miseEnAttente:", e);
+            alert("Erreur lors de l'ouverture du popup: " + e.message);
+        }
+    };
+
     let ticketLines = [];
     let currentVariants = []; // Store variants to allow filtering
     let currentClientLoyaltyTier = 0;
@@ -979,34 +1111,40 @@
         }
     });
 
+    let isRetourMode = false;
+
     function addProductToTicket(productData) {
         let prix = parseFloat(productData.ttc_vente) || 0;
         let remise = currentClientLoyaltyTier || 0;
         let prixNet = prix - (prix * (remise / 100));
+        let qteVal = isRetourMode ? -1 : 1;
         let product = {
             produitid: productData.produitid,
             produit2id: productData.produit2id,
             ref: productData.produitcode || productData.reference,
+            code: productData.produitcode || productData.reference,
+            reference: productData.reference || productData.produitcode,
             designation: productData.produitlibelle,
             taille: productData.taillelibelle,
             couleur: productData.couleurlibelle,
-            qte: 1,
+            qte: qteVal,
             prix: prix,
             remise: remise,
             prixNet: prixNet,
-            total: prixNet,
+            total: qteVal * prixNet,
             stock: parseFloat(productData.total_stock) || 0
         };
         
         // Check if product already exists to increment Qty
         let existingLine = ticketLines.find(l => l.produitid === product.produitid && l.produit2id === product.produit2id);
         if (existingLine) {
-            existingLine.qte += 1;
+            existingLine.qte += qteVal;
             existingLine.total = existingLine.qte * existingLine.prixNet;
         } else {
             ticketLines.push(product);
         }
         
+        isRetourMode = false; // Reset
         renderTable();
     }
 
@@ -1189,6 +1327,11 @@
     }
 
     // ========== LOGIQUE MODAL PRODUIT ==========
+    function handleRetour2Click() {
+        isRetourMode = true;
+        openProductModal();
+    }
+
     function openProductModal() {
         document.getElementById('productModal').style.display = 'flex';
         searchProducts(); // Load initially
@@ -2086,7 +2229,7 @@
 
         if (pendingAction === 'miseEnAttente') {
             pendingAction = null;
-            executeMiseEnAttente();
+            window.executeMiseEnAttente();
         }
     }
 
@@ -2248,6 +2391,428 @@
     </div>
 </div>
 
+<!-- INFORMATIONS CHEQUE MODAL -->
+<div id="chequeModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 650px; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: Arial, sans-serif;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Informations Cheque</h2>
+            <button type="button" onclick="closeChequeModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666; font-weight: bold;">&times;</button>
+        </div>
+        <!-- Top Inputs -->
+        <div style="padding: 15px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
+            <label style="font-weight: normal;">Montant</label>
+            <input type="text" id="chequeGlobalMontant" style="width: 120px; padding: 4px; border: 1px solid #ccc; border-radius: 2px;">
+            
+            <label style="font-weight: normal; margin-left: 10px;">Nombre de cheque</label>
+            <input type="number" id="chequeNombre" value="1" min="1" style="width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 2px;">
+            
+            <button type="button" onclick="generateChequeRows()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 40px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+        </div>
+        <!-- Table -->
+        <div style="padding: 0 15px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #ddd; text-align: center;">
+                <thead style="background: #fff;">
+                    <tr>
+                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Montant</th>
+                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Propriétaire</th>
+                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Numéro</th>
+                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Banque</th>
+                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Échéance</th>
+                    </tr>
+                </thead>
+                <tbody id="chequeTbody">
+                    <!-- rows generated by JS -->
+                </tbody>
+            </table>
+        </div>
+        <!-- Footer -->
+        <div style="padding: 15px; display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative;">
+            <div id="chequeError" style="color: #dc2626; font-size: 12px; position: absolute; left: 15px; bottom: 15px; display: none;">numéro chèque && Montant Obligatoire</div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" onclick="validerCheques()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button type="button" onclick="closeChequeModal()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CHEQUE CADEAU MODAL -->
+<div id="chequeCadeauModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 500px; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: Arial, sans-serif;">
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Type Cheque Cadeau</h2>
+            <button type="button" onclick="closeChequeCadeauModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666; font-weight: bold;">&times;</button>
+        </div>
+        <div style="padding: 20px;">
+            <div style="border: 1px solid #ddd; padding: 15px; display: flex; align-items: center; justify-content: center; gap: 20px; background: #f9f9f9; border-radius: 4px; margin-bottom: 15px;">
+                <label style="font-weight: normal; font-size: 13px;">Montant</label>
+                <input type="number" step="0.001" id="chequeCadeauMontant" style="width: 150px; padding: 8px; border: 1px solid #ccc; font-weight: bold; font-size: 14px; text-align: center;">
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                @foreach($typeChequeCadeaus as $type)
+                    <button type="button" onclick="validerChequeCadeau({{ $type->typechequecadeauid }})" style="background: white; border: 1px solid #2c3e50; padding: 10px 20px; min-width: 100px; cursor: pointer; border-radius: 2px; font-size: 12px;">
+                        {{ $type->libelle }}
+                    </button>
+                @endforeach
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RETOUR TICKET MODAL -->
+<div id="retourModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 1000px; max-height: 90%; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: Arial, sans-serif; display: flex; flex-direction: column;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333; flex: 1; text-align: center;">Mouvement Ticket</h2>
+            <button type="button" onclick="closeRetourModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666; font-weight: bold;">&times;</button>
+        </div>
+        <!-- Search Section -->
+        <div style="padding: 15px; display: flex; justify-content: center; align-items: center; gap: 10px; border-bottom: 1px solid #ddd;">
+            <input type="text" id="retourTicketNumero" style="width: 300px; padding: 6px; border: 1px solid #ccc; border-radius: 2px;">
+            <button type="button" onclick="browseTicketsRetour()" style="padding: 6px 15px; border: 1px solid #ccc; background: white; cursor: pointer; border-radius: 2px;">...</button>
+            <button type="button" onclick="openMouvementsModal()" style="padding: 6px 15px; border: 1px solid #ccc; background: white; cursor: pointer; border-radius: 2px;">Mvts</button>
+        </div>
+        <!-- Table -->
+        <div style="flex: 1; overflow-y: auto; padding: 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
+                <thead style="background: #fff; position: sticky; top: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                    <tr>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-weight: bold; text-align: left;">Référence</th>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-weight: bold; text-align: left;">Désignation</th>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-weight: bold;">Qte Vendu</th>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-weight: bold;">Qte Récupérée</th>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-weight: bold;">Qte</th>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-weight: bold;">Prix</th>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-weight: bold;">Rem%</th>
+                        <th style="padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold;">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="retourTbody">
+                    <!-- rows dynamically populated -->
+                </tbody>
+            </table>
+        </div>
+        <!-- Footer Buttons -->
+        <div style="padding: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px; background: #f8f9fa;">
+            <button type="button" onclick="validerRetour()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+            <button type="button" onclick="closeRetourModal()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MOUVEMENTS MODAL -->
+<div id="mouvementsModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1030; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 1100px; height: 700px; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); display: flex; flex-direction: column; font-family: Arial, sans-serif;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; text-align: center;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Mouvements</h2>
+        </div>
+        <!-- Filters Section -->
+        <div style="padding: 15px; display: flex; align-items: center; justify-content: center; gap: 15px; border-bottom: 1px solid #ddd;">
+            <label style="font-weight: bold; font-size: 12px;">DU</label>
+            <input type="date" id="mvtFilterDu" value="{{ date('Y-m-d') }}" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+            
+            <label style="font-weight: bold; font-size: 12px;">AU</label>
+            <input type="date" id="mvtFilterAu" value="{{ date('Y-m-d') }}" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px;">
+
+            <label style="font-weight: bold; font-size: 12px;">Client</label>
+            <select id="mvtFilterClient" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px; width: 200px; font-size: 12px;">
+                <option value="">PASSAGER</option>
+            </select>
+
+            <button type="button" onclick="loadMouvementsData()" style="padding: 6px 20px; border: 1px solid #333; background: white; cursor: pointer; border-radius: 4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            </button>
+        </div>
+        <div style="padding: 10px 15px; display: flex; justify-content: flex-end; border-bottom: 1px solid #ddd;">
+            <div style="position: relative;">
+                <input type="text" id="mvtSearchText" placeholder="Enter text to search..." onkeyup="filterMouvementsTable()" style="padding: 6px 6px 6px 25px; border: 1px solid #ccc; width: 250px; font-size: 12px;">
+                <svg style="position: absolute; left: 6px; top: 8px;" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+        </div>
+        <!-- Table -->
+        <div style="flex: 1; overflow: auto; padding: 0 15px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;" id="mvtTable">
+                <thead style="background: #f8f9fa; position: sticky; top: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                    <tr>
+                        <th style="padding: 8px; border: 1px solid #ddd; width: 30px; text-align: center;"><input type="checkbox" onclick="toggleAllMouvements(this)"></th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Numéro</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Date</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Reference</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Produit</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Taille</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Couleur</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Qte</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">PU.TTC</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Remise</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="mvtTbody">
+                    <tr><td colspan="11" style="text-align: center; padding: 40px; font-weight: bold; color: #555;">No data to display</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Footer Buttons -->
+        <div style="padding: 15px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px; background: #f8f9fa;">
+            <button type="button" onclick="validerMouvementsSelection()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+            <button type="button" onclick="closeMouvementsModal()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- CONSULTATION TICKETS MODAL -->
+<div id="consultationModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 1300px; max-height: 95%; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+        
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #fff; position: relative;">
+            <div style="flex: 1;"></div>
+            <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: #333; text-align: center; flex: 1;">Journal Vente</h2>
+            <div style="flex: 1; display: flex; justify-content: flex-end; gap: 5px;">
+                <button type="button" style="background: white; border: 1px solid #ccc; width: 40px; height: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 2px;" title="Valider">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button type="button" onclick="closeConsultationModal()" style="background: white; border: 1px solid #ccc; width: 40px; height: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 2px;" title="Fermer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Top Filters -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; align-items: center; gap: 15px; background: #fff; font-size: 12px;">
+            <div style="display: flex; align-items: center; gap: 5px; flex: 1;">
+                <label style="color: #555;">Indicateur</label>
+                <select id="consultationIndicateur" style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 2px; outline: none;" onchange="renderConsultationTickets()">
+                    <option value="Tous">Tous</option>
+                    <option value="Payé">Payé</option>
+                    <option value="Non Payé">Non Payé</option>
+                </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px; flex: 1.5;">
+                <label style="color: #555;">Client</label>
+                <select id="consultationClientSelect" style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 2px; outline: none;" onchange="renderConsultationTickets()">
+                    <option value="Tous"></option>
+                </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px; flex: 1.5;">
+                <label style="color: #555;">Vendeur</label>
+                <select id="consultationVendeurSelect" style="flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 2px; outline: none;" onchange="renderConsultationTickets()">
+                    <option value="Tous">Tous</option>
+                </select>
+            </div>
+            <div>
+                <button type="button" onclick="fetchConsultationData()" style="background: white; border: 1px solid #555; padding: 4px 15px; cursor: pointer; border-radius: 2px; display: flex; align-items: center; justify-content: center; height: 28px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                </button>
+            </div>
+        </div>
+
+        <div style="padding: 10px 15px; flex: 1; overflow: hidden; display: flex; flex-direction: column; background: #fff;">
+            <!-- Global Search -->
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 5px;">
+                <div style="position: relative; width: 250px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 6px; top: 7px;">
+                        <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="consultationGlobalSearch" placeholder="Enter text to search..." style="width: 100%; padding: 4px 6px 4px 22px; border: 1px solid #ccc; border-radius: 2px; font-size: 12px; outline: none;" oninput="renderConsultationTickets()">
+                </div>
+            </div>
+
+            <!-- Grid -->
+            <div style="flex: 1; overflow-y: auto; border: 1px solid #ccc;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px; white-space: nowrap;">
+                    <thead style="position: sticky; top: 0; background: #f9f9f9; z-index: 2;">
+                        <tr style="text-align: left; color: #333;">
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Statut</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Date</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Numéro</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Client</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Tel. client</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Total TTC</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Montant reçu</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Reste</th>
+                            <th style="padding: 6px 8px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; font-weight: 600;">Caissier</th>
+                            <th style="padding: 6px 8px; border-bottom: 1px solid #ddd; font-weight: 600;">Vendeur</th>
+                        </tr>
+                        <tr style="background: #fff;">
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="text" class="consult-filter" data-col="statut" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="date" class="consult-filter" data-col="date" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="number" class="consult-filter" data-col="numero" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="text" class="consult-filter" data-col="client" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="text" class="consult-filter" data-col="tel" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="number" step="0.001" class="consult-filter" data-col="ttc" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="number" step="0.001" class="consult-filter" data-col="recu" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="number" step="0.001" class="consult-filter" data-col="reste" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;"><input type="text" class="consult-filter" data-col="caissier" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                            <td style="padding: 2px 4px; border-bottom: 1px solid #ddd;"><input type="text" class="consult-filter" data-col="vendeur" style="width: 100%; border: 1px solid #ccc; padding: 2px 4px; font-size: 11px;"></td>
+                        </tr>
+                    </thead>
+                    <tbody id="consultationTbody">
+                        <tr><td colspan="10" style="text-align: center; padding: 30px; font-weight: bold;">No data to display</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allConsultationTickets = [];
+    
+    function openConsultationModal() {
+        document.getElementById('consultationModal').style.display = 'flex';
+        fetchConsultationData();
+    }
+    
+    function closeConsultationModal() {
+        document.getElementById('consultationModal').style.display = 'none';
+    }
+    
+    function fetchConsultationData() {
+        fetch(`{{ route('vente.caisse.journal_data') }}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.tickets) {
+                    allConsultationTickets = data.tickets;
+                    
+                    // Populate Client Dropdown
+                    let clientOpts = '<option value="Tous"></option>';
+                    if(data.clients) {
+                        data.clients.forEach(c => { clientOpts += `<option value="${c.clientid}">${c.nom}</option>`; });
+                    }
+                    document.getElementById('consultationClientSelect').innerHTML = clientOpts;
+                    
+                    // Populate Vendeur Dropdown
+                    let vendeurOpts = '<option value="Tous">Tous</option>';
+                    if(data.vendeurs) {
+                        data.vendeurs.forEach(v => { vendeurOpts += `<option value="${v.employeeid}">${v.nom}</option>`; });
+                    }
+                    document.getElementById('consultationVendeurSelect').innerHTML = vendeurOpts;
+
+                    renderConsultationTickets();
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    function renderConsultationTickets() {
+        const globalSearch = document.getElementById('consultationGlobalSearch').value.toLowerCase();
+        const indicateur = document.getElementById('consultationIndicateur').value;
+        const clientFilter = document.getElementById('consultationClientSelect').options[document.getElementById('consultationClientSelect').selectedIndex].text;
+        const vendeurFilter = document.getElementById('consultationVendeurSelect').options[document.getElementById('consultationVendeurSelect').selectedIndex].text;
+
+        const filters = {
+            statut: document.querySelector('.consult-filter[data-col="statut"]').value.toLowerCase(),
+            date: document.querySelector('.consult-filter[data-col="date"]').value,
+            numero: document.querySelector('.consult-filter[data-col="numero"]').value.toLowerCase(),
+            client: document.querySelector('.consult-filter[data-col="client"]').value.toLowerCase(),
+            tel: document.querySelector('.consult-filter[data-col="tel"]').value.toLowerCase(),
+            ttc: document.querySelector('.consult-filter[data-col="ttc"]').value,
+            recu: document.querySelector('.consult-filter[data-col="recu"]').value,
+            reste: document.querySelector('.consult-filter[data-col="reste"]').value,
+            caissier: document.querySelector('.consult-filter[data-col="caissier"]').value.toLowerCase(),
+            vendeur: document.querySelector('.consult-filter[data-col="vendeur"]').value.toLowerCase()
+        };
+
+        const tbody = document.getElementById('consultationTbody');
+        tbody.innerHTML = '';
+        
+        let count = 0;
+
+        for(let i = 0; i < allConsultationTickets.length; i++) {
+            let t = allConsultationTickets[i];
+            
+            // Format dates
+            let d = new Date(t.datecreation);
+            let dateStr = d.toLocaleDateString('fr-FR');
+            let isoDate = d.toISOString().split('T')[0];
+            
+            let statut = t.netapayer > 0 ? "Non Payé" : "Payé";
+            let cnom = t.client_nom || '';
+            let vnom = t.vendeur_nom || '';
+            let ctel = t.client_tel || '';
+            let cainom = t.caissier_nom || '';
+            let num = t.cticketnumero || '';
+            
+            // Indicateur Filter
+            if(indicateur !== "Tous" && statut !== indicateur) continue;
+            
+            // Top Dropdowns
+            if(document.getElementById('consultationClientSelect').value !== "Tous" && clientFilter && cnom !== clientFilter) continue;
+            if(document.getElementById('consultationVendeurSelect').value !== "Tous" && vendeurFilter && vnom !== vendeurFilter) continue;
+            
+            // Global Search
+            if(globalSearch) {
+                let text = `${statut} ${dateStr} ${num} ${cnom} ${ctel} ${t.totalttc} ${t.acompte} ${t.netapayer} ${cainom} ${vnom}`.toLowerCase();
+                if(!text.includes(globalSearch)) continue;
+            }
+
+            // Column Filters
+            if(filters.statut && !statut.toLowerCase().includes(filters.statut)) continue;
+            if(filters.date && isoDate !== filters.date) continue;
+            if(filters.numero && !String(num).includes(filters.numero)) continue;
+            if(filters.client && !cnom.toLowerCase().includes(filters.client)) continue;
+            if(filters.tel && !ctel.toLowerCase().includes(filters.tel)) continue;
+            if(filters.ttc && parseFloat(t.totalttc) !== parseFloat(filters.ttc)) continue;
+            if(filters.recu && parseFloat(t.acompte) !== parseFloat(filters.recu)) continue;
+            if(filters.reste && parseFloat(t.netapayer) !== parseFloat(filters.reste)) continue;
+            if(filters.caissier && !cainom.toLowerCase().includes(filters.caissier)) continue;
+            if(filters.vendeur && !vnom.toLowerCase().includes(filters.vendeur)) continue;
+
+            count++;
+            
+            let bgStatut = statut === "Payé" ? "#22c55e" : "#ef4444";
+            
+            let tr = document.createElement('tr');
+            tr.style.borderBottom = "1px solid #eee";
+            tr.className = "ticket-row";
+            tr.style.cursor = "pointer";
+            tr.innerHTML = `
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">
+                    <span style="background: ${bgStatut}; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10px;">${statut}</span>
+                </td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${dateStr}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${num}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${cnom}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${ctel}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee; text-align: right;">${parseFloat(t.totalttc).toFixed(3)}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee; text-align: right;">${parseFloat(t.acompte).toFixed(3)}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee; text-align: right;">${parseFloat(t.netapayer).toFixed(3)}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${cainom}</td>
+                <td style="padding: 6px 8px;">${vnom}</td>
+            `;
+            
+            tr.ondblclick = () => { window.open(`/vente/tickets/${t.cticketid}`, '_blank', 'width=800,height=600'); };
+            tbody.appendChild(tr);
+        }
+
+        if(count === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 30px; font-weight: bold;">No data to display</td></tr>';
+        }
+    }
+
+    // Attach listener to all column filters
+    document.querySelectorAll('.consult-filter').forEach(inp => {
+        inp.addEventListener('input', () => { renderConsultationTickets(); });
+    });
+
     function validerTicket() {
         openPaymentModal(1, 'Espèce'); // Par défaut on propose Espèce quand on clique sur le bouton de validation principal
     }
@@ -2257,6 +2822,17 @@
             alert("Le ticket est vide.");
             return;
         }
+
+        if (modeId === 2) {
+            openChequeModal();
+            return;
+        }
+
+        if (modeId === 5) {
+            openChequeCadeauModal();
+            return;
+        }
+
         let total = parseFloat(document.getElementById('grandTotal').innerText);
         document.getElementById('paymentModeId').value = modeId;
         document.getElementById('paymentModalTitle').innerText = 'Paiement - ' + modeName;
@@ -2265,6 +2841,145 @@
         document.getElementById('paymentRendu').innerText = '0.000';
         document.getElementById('paymentModal').style.display = 'flex';
         document.getElementById('paymentMontant').select();
+    }
+
+    // CHEQUE LOGIC
+    function openChequeModal() {
+        let total = parseFloat(document.getElementById('grandTotal').innerText);
+        document.getElementById('chequeGlobalMontant').value = total.toFixed(3);
+        document.getElementById('chequeNombre').value = 1;
+        document.getElementById('chequeError').style.display = 'none';
+        
+        generateChequeRows();
+        
+        document.getElementById('chequeModal').style.display = 'flex';
+    }
+
+    function closeChequeModal() {
+        document.getElementById('chequeModal').style.display = 'none';
+    }
+
+    function generateChequeRows() {
+        const montantGlobal = parseFloat(document.getElementById('chequeGlobalMontant').value) || 0;
+        const nbr = parseInt(document.getElementById('chequeNombre').value) || 1;
+        const tbody = document.getElementById('chequeTbody');
+        tbody.innerHTML = '';
+        
+        let montantParCheque = (montantGlobal / nbr).toFixed(3);
+        let nomClient = document.getElementById('clientName').innerText;
+        if(nomClient === "Aucun client" || nomClient === "PASSAGER") {
+            nomClient = "PASSAGER";
+        }
+
+        let today = new Date().toISOString().split('T')[0];
+
+        for(let i = 0; i < nbr; i++) {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 4px; border: 1px solid #ddd;">
+                    <input type="number" step="0.001" class="chq-montant" value="${montantParCheque}" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; text-align: center; outline: none;">
+                </td>
+                <td style="padding: 4px; border: 1px solid #ddd;">
+                    <input type="text" class="chq-prop" value="${nomClient}" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
+                </td>
+                <td style="padding: 4px; border: 1px solid #ddd;">
+                    <input type="text" class="chq-num" placeholder="Numéro" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
+                </td>
+                <td style="padding: 4px; border: 1px solid #ddd;">
+                    <input type="text" class="chq-banque" placeholder="Banque" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
+                </td>
+                <td style="padding: 4px; border: 1px solid #ddd;">
+                    <input type="date" class="chq-date" value="${today}" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
+    function validerCheques() {
+        const rows = document.querySelectorAll('#chequeTbody tr');
+        let cheques = [];
+        let totalCheques = 0;
+        let hasError = false;
+
+        rows.forEach(row => {
+            let mnt = parseFloat(row.querySelector('.chq-montant').value) || 0;
+            let num = row.querySelector('.chq-num').value.trim();
+            let prop = row.querySelector('.chq-prop').value.trim();
+            let bq = row.querySelector('.chq-banque').value.trim();
+            let dt = row.querySelector('.chq-date').value;
+
+            if (mnt <= 0 || num === "") {
+                hasError = true;
+            }
+
+            totalCheques += mnt;
+            cheques.push({
+                montant: mnt,
+                numero: num,
+                proprietaire: prop,
+                banque: bq,
+                date: dt
+            });
+        });
+
+        if (hasError) {
+            document.getElementById('chequeError').style.display = 'block';
+            return;
+        }
+
+        document.getElementById('chequeError').style.display = 'none';
+        
+        let grandTotal = parseFloat(document.getElementById('grandTotal').innerText);
+        if (totalCheques < grandTotal) {
+            alert("Le total des chèques (" + totalCheques.toFixed(3) + ") est inférieur au total à payer (" + grandTotal.toFixed(3) + ")");
+            return;
+        }
+
+        // Format payload to submit
+        let data = {
+            clientid: currentClientId,
+            vendeurid: currentVendeurId,
+            lignes: ticketLines,
+            totalttc: grandTotal,
+            reglements: [{ modereglementid: 2, montant: totalCheques }],
+            cheques: cheques
+        };
+
+        closeChequeModal();
+        submitTicketToBackend(data);
+    }
+
+    // CHEQUE CADEAU LOGIC
+    function openChequeCadeauModal() {
+        let total = parseFloat(document.getElementById('grandTotal').innerText);
+        document.getElementById('chequeCadeauMontant').value = total.toFixed(3);
+        document.getElementById('chequeCadeauModal').style.display = 'flex';
+    }
+
+    function closeChequeCadeauModal() {
+        document.getElementById('chequeCadeauModal').style.display = 'none';
+    }
+
+    function validerChequeCadeau(typeId) {
+        let mnt = parseFloat(document.getElementById('chequeCadeauMontant').value) || 0;
+        let grandTotal = parseFloat(document.getElementById('grandTotal').innerText);
+        
+        if (mnt <= 0) {
+            alert("Le montant doit être supérieur à 0");
+            return;
+        }
+
+        let data = {
+            clientid: currentClientId,
+            vendeurid: currentVendeurId,
+            lignes: ticketLines,
+            totalttc: grandTotal,
+            reglements: [{ modereglementid: 5, montant: mnt, typechequecadeauid: typeId }]
+        };
+
+        closeChequeCadeauModal();
+        submitTicketToBackend(data);
     }
 
     function closePaymentModal() {
@@ -2304,54 +3019,7 @@
             ]
         };
 
-        submitTicketToBackend(data);
-    }
-
-    function miseEnAttente() {
-        if (ticketLines.length === 0) {
-            alert("Le ticket est vide.");
-            return;
-        }
-        pendingAction = 'miseEnAttente';
-        openVendeurModal();
-    }
-
-    function executeMiseEnAttente() {
-        let data = {
-            clientid: currentClientId,
-            vendeurid: currentVendeurId,
-            en_attente: true,
-            lignes: ticketLines
-        };
-
-        submitTicketToBackend(data);
-    }
-
-    function submitTicketToBackend(data) {
-        fetch(`{{ route('vente.caisse.store') }}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            },
-            body: JSON.stringify(data)
-        })
-        .then(r => r.json())
-        .then(res => {
-            if (res.success) {
-                // Succès
-                closePaymentModal();
-                alert(res.message);
-                // Vider le ticket
-                annulerTicket();
-            } else {
-                alert("Erreur: " + res.message);
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Erreur lors de la communication avec le serveur.");
-        });
+        window.submitTicketToBackend(data);
     }
 
     function openRepriseModal() {
@@ -2478,6 +3146,230 @@
         }
         console.log("=== FIN RESTAURATION LOCALSTORAGE ===");
     })();
+
+    // --- RETOUR TICKET LOGIC ---
+    let ticketRetourLines = []; 
+
+    function openRetourModal() {
+        document.getElementById('retourTicketNumero').value = '';
+        document.getElementById('retourTbody').innerHTML = '';
+        ticketRetourLines = [];
+        document.getElementById('retourModal').style.display = 'flex';
+        document.getElementById('retourTicketNumero').focus();
+    }
+
+    function closeRetourModal() {
+        document.getElementById('retourModal').style.display = 'none';
+        document.getElementById('scanInput').focus();
+    }
+
+    function loadTicketMvts() {
+        let num = document.getElementById('retourTicketNumero').value.trim();
+        if (!num) return;
+        
+        // Fetch ticket details from backend
+        fetch(`/vente/caisse/ticket-details/${num}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success && res.ticket) {
+                    ticketRetourLines = res.lines;
+                    renderRetourTbody();
+                } else {
+                    alert("Ticket introuvable.");
+                }
+            })
+            .catch(err => alert("Erreur de récupération du ticket."));
+    }
+
+    function renderRetourTbody() {
+        let tbody = document.getElementById('retourTbody');
+        tbody.innerHTML = '';
+        ticketRetourLines.forEach((l, index) => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; text-align: left;">${l.article_ref}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; text-align: left;">${l.article_designation}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">${parseFloat(l.qte)}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">0</td> <!-- Qte Récupérée -->
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">
+                    <input type="number" step="1" max="${parseFloat(l.qte)}" min="0" value="0" style="width: 60px; text-align: center; border: 1px solid #ccc; font-weight: bold;" onchange="updateRetourLine(${index}, this.value)" onkeyup="updateRetourLine(${index}, this.value)">
+                </td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">${parseFloat(l.prix).toFixed(3)}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">${parseFloat(l.remise).toFixed(2)}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd;" id="retourTotal_${index}">0.000</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateRetourLine(index, retQte) {
+        let qte = parseFloat(retQte) || 0;
+        let line = ticketRetourLines[index];
+        if (qte > parseFloat(line.qte)) {
+            alert("La quantité à retourner ne peut pas dépasser la quantité vendue.");
+            qte = parseFloat(line.qte);
+            document.querySelectorAll('#retourTbody tr')[index].querySelector('input[type=number]').value = qte;
+        }
+        line.qte_retour = qte;
+        let total = qte * parseFloat(line.prix) * (1 - (parseFloat(line.remise)/100));
+        document.getElementById(`retourTotal_${index}`).innerText = total.toFixed(3);
+    }
+
+    function validerRetour() {
+        let hasRetour = false;
+        ticketRetourLines.forEach(l => {
+            if (l.qte_retour > 0) {
+                // Add to current ticket lines as negative quantities
+                let retourLine = {
+                    produitid: l.articleid,
+                    produit2id: l.produit2id,
+                    code: l.article_ref,
+                    reference: l.article_ref,
+                    designation: l.article_designation,
+                    qte: -Math.abs(l.qte_retour),
+                    prix: l.prix,
+                    remise: l.remise,
+                    prixNet: parseFloat(l.prix) * (1 - (parseFloat(l.remise)/100)),
+                    total: -(l.qte_retour * parseFloat(l.prix) * (1 - (parseFloat(l.remise)/100))),
+                    stock: 0
+                };
+                ticketLines.push(retourLine);
+                hasRetour = true;
+            }
+        });
+        if (hasRetour) {
+            renderTable();
+            closeRetourModal();
+        } else {
+            alert("Veuillez saisir au moins une quantité à retourner pour valider.");
+        }
+    }
+    
+    function browseTicketsRetour() {
+        closeRetourModal();
+        openConsultationModal();
+    }
+
+    // --- MOUVEMENTS MODAL LOGIC ---
+    let mouvementsData = [];
+
+    function openMouvementsModal() {
+        document.getElementById('mouvementsModal').style.display = 'flex';
+        // optionally load clients into the dropdown here or just use the current PASSAGER
+        // Let's copy clients from consultation modal or global clients list if we had one
+        let clientSelect = document.getElementById('mvtFilterClient');
+        if (clientSelect.options.length <= 1) {
+            let options = '<option value="">PASSAGER</option>';
+            document.querySelectorAll('#consultationClientFilter option').forEach(opt => {
+                if (opt.value) {
+                    options += `<option value="${opt.value}">${opt.innerText}</option>`;
+                }
+            });
+            clientSelect.innerHTML = options;
+        }
+        
+        loadMouvementsData();
+    }
+
+    function closeMouvementsModal() {
+        document.getElementById('mouvementsModal').style.display = 'none';
+        document.getElementById('retourTicketNumero').focus();
+    }
+
+    function loadMouvementsData() {
+        let du = document.getElementById('mvtFilterDu').value;
+        let au = document.getElementById('mvtFilterAu').value;
+        let clientid = document.getElementById('mvtFilterClient').value;
+        
+        fetch(`{{ route('vente.caisse.mouvements') }}?du=${du}&au=${au}&clientid=${clientid}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    mouvementsData = res.mouvements;
+                    renderMouvementsTable(mouvementsData);
+                } else {
+                    alert("Erreur de chargement des mouvements.");
+                }
+            })
+            .catch(err => alert("Erreur serveur."));
+    }
+
+    function renderMouvementsTable(data) {
+        let tbody = document.getElementById('mvtTbody');
+        tbody.innerHTML = '';
+        if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 40px; font-weight: bold; color: #555;">No data to display</td></tr>`;
+            return;
+        }
+        
+        data.forEach((m, index) => {
+            let total = parseFloat(m.qte) * parseFloat(m.prix) * (1 - (parseFloat(m.remise)/100));
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                    <input type="checkbox" class="mvt-checkbox" data-index="${index}">
+                </td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${m.cticketnumero || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${(m.date || '').substring(0,10)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${m.reference || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${m.designation || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${m.taille || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${m.couleur || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(m.qte)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(m.prix).toFixed(3)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(m.remise).toFixed(2)}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${total.toFixed(3)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function filterMouvementsTable() {
+        let text = document.getElementById('mvtSearchText').value.toLowerCase();
+        let filtered = mouvementsData.filter(m => 
+            (m.cticketnumero || '').toLowerCase().includes(text) ||
+            (m.reference || '').toLowerCase().includes(text) ||
+            (m.designation || '').toLowerCase().includes(text)
+        );
+        renderMouvementsTable(filtered);
+    }
+
+    function toggleAllMouvements(source) {
+        document.querySelectorAll('.mvt-checkbox').forEach(cb => {
+            cb.checked = source.checked;
+        });
+    }
+
+    function validerMouvementsSelection() {
+        let selectedIndexes = [];
+        document.querySelectorAll('.mvt-checkbox:checked').forEach(cb => {
+            selectedIndexes.push(parseInt(cb.getAttribute('data-index')));
+        });
+        
+        if (selectedIndexes.length === 0) {
+            alert("Veuillez sélectionner au moins un mouvement.");
+            return;
+        }
+        
+        // Push selected to ticketRetourLines so they show in Retour modal
+        selectedIndexes.forEach(idx => {
+            let m = mouvementsData[idx];
+            // Format for Retour Modal
+            ticketRetourLines.push({
+                articleid: m.articleid,
+                produit2id: m.produit2id,
+                article_ref: m.reference,
+                article_designation: m.designation,
+                qte: m.qte,
+                prix: m.prix,
+                remise: m.remise,
+                qte_retour: 0 // Default to 0, user will change it in Retour Modal
+            });
+        });
+        
+        renderRetourTbody();
+        closeMouvementsModal();
+    }
 
 </script>
 

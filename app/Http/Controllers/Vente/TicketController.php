@@ -97,47 +97,39 @@ class TicketController extends Controller
             }
         }
 
-        if ($hasFilters) {
-            if ($request->ajax()) {
-                \Illuminate\Support\Facades\Log::info('AJAX Search Query: ' . $query->toSql(), $query->getBindings());
-                \Illuminate\Support\Facades\Log::info('Request Filters: ', $request->all());
+        if ($request->ajax()) {
+            \Illuminate\Support\Facades\Log::info('AJAX Search Query: ' . $query->toSql(), $query->getBindings());
+            \Illuminate\Support\Facades\Log::info('Request Filters: ', $request->all());
 
-                $totalQte = (clone $query)->sum('ctickets.totalqte');
-                $totalBrutHt = (clone $query)->sum('ctickets.totalbrutht');
-                $totalRemise = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('ctickets.totalbrutht - ctickets.totalnetht'));
-                $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
-                $totalTva = (clone $query)->sum('ctickets.totaltva');
-                $totalTtc = (clone $query)->sum('ctickets.totalttc');
-                $totalAcompte = (clone $query)->sum('ctickets.acompte');
-                $totalReste = (clone $query)->sum('ctickets.netapayer');
-
-                $tickets = $query->paginate(15);
-                $html = view('vente.tickets.partials.table_body', compact('tickets'))->render();
-
-                return response()->json([
-                    'html' => $html,
-                    'pagination' => $tickets->links()->toHtml(),
-                    'totals' => [
-                        'qte' => number_format($totalQte ?? 0, 0, ',', ' '),
-                        'brut_ht' => number_format($totalBrutHt ?? 0, 3, ',', ' '),
-                        'remise' => number_format($totalRemise ?? 0, 3, ',', ' '),
-                        'net_ht' => number_format($totalNetHt ?? 0, 3, ',', ' '),
-                        'tva' => number_format($totalTva ?? 0, 3, ',', ' '),
-                        'ttc' => number_format($totalTtc ?? 0, 3, ',', ' '),
-                        'acompte' => number_format($totalAcompte ?? 0, 3, ',', ' '),
-                        'reste' => number_format($totalReste ?? 0, 3, ',', ' ')
-                    ]
-                ]);
-            }
+            $totalQte = (clone $query)->sum('ctickets.totalqte');
+            $totalBrutHt = (clone $query)->sum('ctickets.totalbrutht');
+            $totalRemise = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('ctickets.totalbrutht - ctickets.totalnetht'));
+            $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
+            $totalTva = (clone $query)->sum('ctickets.totaltva');
+            $totalTtc = (clone $query)->sum('ctickets.totalttc');
+            $totalAcompte = (clone $query)->sum('ctickets.acompte');
+            $totalReste = (clone $query)->sum('ctickets.netapayer');
 
             $tickets = $query->paginate(15);
-        } else {
-            // Return empty paginator if no filters
-            $tickets = \Illuminate\Pagination\Paginator::resolveCurrentPage() == 1 
-                ? new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15) 
-                : $query->whereRaw('1 = 0')->paginate(15);
+            $html = view('vente.tickets.partials.table_body', compact('tickets'))->render();
+
+            return response()->json([
+                'html' => $html,
+                'pagination' => $tickets->links()->toHtml(),
+                'totals' => [
+                    'qte' => number_format($totalQte ?? 0, 0, ',', ' '),
+                    'brut_ht' => number_format($totalBrutHt ?? 0, 3, ',', ' '),
+                    'remise' => number_format($totalRemise ?? 0, 3, ',', ' '),
+                    'net_ht' => number_format($totalNetHt ?? 0, 3, ',', ' '),
+                    'tva' => number_format($totalTva ?? 0, 3, ',', ' '),
+                    'ttc' => number_format($totalTtc ?? 0, 3, ',', ' '),
+                    'acompte' => number_format($totalAcompte ?? 0, 3, ',', ' '),
+                    'reste' => number_format($totalReste ?? 0, 3, ',', ' ')
+                ]
+            ]);
         }
-        
+
+        $tickets = $query->paginate(15);
         $clients = \Illuminate\Support\Facades\DB::table('clients')->select('clientid', 'nom', 'code')->orderBy('nom')->get();
         $statuts = \Illuminate\Support\Facades\DB::table('statutdocuments')
             ->select('statutdocumentid', 'libelle')

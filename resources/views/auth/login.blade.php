@@ -473,6 +473,31 @@
                     </div>
                 </div>
 
+                <div class="form-group" id="siteGroup" style="display: none;">
+                    <label class="form-label" for="siteid">Site</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                        </span>
+                        <select
+                            id="siteid"
+                            name="siteid"
+                            class="form-input"
+                            style="padding-left: 42px; appearance: none;"
+                        >
+                            <option value="">Chargement...</option>
+                        </select>
+                        <div style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="btn-submit" id="submitBtn">
                     <div class="btn-content">
                         <span class="btn-text">Se connecter</span>
@@ -520,6 +545,47 @@
                 this.closest('.input-wrapper').querySelector('.input-icon').style.color = '';
             });
         });
+
+        // Sites logic
+        const loginInput = document.getElementById('login');
+        const siteGroup = document.getElementById('siteGroup');
+        const siteSelect = document.getElementById('siteid');
+
+        let fetchTimeout;
+        loginInput.addEventListener('input', () => {
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(() => {
+                const login = loginInput.value.trim();
+                if (login.length > 0) {
+                    fetch(`/login/sites?login=${encodeURIComponent(login)}`)
+                        .then(res => res.json())
+                        .then(sites => {
+                            if (sites && sites.length > 0) {
+                                siteSelect.innerHTML = '';
+                                sites.forEach(site => {
+                                    const option = document.createElement('option');
+                                    option.value = site.siteid;
+                                    option.textContent = site.libelle;
+                                    siteSelect.appendChild(option);
+                                });
+                                siteGroup.style.display = 'block';
+                            } else {
+                                siteGroup.style.display = 'none';
+                                siteSelect.innerHTML = '<option value="">Chargement...</option>';
+                            }
+                        })
+                        .catch(err => console.error('Erreur de chargement des sites:', err));
+                } else {
+                    siteGroup.style.display = 'none';
+                    siteSelect.innerHTML = '<option value="">Chargement...</option>';
+                }
+            }, 400); // 400ms debounce
+        });
+        
+        // Trigger initially if there is a value (e.g. form validation error redirect)
+        if (loginInput.value.trim().length > 0) {
+            loginInput.dispatchEvent(new Event('input'));
+        }
     </script>
 </body>
 </html>

@@ -58,7 +58,9 @@ class PosController extends Controller
         $lastTicket = DB::table('ctickets')->orderBy('cticketid', 'desc')->first();
         $draftId = $lastTicket && $lastTicket->cticketnumero ? (intval($lastTicket->cticketnumero) + 1) : date('y') . '000001';
 
-        return view('caisse.pos', compact('client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 'defaultVendeur', 'draftId'));
+        $typeChequeCadeaus = DB::table('typechequecadeaus')->orderBy('priorite')->get();
+
+        return view('caisse.pos', compact('client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 'defaultVendeur', 'draftId', 'typeChequeCadeaus'));
     }
 
     /**

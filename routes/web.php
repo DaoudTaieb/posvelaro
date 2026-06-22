@@ -15,6 +15,7 @@ Route::get('/', function () {
 });
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/login/sites', [AuthController::class, 'getSites'])->name('login.sites');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Protected routes
@@ -103,6 +104,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/caisse', [\App\Http\Controllers\Vente\CaisseController::class, 'store'])->name('caisse.store');
         Route::get('/caisse/en-attente', [\App\Http\Controllers\Vente\CaisseController::class, 'getEnAttente'])->name('caisse.en_attente');
         Route::get('/caisse/reprise/{id}', [\App\Http\Controllers\Vente\CaisseController::class, 'reprise'])->name('caisse.reprise');
+        Route::get('/caisse/journal-data', [\App\Http\Controllers\Vente\CaisseController::class, 'journalVenteData'])->name('caisse.journal_data');
+        Route::get('/caisse/ticket-details/{numero}', [\App\Http\Controllers\Vente\CaisseController::class, 'ticketDetails'])->name('caisse.ticket_details');
+        Route::get('/caisse/mouvements', [\App\Http\Controllers\Vente\CaisseController::class, 'getMouvements'])->name('caisse.mouvements');
         
         // Consultation Tickets
         Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');

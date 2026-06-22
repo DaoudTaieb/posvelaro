@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Vente;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CaisseController extends Controller
 {
@@ -27,13 +28,13 @@ class CaisseController extends Controller
             $caissierid = $user->userid;
             $employeeid = $request->input('vendeurid', $user->employeeid ?? 1);
 
-            // Fetch journal de caisse ouvert
             $journal = DB::table('journalcaisses')
-                ->where('caissierid', $caissierid)
-                ->where('etat', 0) // Supposons 0 = ouvert
+                ->where('userid', $caissierid)
+                ->where('isclosed', 0) // 0 = ouvert
                 ->orderBy('journalcaisseid', 'desc')
                 ->first();
             $journalcaisseid = $journal ? $journal->journalcaisseid : 1;
+            $agencebid = $journal ? $journal->agencebid : 2;
 
             // Générer le numéro de ticket
             $lastTicket = DB::table('ctickets')->orderBy('cticketid', 'desc')->first();
@@ -80,7 +81,7 @@ class CaisseController extends Controller
                 'siteid' => $siteid,
                 'cticketnumero' => $nextNumero,
                 'modepieceid' => 1,
-                'etatblid' => 0,
+                'etatblid' => 1,
                 'transfere' => 0,
                 'datecreation' => $now,
                 'cticketdate' => $now,
@@ -116,22 +117,54 @@ class CaisseController extends Controller
             $ordre = 1;
             foreach ($lignes as $ligne) {
                 // Find product ID from produit2id
-                $produit2 = DB::table('produit2s')->where('produit2id', $ligne['produit2id'])->first();
+                $produit2id = $ligne['produit2id'] ?? null;
+                if (!$produit2id && isset($ligne['produitid'])) {
+                    $p2 = DB::table('produit2s')->where('produitid', $ligne['produitid'])->first();
+                    if ($p2) $produit2id = $p2->produit2id;
+                }
+                if (!$produit2id && isset($ligne['articleid'])) {
+                    $p2 = DB::table('produit2s')->where('produitid', $ligne['articleid'])->first();
+                    if ($p2) $produit2id = $p2->produit2id;
+                }
+                if (!$produit2id && isset($ligne['code'])) {
+                    $p2 = DB::table('produit2s')
+                        ->join('produits', 'produit2s.produitid', '=', 'produits.produitid')
+                        ->where('produits.reference', $ligne['code'])
+                        ->orWhere('produit2s.barcode2', $ligne['code'])
+                        ->select('produit2s.produit2id')
+                        ->first();
+                    if ($p2) $produit2id = $p2->produit2id;
+                }
+
+                if (!$produit2id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Erreur : La variante de l'article " . ($ligne['reference'] ?? '') . " est introuvable."
+                    ]);
+                }
+
+                $produit2 = DB::table('produit2s')->where('produit2id', $produit2id)->first();
                 $produitid = $produit2 ? $produit2->produitid : 1;
 
                 $tva_rate = 19;
-                $ht = floatval($ligne['total']) / (1 + ($tva_rate / 100));
+                $l_total = floatval($ligne['total'] ?? 0);
+                $l_qte = floatval($ligne['qte'] ?? 1);
+                if ($l_qte == 0) $l_qte = 1;
+                $l_prixNet = floatval($ligne['prixNet'] ?? ($ligne['prix'] ?? 0));
+                $l_remise = floatval($ligne['remise'] ?? 0);
+
+                $ht = $l_total / (1 + ($tva_rate / 100));
                 
                 DB::table('detctickets')->insert([
                     'cticketid' => $cticketid,
                     'produitid' => $produitid,
-                    'produit2id' => $ligne['produit2id'],
+                    'produit2id' => $produit2id,
                     'taxefamilleid' => 1,
-                    'ht' => $ht / floatval($ligne['qte']),
-                    'ttc' => floatval($ligne['prixNet']),
-                    'qte' => floatval($ligne['qte']),
+                    'ht' => $ht / $l_qte,
+                    'ttc' => $l_prixNet,
+                    'qte' => $l_qte,
                     'totalht' => $ht,
-                    'remise' => floatval($ligne['remise']),
+                    'remise' => $l_remise,
                     'remise2' => 0,
                     'totalhtnet' => $ht,
                     'taxe1' => 0, 'vtaxe1' => 0,
@@ -139,9 +172,9 @@ class CaisseController extends Controller
                     'taxe3' => 0, 'vtaxe3' => 0,
                     'taxe4' => 0, 'vtaxe4' => 0,
                     'tva' => $tva_rate,
-                    'vtva' => floatval($ligne['total']) - $ht,
-                    'totalttc' => floatval($ligne['total']),
-                    'totalttcnet' => floatval($ligne['total']),
+                    'vtva' => $l_total - $ht,
+                    'totalttc' => $l_total,
+                    'totalttcnet' => $l_total,
                     'qtetrans' => 0,
                     'siteid' => $siteid,
                     'date' => $now,
@@ -178,12 +211,14 @@ class CaisseController extends Controller
                         'retenuevalide' => 0,
                         'employeeid' => $employeeid,
                         'userid' => $caissierid,
+                        'agencebid' => $agencebid,
                         'cours' => 1,
                         'nonaffecte' => 0,
                         'iscomplement' => 0,
                         'journalcaisseid' => $journalcaisseid,
                         'rendu' => floatval($request->input('rendu', 0)),
-                        'deviseid' => 1
+                        'deviseid' => 1,
+                        'typechequecadeauid' => $reglement['typechequecadeauid'] ?? null
                     ]);
                 }
             }
@@ -251,7 +286,6 @@ class CaisseController extends Controller
     public function getEnAttente()
     {
         $siteid = auth()->user()->siteid ?? 102;
-        
         $tickets = DB::table('ctickets')
             ->leftJoin('clients', 'ctickets.clientid', '=', 'clients.clientid')
             ->where('ctickets.enattente', 1)
@@ -261,6 +295,112 @@ class CaisseController extends Controller
             ->get();
             
         return response()->json(['success' => true, 'tickets' => $tickets]);
+    }
+
+    /**
+     * Data for Journal Vente Modal in POS
+     */
+    public function journalVenteData()
+    {
+        $tickets = \Illuminate\Support\Facades\DB::table('ctickets')
+            ->leftJoin('clients', 'ctickets.clientid', '=', 'clients.clientid')
+            ->leftJoin('users as caissiers', 'ctickets.caissierid', '=', 'caissiers.userid')
+            ->leftJoin('employees as vendeurs', 'ctickets.employeeid', '=', 'vendeurs.employeeid')
+            ->leftJoin('statutdocuments', 'ctickets.statutdocumentid', '=', 'statutdocuments.statutdocumentid')
+            ->select(
+                'ctickets.cticketid',
+                'ctickets.cticketnumero',
+                'ctickets.datecreation',
+                'ctickets.totalttc',
+                'ctickets.acompte',
+                'ctickets.netapayer',
+                'clients.nom as client_nom',
+                'clients.tel as client_tel',
+                'clients.code as client_code',
+                'caissiers.login as caissier_nom',
+                'vendeurs.nom as vendeur_nom',
+                'vendeurs.code as vendeur_code',
+                'statutdocuments.libelle as statut_libelle',
+                'statutdocuments.statutdocumentid'
+            )
+            ->where('ctickets.enattente', false)
+            ->orderBy('ctickets.cticketid', 'desc')
+            ->limit(1000)
+            ->get();
+
+        $clients = \Illuminate\Support\Facades\DB::table('clients')->select('clientid', 'nom')->orderBy('nom')->get();
+        $vendeurs = \Illuminate\Support\Facades\DB::table('employees')->select('employeeid', 'nom')->where('isvendeur', true)->get();
+
+        return response()->json([
+            'tickets' => $tickets,
+            'clients' => $clients,
+            'vendeurs' => $vendeurs
+        ]);
+    }
+
+    public function ticketDetails($numero)
+    {
+        $ticket = DB::table('ctickets')->where('cticketnumero', $numero)->first();
+        if (!$ticket) {
+            return response()->json(['success' => false, 'message' => 'Ticket introuvable.']);
+        }
+        
+        $lignes = DB::table('detctickets')
+            ->join('produits', 'detctickets.produitid', '=', 'produits.produitid')
+            ->join('produit2s', 'detctickets.produit2id', '=', 'produit2s.produit2id')
+            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
+            ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+            ->where('detctickets.cticketid', $ticket->cticketid)
+            ->select(
+                'detctickets.*', 
+                'produits.reference as article_ref', 
+                'produits.produitlibelle as article_designation',
+                'detctickets.ttc as prix',
+                'couleurs.couleurlibelle as couleur',
+                'tailles.taillelibelle as taille'
+            )
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'ticket' => $ticket,
+            'lines' => $lignes
+        ]);
+    }
+
+    public function getMouvements(Request $request)
+    {
+        $du = $request->query('du', date('Y-m-d'));
+        $au = $request->query('au', date('Y-m-d'));
+        $clientid = $request->query('clientid');
+
+        $query = DB::table('detctickets')
+            ->join('ctickets', 'detctickets.cticketid', '=', 'ctickets.cticketid')
+            ->join('produits', 'detctickets.produitid', '=', 'produits.produitid')
+            ->join('produit2s', 'detctickets.produit2id', '=', 'produit2s.produit2id')
+            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
+            ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+            ->whereBetween(DB::raw('DATE(ctickets.datecreation)'), [$du, $au]);
+
+        if ($clientid) {
+            $query->where('ctickets.clientid', $clientid);
+        }
+
+        $mouvements = $query->select(
+            'ctickets.cticketnumero',
+            'ctickets.datecreation as date',
+            'produits.reference',
+            'produits.produitlibelle as designation',
+            'tailles.taillelibelle as taille',
+            'couleurs.couleurlibelle as couleur',
+            'detctickets.qte',
+            'detctickets.ttc as prix',
+            'detctickets.remise',
+            'detctickets.produitid as articleid',
+            'detctickets.produit2id'
+        )->get();
+
+        return response()->json(['success' => true, 'mouvements' => $mouvements]);
     }
 
     /**
