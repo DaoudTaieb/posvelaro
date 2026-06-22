@@ -1,4 +1,37 @@
-@extends('layouts.app')
+import os
+
+with open('scratch_clients.txt', 'r', encoding='utf-8') as f:
+    old_content = f.read()
+
+# Extract Modals
+modal_start = old_content.find('<!-- Modal Nouveau Client -->')
+modal_end = old_content.find('@endsection', modal_start)
+if modal_start != -1 and modal_end != -1:
+    modals = old_content[modal_start:modal_end]
+else:
+    modals = ''
+
+# Extract Modals CSS
+modal_css_start = old_content.find('/* Modal Styles */')
+modal_css_end = old_content.find('/* Form Styles */', modal_css_start)
+if modal_css_end == -1:
+    modal_css_end = old_content.find('/* Global Search */', modal_css_start)
+
+if modal_css_start != -1 and modal_css_end != -1:
+    # Also extract Form styles which are used by the modal
+    form_css_start = old_content.find('/* Form Styles */')
+    form_css_end = old_content.find('/* Action Buttons */', form_css_start)
+    if form_css_end == -1:
+        form_css_end = old_content.find('/* Global Search */', form_css_start)
+    
+    action_css_start = old_content.find('/* Action Buttons */')
+    action_css_end = old_content.find('/* Global Search */', action_css_start)
+
+    modal_css = old_content[modal_css_start:modal_css_end] + "\n" + old_content[form_css_start:form_css_end] + "\n" + old_content[action_css_start:action_css_end]
+else:
+    modal_css = ''
+
+new_content = f"""@extends('layouts.app')
 
 @section('title', 'Consultation des Clients')
 
@@ -159,121 +192,14 @@
     </div>
 </div>
 
-<!-- Modal Nouveau Client -->
-<div class="modal-backdrop" id="newClientModal">
-    <div class="modal-container">
-        <div class="modal-header">
-            <h3 class="modal-title">Nouveau Client</h3>
-            <button class="btn-close" id="btnCloseModal">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </button>
-        </div>
-        <div class="modal-body">
-            <form id="newClientForm" action="{{ route('vente.clients.store') }}" method="POST">
-                @csrf
-                <div class="form-grid">
-                    <!-- Row 1 -->
-                    <div class="form-group col-8">
-                        <label class="form-label">Raison</label>
-                        <input type="text" class="form-control" id="raison" name="raison" required>
-                    </div>
-                    <div class="form-group col-4 row-align">
-                        <input type="checkbox" id="bloqueCredit" name="bloque_credit" class="form-checkbox">
-                        <label for="bloqueCredit" class="checkbox-label">Bloque Crédit</label>
-                    </div>
-
-                    <!-- Row 2 -->
-                    <div class="form-group col-4">
-                        <label class="form-label">Matricule Fiscal</label>
-                        <input type="text" class="form-control" id="matricule_fiscal" name="matricule_fiscal">
-                    </div>
-                    <div class="form-group col-4 row-align" style="padding-top: 28px;">
-                        <input type="checkbox" id="gFidelite" name="g_fidelite" class="form-checkbox" checked>
-                        <label for="gFidelite" class="checkbox-label">G.Fidélite</label>
-                    </div>
-                    <div class="form-group col-4">
-                        <label class="form-label">N° Carte Fid</label>
-                        <input type="text" class="form-control" id="carte_fid" name="carte_fid">
-                    </div>
-
-                    <!-- Row 3 -->
-                    <div class="form-group col-6">
-                        <label class="form-label">Telephone</label>
-                        <input type="text" class="form-control" id="telephone" name="telephone">
-                    </div>
-                    <div class="form-group col-6">
-                        <label class="form-label">E-mail</label>
-                        <input type="email" class="form-control" id="email" name="email">
-                    </div>
-
-                    <!-- Row 4 -->
-                    <div class="form-group col-6">
-                        <label class="form-label">Date de Naissance</label>
-                        <input type="date" class="form-control" id="date_naissance" name="date_naissance" value="{{ date('Y-m-d') }}">
-                    </div>
-                    <div class="form-group col-6">
-                        <label class="form-label">Ville</label>
-                        <input type="text" class="form-control" id="ville" name="ville">
-                    </div>
-
-                    <!-- Row 5 -->
-                    <div class="form-group col-12">
-                        <label class="form-label">Adresse</label>
-                        <textarea class="form-control" id="adresse" name="adresse" rows="2"></textarea>
-                    </div>
-                </div>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <button type="submit" form="newClientForm" class="btn-action confirm" id="btnSubmitForm" title="Valider">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-            </button>
-            <button type="button" class="btn-action cancel" id="btnCancelForm" title="Annuler">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Confirmation Suppression -->
-<div class="modal-backdrop" id="confirmDeleteModal">
-    <div class="modal-container" style="max-width: 400px; text-align: center; padding: 30px;">
-        <div style="color: var(--danger); margin-bottom: 20px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-            </svg>
-        </div>
-        <h3 style="margin-bottom: 10px; color: var(--text);">Confirmer la suppression</h3>
-        <p style="color: var(--text-secondary); margin-bottom: 30px;">Voulez-vous vraiment supprimer ce client ? Cette action est irréversible.</p>
-        
-        <div style="display: flex; gap: 12px; justify-content: center;">
-            <button type="button" class="btn" id="btnCancelDelete" style="background: #f1f5f9; color: var(--text); border: none; padding: 10px 24px; border-radius: 8px; font-weight: 500; cursor: pointer;">
-                Annuler
-            </button>
-            <button type="button" class="btn" id="btnConfirmDelete" style="background: var(--danger); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 500; cursor: pointer;">
-                Supprimer
-            </button>
-        </div>
-    </div>
-</div>
-
+{modals}
 @endsection
 
 @section('styles')
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-    :root {
+    :root {{
         /* Colors - Indigo/Purple Theme */
         --primary: #4f46e5;
         --primary-hover: #4338ca;
@@ -310,53 +236,53 @@
         --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    }
+    }}
 
-    body {
+    body {{
         font-family: 'Inter', sans-serif;
         background-color: var(--background);
         color: var(--text-main);
-    }
+    }}
 
     /* Layout */
-    .pos-container {
+    .pos-container {{
         padding: 24px;
         max-width: 100%;
         margin: 0 auto;
-    }
+    }}
 
     /* Header */
-    .page-header {
+    .page-header {{
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
         margin-bottom: 24px;
-    }
-    .page-title {
+    }}
+    .page-title {{
         font-size: 24px;
         font-weight: 700;
         color: var(--text-main);
         margin: 0 0 4px 0;
         letter-spacing: -0.025em;
-    }
-    .page-subtitle {
+    }}
+    .page-subtitle {{
         font-size: 14px;
         color: var(--text-muted);
         margin: 0;
-    }
-    .header-actions {
+    }}
+    .header-actions {{
         display: flex;
         gap: 12px;
-    }
+    }}
 
     /* KPI Cards */
-    .kpi-grid {
+    .kpi-grid {{
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 24px;
         margin-bottom: 24px;
-    }
-    .kpi-card {
+    }}
+    .kpi-card {{
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
@@ -366,72 +292,72 @@
         gap: 16px;
         box-shadow: var(--shadow-sm);
         transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .kpi-card:hover {
+    }}
+    .kpi-card:hover {{
         transform: translateY(-2px);
         box-shadow: var(--shadow-md);
-    }
-    .kpi-icon-wrapper {
+    }}
+    .kpi-icon-wrapper {{
         width: 48px;
         height: 48px;
         border-radius: var(--radius-md);
         display: flex;
         align-items: center;
         justify-content: center;
-    }
-    .bg-indigo-light { background: var(--primary-light); }
-    .bg-red-light { background: var(--danger-bg); }
+    }}
+    .bg-indigo-light {{ background: var(--primary-light); }}
+    .bg-red-light {{ background: var(--danger-bg); }}
     
-    .kpi-info {
+    .kpi-info {{
         display: flex;
         flex-direction: column;
-    }
-    .kpi-label {
+    }}
+    .kpi-label {{
         font-size: 13px;
         font-weight: 500;
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-bottom: 4px;
-    }
-    .kpi-value {
+    }}
+    .kpi-value {{
         font-size: 24px;
         font-weight: 700;
         color: var(--text-main);
         line-height: 1.2;
-    }
-    .text-danger { color: var(--danger); }
+    }}
+    .text-danger {{ color: var(--danger); }}
 
     /* Content Card */
-    .content-card {
+    .content-card {{
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-sm);
         overflow: hidden;
-    }
+    }}
 
     /* Toolbar */
-    .toolbar {
+    .toolbar {{
         padding: 16px 24px;
         border-bottom: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
         align-items: center;
         background: var(--surface);
-    }
-    .search-wrapper {
+    }}
+    .search-wrapper {{
         position: relative;
         width: 360px;
-    }
-    .search-icon {
+    }}
+    .search-icon {{
         position: absolute;
         left: 12px;
         top: 50%;
         transform: translateY(-50%);
         color: var(--text-muted);
-    }
-    .search-input {
+    }}
+    .search-input {{
         width: 100%;
         padding: 10px 16px 10px 40px;
         border: 1px solid var(--border);
@@ -440,14 +366,14 @@
         outline: none;
         transition: border-color 0.2s, box-shadow 0.2s;
         font-family: inherit;
-    }
-    .search-input:focus {
+    }}
+    .search-input:focus {{
         border-color: var(--primary);
         box-shadow: 0 0 0 3px var(--primary-light);
-    }
+    }}
 
     /* Buttons */
-    .btn {
+    .btn {{
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -460,56 +386,56 @@
         transition: all 0.2s;
         border: 1px solid transparent;
         font-family: inherit;
-    }
-    .btn-primary {
+    }}
+    .btn-primary {{
         background: var(--primary);
         color: white;
-    }
-    .btn-primary:hover {
+    }}
+    .btn-primary:hover {{
         background: var(--primary-hover);
         box-shadow: var(--shadow-sm);
-    }
-    .btn-outline {
+    }}
+    .btn-outline {{
         background: var(--surface);
         border-color: var(--border);
         color: var(--text-main);
-    }
-    .btn-outline:hover {
+    }}
+    .btn-outline:hover {{
         background: var(--background);
         border-color: var(--border-hover);
-    }
+    }}
 
-    .btn-reset {
+    .btn-reset {{
         background: transparent;
         border-color: var(--border);
         color: var(--text-muted);
-    }
-    .btn-reset:hover {
+    }}
+    .btn-reset:hover {{
         background: #fef2f2 !important;
         border-color: #fca5a5 !important;
         color: #ef4444 !important;
-    }
+    }}
 
     /* Table */
-    .table-responsive {
+    .table-responsive {{
         width: 100%;
         overflow-x: auto;
         min-height: 400px;
-    }
-    .data-table {
+    }}
+    .data-table {{
         width: 100%;
         border-collapse: separate;
         border-spacing: 0;
         text-align: left;
         font-size: 13px;
-    }
-    .data-table th, .data-table td {
+    }}
+    .data-table th, .data-table td {{
         padding: 14px 16px;
         border-bottom: 1px solid var(--border);
         white-space: nowrap;
         vertical-align: middle;
-    }
-    .data-table thead th {
+    }}
+    .data-table thead th {{
         background: var(--background);
         color: var(--text-muted);
         font-weight: 600;
@@ -519,21 +445,21 @@
         position: sticky;
         top: 0;
         z-index: 10;
-    }
-    .data-table tbody tr {
+    }}
+    .data-table tbody tr {{
         transition: background-color 0.15s ease;
-    }
-    .data-table tbody tr:hover {
+    }}
+    .data-table tbody tr:hover {{
         background: var(--background);
-    }
-    .filter-row th {
+    }}
+    .filter-row th {{
         padding: 8px 16px;
         background: var(--surface);
         border-bottom: 2px solid var(--border);
         top: 45px; /* Offset for sticky header */
         z-index: 9;
-    }
-    .filter-col {
+    }}
+    .filter-col {{
         width: 100%;
         padding: 8px 10px;
         border: 1px solid var(--border);
@@ -542,34 +468,34 @@
         outline: none;
         transition: border-color 0.2s;
         background: var(--background);
-    }
-    .filter-col:focus {
+    }}
+    .filter-col:focus {{
         border-color: var(--primary);
         background: var(--surface);
         box-shadow: 0 0 0 2px var(--primary-light);
-    }
-    select.filter-col {
+    }}
+    select.filter-col {{
         padding-right: 20px;
-    }
+    }}
     
     /* Typography Utilities */
-    .font-medium { font-weight: 500; }
-    .font-bold { font-weight: 600; }
-    .text-right { text-align: right; }
-    .text-center { text-align: center; }
-    .truncate-text {
+    .font-medium {{ font-weight: 500; }}
+    .font-bold {{ font-weight: 600; }}
+    .text-right {{ text-align: right; }}
+    .text-center {{ text-align: center; }}
+    .truncate-text {{
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-    .amount-cell {
+    }}
+    .amount-cell {{
         font-family: 'Inter', sans-serif;
         font-variant-numeric: tabular-nums;
         text-align: right;
-    }
+    }}
 
     /* Badges */
-    .badge {
+    .badge {{
         display: inline-flex;
         align-items: center;
         padding: 4px 8px;
@@ -578,52 +504,52 @@
         font-weight: 500;
         background: #f1f5f9;
         color: var(--text-muted);
-    }
-    .badge-success {
+    }}
+    .badge-success {{
         background: var(--success-bg);
         color: var(--success);
-    }
-    .badge-danger {
+    }}
+    .badge-danger {{
         background: var(--danger-bg);
         color: var(--danger);
-    }
-    .badge-secondary {
+    }}
+    .badge-secondary {{
         background: var(--default-bg);
-        color: var(--text-main);
-    }
+        color: var(--default);
+    }}
 
     /* Pagination */
-    .pagination-wrapper {
+    .pagination-wrapper {{
         padding: 16px 24px;
         background: var(--surface);
         border-top: 1px solid var(--border);
-    }
-    .pagination-wrapper nav {
+    }}
+    .pagination-wrapper nav {{
         display: flex;
         align-items: center;
         justify-content: space-between;
         width: 100%;
-    }
-    .pagination-wrapper .d-sm-none {
+    }}
+    .pagination-wrapper .d-sm-none {{
         display: flex !important;
         justify-content: space-between;
         width: 100%;
-    }
-    .pagination-wrapper .d-none.d-sm-flex {
+    }}
+    .pagination-wrapper .d-none.d-sm-flex {{
         display: none !important;
-    }
-    .pagination-wrapper ul.pagination {
+    }}
+    .pagination-wrapper ul.pagination {{
         display: flex;
         list-style: none;
         padding: 0;
         margin: 0;
         gap: 6px;
-    }
-    .pagination-wrapper .page-item {
+    }}
+    .pagination-wrapper .page-item {{
         margin: 0;
-    }
+    }}
     .pagination-wrapper .page-link,
-    .pagination-wrapper .page-item span {
+    .pagination-wrapper .page-item span {{
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -639,244 +565,50 @@
         text-decoration: none;
         transition: all 0.2s;
         cursor: pointer;
-    }
-    .pagination-wrapper .page-item a.page-link:hover {
+    }}
+    .pagination-wrapper .page-item a.page-link:hover {{
         background: var(--background);
         border-color: var(--border-hover);
         color: var(--primary);
-    }
+    }}
     .pagination-wrapper .page-item.active .page-link,
-    .pagination-wrapper .page-item.active span {
+    .pagination-wrapper .page-item.active span {{
         background: var(--primary);
         color: white;
         border-color: var(--primary);
-    }
+    }}
     .pagination-wrapper .page-item.disabled .page-link,
-    .pagination-wrapper .page-item.disabled span {
+    .pagination-wrapper .page-item.disabled span {{
         background: var(--background);
         color: #cbd5e1;
         border-color: var(--border);
         cursor: not-allowed;
-    }
-    .pagination-wrapper p {
+    }}
+    .pagination-wrapper p {{
         color: var(--text-muted);
         font-size: 13px;
         margin: 0;
-    }
+    }}
     
-    @media (min-width: 576px) {
-        .pagination-wrapper .d-sm-none {
+    @media (min-width: 576px) {{
+        .pagination-wrapper .d-sm-none {{
             display: none !important;
-        }
-        .pagination-wrapper .d-none.d-sm-flex {
+        }}
+        .pagination-wrapper .d-none.d-sm-flex {{
             display: flex !important;
             align-items: center;
             justify-content: space-between;
             width: 100%;
-        }
-    }
+        }}
+    }}
 
-/* Modal Styles */
-    .modal-backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(15, 23, 42, 0.5);
-        backdrop-filter: blur(4px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease;
-    }
-
-    .modal-backdrop.show {
-        opacity: 1;
-        visibility: visible;
-    }
-
-    .modal-container {
-        background: var(--bg-card);
-        border-radius: 12px;
-        width: 100%;
-        max-width: 800px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        transform: scale(0.95);
-        transition: transform 0.3s ease;
-        display: flex;
-        flex-direction: column;
-        max-height: 90vh;
-    }
-
-    .modal-backdrop.show .modal-container {
-        transform: scale(1);
-    }
-
-    .modal-header {
-        padding: 20px 24px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: #f8fafc;
-        border-radius: 12px 12px 0 0;
-    }
-
-    .modal-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text);
-    }
-
-    .btn-close {
-        background: transparent;
-        border: none;
-        color: var(--text-muted);
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 6px;
-        transition: all 0.2s;
-    }
-    .btn-close:hover {
-        background: var(--border);
-        color: var(--text);
-    }
-
-    .modal-body {
-        padding: 24px;
-        overflow-y: auto;
-    }
-
-    .modal-footer {
-        padding: 16px 24px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-        background: #f8fafc;
-        border-radius: 0 0 12px 12px;
-    }
-
-    
-/* Form Styles */
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(12, 1fr);
-        gap: 20px;
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-
-    .form-group.col-12 { grid-column: span 12; }
-    .form-group.col-8 { grid-column: span 8; }
-    .form-group.col-6 { grid-column: span 6; }
-    .form-group.col-4 { grid-column: span 4; }
-    .form-group.col-3 { grid-column: span 3; }
-
-    .form-group.row-align {
-        flex-direction: row;
-        align-items: center;
-        gap: 10px;
-        height: 100%;
-        padding-top: 24px; /* Align with inputs that have labels */
-    }
-
-    .form-label {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--text-secondary);
-    }
-
-    .form-control {
-        padding: 10px 12px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-size: 14px;
-        font-family: inherit;
-        color: var(--text);
-        transition: all 0.2s;
-        width: 100%;
-    }
-
-    .form-control:focus {
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px var(--primary-light);
-    }
-
-    textarea.form-control {
-        resize: vertical;
-        min-height: 80px;
-    }
-
-    .form-checkbox {
-        width: 18px;
-        height: 18px;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        cursor: pointer;
-        accent-color: var(--primary);
-    }
-
-    .checkbox-label {
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--text);
-        cursor: pointer;
-        user-select: none;
-    }
-
-    
-/* Action Buttons */
-    .btn-action {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 48px;
-        height: 40px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: white;
-        color: var(--text);
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .btn-action:hover {
-        background: #f1f5f9;
-    }
-
-    .btn-action.confirm {
-        border-color: var(--primary);
-        color: var(--primary);
-    }
-    .btn-action.confirm:hover {
-        background: var(--primary-light);
-    }
-
-    .btn-action.cancel {
-        border-color: var(--danger-border);
-        color: var(--danger);
-    }
-    .btn-action.cancel:hover {
-        background: var(--danger-bg);
-    }
-
-    
+{modal_css}
 </style>
 @endsection
 
 @section('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function() {{
         // Elements
         const globalSearch = document.getElementById('globalSearch');
         const filterInputs = document.querySelectorAll('.filter-col');
@@ -886,83 +618,83 @@
 
         let debounceTimer;
 
-        function fetchFilteredData(url = '{{ route("vente.clients.index") }}') {
+        function fetchFilteredData(url = '{{ route("vente.clients.index") }}') {{
             const params = new URLSearchParams();
             
             // Collect global search
             if (globalSearch && globalSearch.value) params.append('q', globalSearch.value);
             
             // Collect column filters
-            filterInputs.forEach(input => {
+            filterInputs.forEach(input => {{
                 if (input.value && !input.disabled) params.append(input.getAttribute('data-col'), input.value);
-            });
+            }});
 
-            const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}${params.toString()}`;
+            const fetchUrl = `${{url}}${{url.includes('?') ? '&' : '?'}}${{params.toString()}}`;
 
             // Show loading state
             tableBody.style.opacity = '0.5';
 
-            fetch(fetchUrl, {
-                headers: {
+            fetch(fetchUrl, {{
+                headers: {{
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json'
-                }
-            })
+                }}
+            }})
             .then(res => res.json())
-            .then(data => {
+            .then(data => {{
                 tableBody.style.opacity = '1';
                 tableBody.innerHTML = data.html;
                 if(paginationWrapper) paginationWrapper.innerHTML = data.pagination;
                 attachPaginationEvents();
 
                 // Update KPI Cards dynamically
-                if (data.kpis) {
+                if (data.kpis) {{
                     if(document.getElementById('kpi_nb_clients')) document.getElementById('kpi_nb_clients').textContent = data.kpis.nb_clients;
                     if(document.getElementById('kpi_total_solde')) document.getElementById('kpi_total_solde').textContent = data.kpis.total_solde;
-                }
+                }}
                 
                 // Re-attach modal events for newly loaded rows
                 attachRowEvents();
-            })
-            .catch(err => {
+            }})
+            .catch(err => {{
                 console.error('Error fetching clients:', err);
                 tableBody.style.opacity = '1';
-            });
-        }
+            }});
+        }}
 
-        function handleInput() {
+        function handleInput() {{
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => fetchFilteredData(), 400);
-        }
+        }}
 
         // Attach events
         if (globalSearch) globalSearch.addEventListener('input', handleInput);
-        filterInputs.forEach(input => {
-            if (!input.disabled) {
+        filterInputs.forEach(input => {{
+            if (!input.disabled) {{
                 input.addEventListener('input', handleInput);
                 input.addEventListener('change', handleInput);
-            }
-        });
+            }}
+        }});
         
         // Clear Filters logic
-        if (btnClear) {
-            btnClear.addEventListener('click', function() {
+        if (btnClear) {{
+            btnClear.addEventListener('click', function() {{
                 if (globalSearch) globalSearch.value = '';
                 filterInputs.forEach(input => input.value = '');
                 fetchFilteredData();
-            });
-        }
+            }});
+        }}
 
-        function attachPaginationEvents() {
+        function attachPaginationEvents() {{
             if (!paginationWrapper) return;
             const links = paginationWrapper.querySelectorAll('a.page-link');
-            links.forEach(link => {
-                link.addEventListener('click', function(e) {
+            links.forEach(link => {{
+                link.addEventListener('click', function(e) {{
                     e.preventDefault();
                     fetchFilteredData(this.href);
-                });
-            });
-        }
+                }});
+            }});
+        }}
 
         attachPaginationEvents();
 
@@ -978,8 +710,8 @@
         
         let clientToDelete = null;
 
-        function openModal() {
-            if (newClientForm) {
+        function openModal() {{
+            if (newClientForm) {{
                 newClientForm.reset();
                 newClientForm.action = '{{ route("vente.clients.store") }}';
                 // Default dates/checkboxes
@@ -988,37 +720,37 @@
                 if(document.getElementById('gFidelite')) document.getElementById('gFidelite').checked = true;
                 
                 // Method spoofing cleanup
-                const methodInput = newClientForm.querySelector('input[name="_method"]');
+                const methodInput = newClientForm.querySelector('input[name=\"_method\"]');
                 if(methodInput) methodInput.remove();
-            }
+            }}
             if (newClientModal) newClientModal.classList.add('show');
-        }
+        }}
 
-        function closeModal() {
+        function closeModal() {{
             if (newClientModal) newClientModal.classList.remove('show');
-        }
+        }}
 
         if (btnNewClient) btnNewClient.addEventListener('click', openModal);
         if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
         if (btnCancelForm) btnCancelForm.addEventListener('click', closeModal);
 
         // Edit logic
-        function attachRowEvents() {
-            document.querySelectorAll('.btn-edit').forEach(btn => {
-                btn.addEventListener('click', function() {
+        function attachRowEvents() {{
+            document.querySelectorAll('.btn-edit').forEach(btn => {{
+                btn.addEventListener('click', function() {{
                     const id = this.getAttribute('data-id');
-                    if (newClientForm) {
-                        newClientForm.action = `/vente/clients/${id}`;
+                    if (newClientForm) {{
+                        newClientForm.action = `/vente/clients/${{id}}`;
                         
                         // Add method spoofing for PUT
-                        let methodInput = newClientForm.querySelector('input[name="_method"]');
-                        if(!methodInput) {
+                        let methodInput = newClientForm.querySelector('input[name=\"_method\"]');
+                        if(!methodInput) {{
                             methodInput = document.createElement('input');
                             methodInput.type = 'hidden';
                             methodInput.name = '_method';
                             methodInput.value = 'PUT';
                             newClientForm.appendChild(methodInput);
-                        }
+                        }}
 
                         // Fill data
                         if(document.getElementById('raison')) document.getElementById('raison').value = this.getAttribute('data-nom') || '';
@@ -1030,19 +762,19 @@
                         
                         if(document.getElementById('bloqueCredit')) document.getElementById('bloqueCredit').checked = this.getAttribute('data-credit') === '1';
                         if(document.getElementById('gFidelite')) document.getElementById('gFidelite').checked = this.getAttribute('data-fidelite') === '1';
-                    }
+                    }}
 
                     if (newClientModal) newClientModal.classList.add('show');
-                });
-            });
+                }});
+            }});
 
-            document.querySelectorAll('.btn-delete').forEach(btn => {
-                btn.addEventListener('click', function() {
+            document.querySelectorAll('.btn-delete').forEach(btn => {{
+                btn.addEventListener('click', function() {{
                     clientToDelete = this.getAttribute('data-id');
                     if(confirmDeleteModal) confirmDeleteModal.classList.add('show');
-                });
-            });
-        }
+                }});
+            }});
+        }}
         
         attachRowEvents();
 
@@ -1050,39 +782,43 @@
         const btnCancelDelete = document.getElementById('btnCancelDelete');
         const btnConfirmDelete = document.getElementById('btnConfirmDelete');
 
-        if (btnCancelDelete) {
-            btnCancelDelete.addEventListener('click', () => {
+        if (btnCancelDelete) {{
+            btnCancelDelete.addEventListener('click', () => {{
                 if(confirmDeleteModal) confirmDeleteModal.classList.remove('show');
                 clientToDelete = null;
-            });
-        }
+            }});
+        }}
 
-        if (btnConfirmDelete) {
-            btnConfirmDelete.addEventListener('click', () => {
-                if (clientToDelete) {
-                    fetch(`/vente/clients/${clientToDelete}`, {
+        if (btnConfirmDelete) {{
+            btnConfirmDelete.addEventListener('click', () => {{
+                if (clientToDelete) {{
+                    fetch(`/vente/clients/${{clientToDelete}}`, {{
                         method: 'DELETE',
-                        headers: {
+                        headers: {{
                             'X-CSRF-TOKEN': '{{ csrf_token() }}',
                             'Accept': 'application/json'
-                        }
-                    })
+                        }}
+                    }})
                     .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
+                    .then(data => {{
+                        if (data.success) {{
                             if(confirmDeleteModal) confirmDeleteModal.classList.remove('show');
                             fetchFilteredData(); // reload table
-                        } else {
+                        }} else {{
                             alert(data.message || 'Erreur lors de la suppression.');
-                        }
-                    })
-                    .catch(err => {
+                        }}
+                    }})
+                    .catch(err => {{
                         console.error(err);
                         alert('Erreur serveur.');
-                    });
-                }
-            });
-        }
-    });
+                    }});
+                }}
+            }});
+        }}
+    }});
 </script>
 @endsection
+"""
+
+with open('resources/views/vente/clients/index.blade.php', 'w', encoding='utf-8') as f:
+    f.write(new_content)

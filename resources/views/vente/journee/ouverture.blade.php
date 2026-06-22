@@ -2,90 +2,98 @@
 @section('title', 'Ouverture Journée')
 
 @section('content')
-<div class="main-content-inner" style="max-width: 600px; margin: 40px auto;">
+<div class="pos-container" style="max-width: 600px; margin: 0 auto; padding-top: 40px;">
     
+    <!-- En-tête -->
+    <div class="page-header" style="margin-bottom: 24px; display: block; text-align: center;">
+        <h1 class="page-title" style="font-size: 28px; font-weight: 800; text-align: center; margin-bottom: 6px;">Ouverture de Journée</h1>
+        <p class="page-subtitle" style="text-align: center; font-size: 14px;">Sélectionnez votre caisse et spécifiez le solde initial d'ouverture.</p>
+    </div>
+
+    <!-- Alertes -->
     @if(session('success'))
-    <div style="background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success); padding: 16px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+    <div class="modern-badge badge-success" style="width: 100%; padding: 14px 18px; border-radius: var(--radius-md); font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; line-height: 1.5; box-shadow: var(--shadow-sm);">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
-        <span style="font-weight: 500;">{{ session('success') }}</span>
+        <span style="font-weight: 600;">{{ session('success') }}</span>
     </div>
     @endif
 
     @if(session('error'))
-    <div style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); padding: 16px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+    <div class="modern-badge badge-danger" style="width: 100%; padding: 14px 18px; border-radius: var(--radius-md); font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; line-height: 1.5; box-shadow: var(--shadow-sm);">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
-        <span style="font-weight: 500;">{{ session('error') }}</span>
+        <span style="font-weight: 600;">{{ session('error') }}</span>
     </div>
     @endif
 
-    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden;">
+    <!-- Carte principale -->
+    <div class="content-card" style="box-shadow: var(--shadow-md);">
         
-        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border); background: #f8fafc;">
-            <h2 style="font-size: 18px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; margin: 0;">
-                <div style="padding: 6px; background: var(--primary-light); color: var(--primary); border-radius: 6px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10 9 9 9 8 9"></polyline>
-                    </svg>
-                </div>
-                Ouverture Journée
-            </h2>
+        <!-- En-tête de la Carte -->
+        <div style="padding: 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; background: #fdfdfe;">
+            <div class="kpi-icon-wrapper bg-indigo-light" style="width: 44px; height: 44px; border-radius: var(--radius-md); flex-shrink: 0;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+            </div>
+            <div style="text-align: left;">
+                <h2 style="font-size: 16px; font-weight: 700; color: var(--text-main); margin: 0;">Paramètres de Caisse</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Veuillez remplir les informations requises</p>
+            </div>
         </div>
 
-        <div style="padding: 24px;">
+        <!-- Corps du Formulaire -->
+        <div style="padding: 28px;">
             <form action="{{ route('vente.journee.ouverture.store') }}" method="POST">
                 @csrf
                 
-                <div style="margin-bottom: 20px;">
-                    <label for="caisseid" style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Caisse</label>
-                    <select name="caisseid" id="caisseid" class="form-control" required style="width: 100%; border-radius: 8px; border: 1px solid var(--border); padding: 10px 14px; font-size: 14px; outline: none; transition: border-color 0.2s;">
-                        <option value="">Sélectionnez une caisse</option>
+                <!-- Sélection de la Caisse -->
+                <div class="form-group" style="margin-bottom: 24px; text-align: left;">
+                    <label for="caisseid" class="form-label" style="font-weight: 600; color: var(--text-main); margin-bottom: 8px;">Caisse de Vente</label>
+                    <select name="caisseid" id="caisseid" class="form-control" required style="height: 44px; font-size: 14px; border-radius: var(--radius-md);">
+                        <option value="">Sélectionnez une caisse...</option>
                         @foreach($caisses as $caisse)
                             <option value="{{ $caisse->caisseid }}">{{ str_pad($caisse->numero ?? $caisse->caisseid, 2, '0', STR_PAD_LEFT) }} - {{ $caisse->libelle }}</option>
                         @endforeach
                     </select>
                     @error('caisseid')
-                        <div style="color: var(--danger); font-size: 12px; margin-top: 6px;">{{ $message }}</div>
+                        <div style="color: var(--danger); font-size: 12px; margin-top: 6px; font-weight: 500;">{{ $message }}</div>
                     @enderror
                 </div>
 
-                <div style="margin-bottom: 24px;">
-                    <label for="fondcaisse" style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Solde Caisse</label>
-                    <input type="number" step="0.001" min="0" name="fondcaisse" id="fondcaisse" class="form-control" value="0" required style="width: 100%; border-radius: 8px; border: 1px solid var(--border); padding: 10px 14px; font-size: 14px; outline: none; transition: border-color 0.2s; font-family: monospace;">
+                <!-- Solde initial / Fond de caisse -->
+                <div class="form-group" style="margin-bottom: 32px; text-align: left;">
+                    <label for="fondcaisse" class="form-label" style="font-weight: 600; color: var(--text-main); margin-bottom: 8px;">Solde Initial (Fond de caisse)</label>
+                    <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                        <input type="number" step="0.001" min="0" name="fondcaisse" id="fondcaisse" class="form-control" value="0" required style="height: 44px; font-size: 16px; font-weight: 700; padding-right: 60px; font-family: 'Inter', sans-serif; border-radius: var(--radius-md);">
+                        <span style="position: absolute; right: 16px; font-weight: 700; font-size: 13px; color: var(--text-muted); pointer-events: none;">TND</span>
+                    </div>
                     @error('fondcaisse')
-                        <div style="color: var(--danger); font-size: 12px; margin-top: 6px;">{{ $message }}</div>
+                        <div style="color: var(--danger); font-size: 12px; margin-top: 6px; font-weight: 500;">{{ $message }}</div>
                     @enderror
                 </div>
 
+                <!-- Bouton Enregistrer -->
                 <div style="display: flex; justify-content: flex-end;">
-                    <button type="submit" style="background: var(--primary); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: background 0.2s;">
+                    <button type="submit" class="btn btn-primary" style="height: 44px; padding: 0 28px; font-weight: 600; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); display: inline-flex; align-items: center; gap: 8px;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                             <polyline points="17 21 17 13 7 13 7 21"></polyline>
                             <polyline points="7 3 7 8 15 8"></polyline>
                         </svg>
-                        Enregistrer
+                        Enregistrer l'Ouverture
                     </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
-<style>
-    .form-control:focus {
-        border-color: var(--primary) !important;
-        box-shadow: 0 0 0 3px var(--primary-light) !important;
-    }
-</style>
 @endsection

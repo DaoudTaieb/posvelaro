@@ -50,6 +50,7 @@ class CommissionController extends Controller
             'f_vendeur' => 'vendeurs.nom',
             'f_net_ht' => 'ctickets.totalnetht',
             'f_taux' => 'vendeurs.tauxcommission',
+            'f_montant' => 'montant_commission', // Handled custom
         ];
 
         foreach ($colMap as $reqKey => $dbCol) {
@@ -69,6 +70,9 @@ class CommissionController extends Controller
                         $qBuilder->where('vendeurs.nom', 'ILIKE', "%{$val}%")
                                  ->orWhere('vendeurs.prenom', 'ILIKE', "%{$val}%");
                     });
+                } elseif ($reqKey == 'f_montant') {
+                    $val = $request->{$reqKey};
+                    $query->whereRaw('CAST((ctickets.totalnetht * vendeurs.tauxcommission / 100) AS TEXT) ILIKE ?', ['%'.$val.'%']);
                 } else {
                     $query->where($dbCol, 'ILIKE', '%' . $request->{$reqKey} . '%');
                 }
@@ -85,36 +89,54 @@ class CommissionController extends Controller
             $query->where('ctickets.employeeid', $request->vendeur);
         }
 
-        if ($hasFilters) {
-            if ($request->ajax()) {
-                Log::info('AJAX Commissions Query: ' . $query->toSql(), $query->getBindings());
+        if ($request->ajax()) {
+            Log::info('AJAX Commissions Query: ' . $query->toSql(), $query->getBindings());
+            Log::info('Request Filters: ', $request->all());
 
-                $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
-                $totalCommission = (clone $query)->sum(DB::raw('(ctickets.totalnetht * vendeurs.tauxcommission / 100)'));
+            $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
+            $totalCommission = (clone $query)->sum(DB::raw('(ctickets.totalnetht * vendeurs.tauxcommission / 100)'));
+            $nbVentes = (clone $query)->count();
 
-                $commissions = $query->paginate(15);
-                $html = view('vente.commissions.partials.table_body', compact('commissions'))->render();
-
-                return response()->json([
-                    'html' => $html,
-                    'pagination' => $commissions->links()->toHtml(),
-                    'totals' => [
-                        'net_ht' => number_format($totalNetHt ?? 0, 3, ',', ' '),
-                        'commission' => number_format($totalCommission ?? 0, 3, ',', ' ')
-                    ]
-                ]);
-            }
             $commissions = $query->paginate(15);
-        } else {
-            // Return empty paginator if no filters
-            $commissions = \Illuminate\Pagination\Paginator::resolveCurrentPage() == 1 
-                ? new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15) 
-                : $query->whereRaw('1 = 0')->paginate(15);
+            $html = view('vente.commissions.partials.table_body', compact('commissions'))->render();
+
+            return response()->json([
+                'html' => $html,
+                'pagination' => $commissions->links()->toHtml(),
+                'totals' => [
+                    'net_ht' => number_format((float)($totalNetHt ?? 0), 3, ',', ' '),
+                    'commission' => number_format((float)($totalCommission ?? 0), 3, ',', ' ')
+                ],
+                'kpis' => [
+                    'nb_ventes' => number_format((float)($nbVentes ?? 0), 0, ',', ' '),
+                    'net_ht' => number_format((float)($totalNetHt ?? 0), 3, ',', ' '),
+                    'commission' => number_format((float)($totalCommission ?? 0), 3, ',', ' ')
+                ]
+            ]);
         }
+
+        // Initial Load (Non-AJAX) -> Just load commissions, no empty paginator logic.
+        $commissions = $query->paginate(15);
+        
+        // Calculate initial totals to pass to the view to avoid layout flickers
+        $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
+        $totalCommission = (clone $query)->sum(DB::raw('(ctickets.totalnetht * vendeurs.tauxcommission / 100)'));
+        $nbVentes = (clone $query)->count();
+
+        $totals = [
+            'net_ht' => number_format((float)($totalNetHt ?? 0), 3, ',', ' '),
+            'commission' => number_format((float)($totalCommission ?? 0), 3, ',', ' ')
+        ];
+
+        $kpis = [
+            'nb_ventes' => number_format((float)($nbVentes ?? 0), 0, ',', ' '),
+            'net_ht' => number_format((float)($totalNetHt ?? 0), 3, ',', ' '),
+            'commission' => number_format((float)($totalCommission ?? 0), 3, ',', ' ')
+        ];
 
         $vendeurs = DB::table('employees')->select('employeeid', 'nom', 'prenom')->where('isvendeur', true)->get();
 
-        return view('vente.commissions.index', compact('commissions', 'vendeurs'));
+        return view('vente.commissions.index', compact('commissions', 'vendeurs', 'totals', 'kpis'));
     }
 
     /**

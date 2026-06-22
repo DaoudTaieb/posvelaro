@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\View;
 
 class DemandeTransfertRecuController extends Controller
 {
@@ -24,22 +25,42 @@ class DemandeTransfertRecuController extends Controller
                      ->whereRaw('p.siteid = det.siterecepteurid'); // On veut NOTRE stock
             })
             ->where('d.siterecepteurid', $siteid) // Nous sommes le récepteur
-            ->where('d.etatdemandetransfertid', '!=', 1) // Cacher les brouillons
-            ->select(
-                'd.demandetransfertnumero',
-                'd.demandetransfertdate',
-                'demandeur.libelle as demandeur',
-                'p.reference',
-                'p.couleurlibelle as couleur',
-                'p.taillelibelle as taille',
-                'det.qte as qte_demandee',
-                'p.qtestock as stock',
-                'etat.libelle as etat',
-                'det.description as cause',
-                'det.qteenvoi as qte_validee',
-                'det.detdemandetransfertid'
-            );
+            ->where('d.etatdemandetransfertid', '!=', 1); // Cacher les brouillons
 
+        // KPIs calculation (Base query without search filters)
+        $kpiQuery = clone $query;
+        $totalLignes = $kpiQuery->count();
+        $aTraiter = (clone $query)->where('det.etatdemandetransfertid', 2)->count(); // 2: Envoyé/En attente
+        $validees = (clone $query)->whereIn('det.etatdemandetransfertid', [3, 4, 5])->count();
+
+        // Main Select
+        $query->select(
+            'd.demandetransfertnumero',
+            'd.demandetransfertdate',
+            'demandeur.libelle as demandeur',
+            'p.reference',
+            'p.couleurlibelle as couleur',
+            'p.taillelibelle as taille',
+            'det.qte as qte_demandee',
+            'p.qtestock as stock',
+            'etat.libelle as etat',
+            'det.description as cause',
+            'det.qteenvoi as qte_validee',
+            'det.detdemandetransfertid',
+            'det.etatdemandetransfertid'
+        );
+
+        // Global search
+        if ($request->filled('search')) {
+            $search = '%' . strtolower($request->search) . '%';
+            $query->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(d.demandetransfertnumero) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(demandeur.libelle) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(p.reference) LIKE ?', [$search]);
+            });
+        }
+
+        // Advanced Filters
         if ($request->filled('datedebut') && $request->filled('datefin')) {
             $query->whereBetween('d.demandetransfertdate', [$request->datedebut, $request->datefin]);
         } elseif ($request->filled('datedebut')) {
@@ -52,14 +73,49 @@ class DemandeTransfertRecuController extends Controller
             $query->where('det.etatdemandetransfertid', $request->etatid);
         }
 
+        // Column Filters
+        $filters = [
+            'f_numero' => 'd.demandetransfertnumero',
+            'f_date' => 'd.demandetransfertdate',
+            'f_demandeur' => 'demandeur.libelle',
+            'f_reference' => 'p.reference',
+            'f_couleur' => 'p.couleurlibelle',
+            'f_taille' => 'p.taillelibelle',
+            'f_etat' => 'etat.libelle',
+            'f_qte_demandee' => 'det.qte',
+            'f_stock' => 'p.qtestock',
+            'f_qte_validee' => 'det.qteenvoi',
+            'f_cause' => 'det.description'
+        ];
+
+        foreach ($filters as $param => $column) {
+            if ($request->filled($param)) {
+                $val = '%' . strtolower($request->$param) . '%';
+                // Cast all to text for generic ilike match, including numeric
+                $query->whereRaw("CAST($column AS text) ILIKE ?", [$val]);
+            }
+        }
+
         $demandes = $query->orderBy('d.demandetransfertdate', 'desc')
                           ->orderBy('d.demandetransfertnumero', 'desc')
                           ->paginate($request->get('per_page', 20));
 
+        if ($request->ajax()) {
+            return response()->json([
+                'html' => View::make('transfert.demande_recu.partials.table', compact('demandes'))->render(),
+                'pagination' => (string) $demandes->appends($request->all())->links('pagination::bootstrap-4'),
+                'kpis' => [
+                    'total' => number_format($totalLignes, 0, ',', ' '),
+                    'atraiter' => number_format($aTraiter, 0, ',', ' '),
+                    'validees' => number_format($validees, 0, ',', ' ')
+                ]
+            ]);
+        }
+
         $defaultDateDebut = $request->datedebut ?? Carbon::now()->format('Y-m-d');
         $defaultDateFin = $request->datefin ?? Carbon::now()->format('Y-m-d');
 
-        return view('transfert.demande_recu.index', compact('demandes', 'etats', 'defaultDateDebut', 'defaultDateFin'));
+        return view('transfert.demande_recu.index', compact('demandes', 'etats', 'defaultDateDebut', 'defaultDateFin', 'totalLignes', 'aTraiter', 'validees'));
     }
 
     public function pointer(Request $request)

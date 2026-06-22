@@ -1,152 +1,27 @@
 @extends('layouts.app')
 
-@section('title', 'Saisie Demande de transfert')
+@section('title', 'Saisie Demande de transfert Velaro')
 
 @section('styles')
 <style>
-    .header-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 20px;
-        background: white;
-        border-bottom: 1px solid var(--border);
-    }
-    .header-actions {
-        display: flex;
-        gap: 5px;
-    }
-    .btn-header {
-        background: white;
-        border: 1px solid var(--border);
-        padding: 6px 12px;
-        border-radius: 4px;
-        font-size: 13px;
-        color: var(--text);
-        cursor: pointer;
-    }
-    .btn-header:hover { background: #f8fafc; }
-    
-    .tabs {
-        display: flex;
-        padding: 0 20px;
-        background: white;
-        border-bottom: 1px solid var(--border);
-    }
-    .tab {
-        padding: 10px 15px;
-        font-size: 13px;
-        font-weight: 500;
-        color: #7e22ce;
-        border-bottom: 2px solid #7e22ce;
-        cursor: pointer;
-    }
-    
-    .form-section {
-        background: white;
-        padding: 15px 20px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        gap: 20px;
-        align-items: flex-end;
-    }
-    
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .form-group label {
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-    .form-control {
-        padding: 6px 10px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 13px;
-        outline: none;
-    }
-    .form-control:disabled {
-        background: #f1f5f9;
-        color: var(--text-muted);
-    }
-    
-    .grid-section {
-        background: white;
-        min-height: 200px;
-    }
-    
-    .grid-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-    }
-    .grid-table th {
-        padding: 8px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        background: #f8fafc;
-        border: 1px solid var(--border);
-        text-align: left;
-    }
-    .grid-table td {
-        padding: 8px;
-        border: 1px solid var(--border);
-        color: var(--text);
-    }
-    
-    .input-row td {
-        padding: 4px;
-    }
-    .input-row input {
-        width: 100%;
-        padding: 4px;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        box-sizing: border-box;
-        outline: none;
-    }
-    
-    .btn-save {
-        padding: 6px 15px;
-        background: white;
-        border: 1px solid var(--text);
-        border-radius: 4px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 32px;
-    }
-    .btn-save:hover { background: #f8fafc; }
-    
-    .footer-bar {
-        padding: 10px 20px;
-        background: #f8fafc;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text);
-    }
-    
     /* Modal Styles */
     .modal-overlay {
         display: none;
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.5);
+        background: rgba(15, 23, 42, 0.6); /* Slate 900 with opacity */
+        backdrop-filter: blur(4px);
         z-index: 1000;
         align-items: center;
         justify-content: center;
     }
     .modal-content {
-        background: white;
+        background: var(--surface);
         width: 95%;
-        height: 95%;
-        border-radius: 4px;
+        max-width: 1200px;
+        height: 90%;
+        border-radius: 12px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -155,92 +30,149 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px 20px;
+        padding: 16px 24px;
         border-bottom: 1px solid var(--border);
+        background: #f8fafc;
+    }
+    .modal-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--text-main);
     }
     .modal-filters {
         display: flex;
         gap: 15px;
-        padding: 10px 20px;
+        padding: 16px 24px;
         background: white;
         border-bottom: 1px solid var(--border);
-        align-items: center;
+        align-items: flex-end;
         flex-wrap: wrap;
     }
     .modal-table-container {
         flex: 1;
         overflow: auto;
+        padding: 0;
     }
-    .modal-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 11px;
-    }
-    .modal-table th {
-        padding: 6px;
-        border: 1px solid var(--border);
+    
+    .input-row td {
+        padding: 8px 12px !important;
         background: #f8fafc;
-        color: var(--text-secondary);
-        font-weight: 600;
-        text-align: left;
     }
-    .modal-table td {
-        padding: 6px;
-        border: 1px solid var(--border);
-        color: var(--text);
-    }
-    .col-search {
+    .input-row input {
         width: 100%;
-        padding: 4px;
+        padding: 6px 10px;
         border: 1px solid var(--border);
-        border-radius: 3px;
+        border-radius: 6px;
         box-sizing: border-box;
-        margin-top: 4px;
+        outline: none;
+        font-size: 13px;
+        transition: border-color 0.2s;
+    }
+    .input-row input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+    .input-row input:disabled {
+        background: #f1f5f9;
+        color: var(--text-muted);
+    }
+
+    .action-btn-small {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+        background: white;
+    }
+    .action-btn-small.add {
+        color: var(--success);
+        border-color: var(--success);
+    }
+    .action-btn-small.add:hover {
+        background: var(--success);
+        color: white;
+    }
+    .action-btn-small.delete {
+        color: var(--danger);
+        border-color: var(--danger);
+    }
+    .action-btn-small.delete:hover {
+        background: var(--danger);
+        color: white;
+    }
+    
+    .footer-bar {
+        padding: 12px 24px;
+        background: #f8fafc;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-main);
     }
 </style>
 @endsection
 
 @section('content')
-<div class="main-content-inner full-width" style="padding: 0;">
+<div class="pos-container">
     
-    <!-- En-tête -->
-    <div class="header-bar">
-        <h1 style="font-size: 16px; font-weight: 700; margin: 0;">Saisie Demande de transfert</h1>
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Saisie Demande de Transfert</h1>
+            <p class="page-subtitle">Nouvelle demande ou modification d'une demande existante.</p>
+        </div>
         <div class="header-actions">
-            <a href="{{ route('transfert.demande_envoye.create') }}" class="btn-header" style="text-decoration: none;">Nouveau</a>
+            <a href="{{ route('transfert.demande_envoye.create') }}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Nouveau
+            </a>
             
-            <button type="button" class="btn-header" onclick="submitForm('envoyer')" {{ (isset($demande) && $demande->etatdemandetransfertid != 1) ? 'disabled' : '' }}>Envoyer</button>
-            <button type="button" class="btn-header">Annuler Demande</button>
+            <button type="button" class="btn btn-primary" onclick="submitForm('envoyer')" {{ (isset($demande) && $demande->etatdemandetransfertid != 1) ? 'disabled' : '' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                Envoyer
+            </button>
             
-            <a href="{{ route('transfert.demande_envoye.index') }}" class="btn-header" style="text-decoration: none; padding: 6px 10px;" title="Fermer">
+            <button type="button" class="btn btn-danger">Annuler Demande</button>
+            
+            <a href="{{ route('transfert.demande_envoye.index') }}" class="btn btn-outline">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
+                Fermer
             </a>
         </div>
     </div>
-    
-    <!-- Onglets -->
-    <div class="tabs">
-        <div class="tab">Général</div>
-    </div>
 
-    <!-- Formulaire Maître -->
-    <div class="tabs-content" style="padding: 15px 20px;">
-        <form method="POST" action="{{ route('transfert.demande_envoye.store') }}" id="headerForm">
-            @csrf
-            <div style="display: flex; gap: 20px; align-items: flex-end;">
-                <!-- Expéditeur -->
-                <div class="form-group" style="flex: 1;">
-                    <label>Expéditeur</label>
+    <form method="POST" action="{{ route('transfert.demande_envoye.store') }}" id="headerForm">
+        @csrf
+        
+        <!-- Informations Générales -->
+        <div class="content-card" style="margin-bottom: 20px;">
+            <div style="padding: 20px; display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap;">
+                
+                <div class="form-group" style="flex: 1; min-width: 200px; margin: 0;">
+                    <label class="form-label">Expéditeur</label>
                     <input type="text" class="form-control" value="{{ $site ? $site->libelle : 'Velaro' }}" disabled>
                     <input type="hidden" name="siteid" value="{{ $site ? $site->siteid : '' }}">
                 </div>
 
-                <!-- Récepteur -->
-                <div class="form-group" style="flex: 1;">
-                    <label>Récepteur</label>
+                <div class="form-group" style="flex: 1; min-width: 200px; margin: 0;">
+                    <label class="form-label">Récepteur</label>
                     <select name="siterecepteurid" class="form-control" required {{ isset($demande) ? 'disabled' : '' }}>
                         <option value="">Sélectionner un site...</option>
                         @foreach($sites as $s)
@@ -253,15 +185,13 @@
                     @endif
                 </div>
 
-                <!-- Observation -->
-                <div class="form-group" style="flex: 2;">
-                    <label>Observation</label>
-                    <input type="text" name="description" class="form-control" placeholder="Observation" value="{{ $demande->description ?? 'Observation' }}" {{ isset($demande) ? 'disabled' : '' }}>
+                <div class="form-group" style="flex: 2; min-width: 300px; margin: 0;">
+                    <label class="form-label">Observation</label>
+                    <input type="text" name="description" class="form-control" placeholder="Observation optionnelle..." value="{{ $demande->description ?? '' }}" {{ isset($demande) ? 'disabled' : '' }}>
                 </div>
 
-                <!-- Actions -->
-                <div style="display: flex; gap: 5px; margin-bottom: 2px;">
-                    <button type="submit" class="btn-save" title="Enregistrer l'en-tête">
+                <div style="margin: 0;">
+                    <button type="submit" class="btn btn-outline" title="Enregistrer l'en-tête" style="height: 38px; width: 38px; padding: 0; display: flex; align-items: center; justify-content: center;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                             <polyline points="17 21 17 13 7 13 7 21"></polyline>
@@ -270,110 +200,131 @@
                     </button>
                 </div>
             </div>
+        </div>
 
-    <!-- Grille de Détails -->
-    <div class="grid-section">
-        <table class="grid-table">
-            <thead>
-                <tr>
-                    <th style="width: 150px;">Réf</th>
-                    <th>Désignation</th>
-                    <th style="width: 80px;">Taille</th>
-                    <th style="width: 80px;">Couleur</th>
-                    <th style="width: 80px;">Qte</th>
-                    <th style="width: 100px;">Prix Vente</th>
-                    <th style="width: 60px; text-align: center;">Clear</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Ligne de saisie -->
-                <tr class="input-row" style="background: #f8fafc;">
-                    <td style="display: flex; gap: 2px;">
-                        <input type="text" id="input-ref" placeholder="Réf..." style="width: calc(100% - 30px);">
-                        <button type="button" class="btn-header" style="padding: 2px 6px;" onclick="openProductModal()">...</button>
-                    </td>
-                    <td><input type="text" id="input-des" disabled></td>
-                    <td><input type="text" id="input-taille" disabled></td>
-                    <td><input type="text" id="input-couleur" disabled></td>
-                    <td><input type="number" id="input-qte" value="1" min="1"></td>
-                    <td><input type="text" id="input-prix" disabled></td>
-                    <td style="text-align: center; display: flex; gap: 5px; justify-content: center;">
-                        <button type="button" class="btn-header" style="padding: 2px 6px; color: #16a34a; border-color: #16a34a;" onclick="addLine(event)">+</button>
-                        <button type="button" class="btn-header" style="padding: 2px 6px; color: #ef4444; border-color: #ef4444;" onclick="clearInputRow(event)">x</button>
-                    </td>
-                </tr>
-                <!-- Lignes de détail existantes -->
-                @if(isset($lignes) && count($lignes) > 0)
-                    @foreach($lignes as $index => $ligne)
-                        <tr class="existing-row">
-                            <td>{{ $ligne->reference ?? $ligne->produitcode }}</td>
-                            <td>{{ $ligne->produitlibelle }}</td>
-                            <td>{{ $ligne->taillelibelle }}</td>
-                            <td>{{ $ligne->couleurlibelle }}</td>
-                            <td>{{ $ligne->qte }}</td>
-                            <td>{{ number_format($ligne->ttc, 2) }}</td>
+        <!-- Tableau des Produits -->
+        <div class="content-card">
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 180px;">Réf</th>
+                            <th>Désignation</th>
+                            <th style="width: 120px;">Taille</th>
+                            <th style="width: 120px;">Couleur</th>
+                            <th style="width: 100px; text-align: center;">Qte</th>
+                            <th style="width: 120px; text-align: right;">Prix Vente</th>
+                            <th style="width: 80px; text-align: center;">Actions</th>
+                        </tr>
+                        <tr class="filter-row">
+                            <th><input type="text" class="local-filter" data-col="0" placeholder="Filtrer Réf..." style="width:100%; border:1px solid var(--border); border-radius:4px; padding:4px;"></th>
+                            <th><input type="text" class="local-filter" data-col="1" placeholder="Filtrer Désignation..." style="width:100%; border:1px solid var(--border); border-radius:4px; padding:4px;"></th>
+                            <th><input type="text" class="local-filter" data-col="2" placeholder="Filtrer Taille..." style="width:100%; border:1px solid var(--border); border-radius:4px; padding:4px;"></th>
+                            <th><input type="text" class="local-filter" data-col="3" placeholder="Filtrer Couleur..." style="width:100%; border:1px solid var(--border); border-radius:4px; padding:4px;"></th>
+                            <th><input type="text" class="local-filter" data-col="4" placeholder="Filtrer Qte..." style="width:100%; border:1px solid var(--border); border-radius:4px; padding:4px; text-align:center;"></th>
+                            <th><input type="text" class="local-filter" data-col="5" placeholder="Filtrer Prix..." style="width:100%; border:1px solid var(--border); border-radius:4px; padding:4px; text-align:right;"></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Ligne de saisie -->
+                        <tr class="input-row">
+                            <td style="display: flex; gap: 8px;">
+                                <input type="text" id="input-ref" placeholder="Scanner Réf..." style="flex: 1;">
+                                <button type="button" class="btn btn-outline" style="padding: 4px 8px; height: auto;" onclick="openProductModal()" title="Recherche avancée">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                </button>
+                            </td>
+                            <td><input type="text" id="input-des" disabled placeholder="Désignation"></td>
+                            <td><input type="text" id="input-taille" disabled placeholder="Taille"></td>
+                            <td><input type="text" id="input-couleur" disabled placeholder="Couleur"></td>
+                            <td><input type="number" id="input-qte" value="1" min="1" style="text-align: center;"></td>
+                            <td><input type="text" id="input-prix" disabled placeholder="Prix" style="text-align: right;"></td>
                             <td style="text-align: center;">
-                                <button type="button" class="btn-header" style="padding: 2px 6px; color: #ef4444; border-color: #ef4444;" onclick="this.closest('tr').remove(); updateFooter();" {{ isset($demande) && $demande->etatdemandetransfertid != 1 ? 'disabled' : '' }}>x</button>
-                                <input type="hidden" name="lignes[{{ $index }}][produitid]" value="{{ $ligne->produitid }}">
-                                <input type="hidden" name="lignes[{{ $index }}][produit2id]" value="{{ $ligne->produit2id }}">
-                                <input type="hidden" name="lignes[{{ $index }}][qte]" value="{{ $ligne->qte }}">
-                                <input type="hidden" name="lignes[{{ $index }}][prix]" value="{{ $ligne->ttc }}">
+                                <div style="display: flex; gap: 4px; justify-content: center;">
+                                    <button type="button" class="action-btn-small add" onclick="addLine(event)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    </button>
+                                    <button type="button" class="action-btn-small delete" onclick="clearInputRow(event)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
-                    @endforeach
-                @endif
-                
-        <!-- Lignes vides par défaut -->
-                <tr id="empty-row" style="{{ isset($lignes) && count($lignes) > 0 ? 'display: none;' : '' }}">
-                    <td colspan="7" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">
-                        No data to display
-                        <br><br>
-                        <span style="font-weight: 400; font-size: 11px;">(Veuillez ajouter des produits avec la zone ci-dessus)</span>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    </form>
 
-    <!-- Footer -->
-    <div class="footer-bar">
-        <div>Nombre de ligne 0</div>
-        <div>0</div>
-    </div>
-    <div style="padding: 10px 15px; background: #f8fafc; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #7e22ce; color: white; border-radius: 4px; font-weight: bold; font-size: 12px;">1</div>
-        <div style="font-size: 12px; color: var(--text-secondary);">
-            Page Size: 
-            <select style="padding: 4px; border: 1px solid var(--border); border-radius: 4px;">
-                <option>20</option>
-            </select>
+                        <!-- Lignes de détail existantes -->
+                        @if(isset($lignes) && count($lignes) > 0)
+                            @foreach($lignes as $index => $ligne)
+                                <tr class="existing-row hover-row">
+                                    <td>{{ $ligne->reference ?? $ligne->produitcode }}</td>
+                                    <td>{{ $ligne->produitlibelle }}</td>
+                                    <td>{{ $ligne->taillelibelle }}</td>
+                                    <td>{{ $ligne->couleurlibelle }}</td>
+                                    <td style="text-align: center; font-weight: 600;">{{ $ligne->qte }}</td>
+                                    <td style="text-align: right;">{{ number_format($ligne->ttc, 2, ',', ' ') }} MAD</td>
+                                    <td style="text-align: center;">
+                                        <button type="button" class="action-btn-small delete" onclick="this.closest('tr').remove(); updateFooter();" {{ isset($demande) && $demande->etatdemandetransfertid != 1 ? 'disabled' : '' }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </button>
+                                        <input type="hidden" name="lignes[{{ $index }}][produitid]" value="{{ $ligne->produitid }}">
+                                        <input type="hidden" name="lignes[{{ $index }}][produit2id]" value="{{ $ligne->produit2id }}">
+                                        <input type="hidden" name="lignes[{{ $index }}][qte]" value="{{ $ligne->qte }}">
+                                        <input type="hidden" name="lignes[{{ $index }}][prix]" value="{{ $ligne->ttc }}">
+                                    </td>
+                                </tr>
+                            @endforeach
+                        @endif
+                        
+                        <!-- Lignes vides par défaut -->
+                        <tr id="empty-row" style="{{ isset($lignes) && count($lignes) > 0 ? 'display: none;' : '' }}">
+                            <td colspan="7" style="padding: 60px; text-align: center; color: var(--text-muted);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; opacity: 0.5;">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                </svg>
+                                <div style="font-weight: 600; font-size: 15px; margin-bottom: 8px;">Aucun produit ajouté</div>
+                                <div style="font-size: 13px;">Veuillez scanner une référence ou utiliser la recherche avancée pour ajouter des produits.</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer-bar">
+                <div>Total Lignes: <span id="total-lines" style="color: var(--primary);">{{ isset($lignes) ? count($lignes) : 0 }}</span></div>
+                <div>Quantité Totale: <span id="total-qte" style="color: var(--primary);">0</span></div>
+            </div>
         </div>
-    </div>
+    </form>
 
     <!-- Modal Sélection des Produits -->
     <div id="productModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <div style="flex:1; display:flex; justify-content:center;">
-                    <h2 style="margin:0; font-size: 16px; font-weight: 700; color: var(--text);">Sélection des produits</h2>
-                </div>
-                <div style="display: flex; gap: 5px;">
-                    <button class="btn-header" style="padding: 6px 15px;" onclick="document.getElementById('productModal').style.display='none'">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </button>
-                    <button class="btn-header" style="padding: 6px 15px;" onclick="document.getElementById('productModal').style.display='none'">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-    @include('transfert.demande_envoye.partials.product_modal')
-
+                <h2 class="modal-title">Recherche de Produits</h2>
+                <button type="button" class="btn btn-outline" style="padding: 6px 10px;" onclick="document.getElementById('productModal').style.display='none'">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- We assume the partial handles its own filters and table body -->
+            @include('transfert.demande_envoye.partials.product_modal')
+            
+        </div>
+    </div>
 </div>
 
+@endsection
+
+@section('scripts')
 <script>
     function submitForm(actionType) {
         let form = document.getElementById('headerForm');
@@ -390,18 +341,26 @@
 
     function openProductModal() {
         document.getElementById('productModal').style.display = 'flex';
-        searchProducts(); // Load initially or wait for click? Let's load initially
+        searchProducts(); // Load initially
     }
 
     function searchProducts() {
-        const sousFamille = document.getElementById('filter-sf').value;
-        const famille = document.getElementById('filter-f').value;
-        const saison = document.getElementById('filter-s').value;
-        const categorie = document.getElementById('filter-c').value;
-        const marque = document.getElementById('filter-m').value;
-        const search = document.getElementById('filter-search').value;
+        // Ensure elements exist before reading values (in case partial changes)
+        const sf = document.getElementById('filter-sf');
+        const f = document.getElementById('filter-f');
+        const s = document.getElementById('filter-s');
+        const c = document.getElementById('filter-c');
+        const m = document.getElementById('filter-m');
+        const searchInput = document.getElementById('filter-search');
 
-        const url = new URL('{{ route("transfert.demande_envoye.search_products") }}');
+        const sousFamille = sf ? sf.value : '';
+        const famille = f ? f.value : '';
+        const saison = s ? s.value : '';
+        const categorie = c ? c.value : '';
+        const marque = m ? m.value : '';
+        const search = searchInput ? searchInput.value : '';
+
+        const url = new URL('{{ route("transfert.demande_envoye.search_products") }}', window.location.origin);
         if(sousFamille) url.searchParams.append('sousfamilleid', sousFamille);
         if(famille) url.searchParams.append('familleid', famille);
         if(saison) url.searchParams.append('saisonid', saison);
@@ -413,20 +372,22 @@
             .then(res => res.json())
             .then(data => {
                 const tbody = document.getElementById('modal-tbody');
+                if (!tbody) return;
+                
                 tbody.innerHTML = '';
                 
                 if(data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="9" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">No data to display</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">Aucun produit trouvé</td></tr>`;
                     return;
                 }
 
                 data.forEach(p => {
                     const tr = document.createElement('tr');
                     tr.style.cursor = 'pointer';
-                    tr.onmouseover = () => tr.style.background = '#f1f5f9';
-                    tr.onmouseout = () => tr.style.background = 'white';
+                    tr.classList.add('hover-row');
                     tr.onclick = () => selectProduct(p);
 
+                    // Reusing Velaro data-table styles for the rows if modal uses them
                     tr.innerHTML = `
                         <td>${p.produitcode || ''}</td>
                         <td>${p.reference || ''}</td>
@@ -434,8 +395,8 @@
                         <td>${p.produitlibelle || ''}</td>
                         <td>${p.famillelibelle || ''}</td>
                         <td>${p.sousfamillelibelle || ''}</td>
-                        <td>${p.ttc_vente || ''}</td>
-                        <td>${p.total_stock || 0}</td>
+                        <td style="text-align: right;">${p.ttc_vente ? parseFloat(p.ttc_vente).toFixed(2) + ' MAD' : ''}</td>
+                        <td style="text-align: center; font-weight: 600;">${p.total_stock || 0}</td>
                         <td>${p.fournisseur || ''}</td>
                     `;
                     tbody.appendChild(tr);
@@ -452,7 +413,7 @@
         document.getElementById('input-des').value = product.produitlibelle || '';
         document.getElementById('input-taille').value = product.taillelibelle || '';
         document.getElementById('input-couleur').value = product.couleurlibelle || '';
-        document.getElementById('input-prix').value = product.ttc_vente || '';
+        document.getElementById('input-prix').value = product.ttc_vente ? parseFloat(product.ttc_vente).toFixed(2) + ' MAD' : '';
         document.getElementById('input-qte').value = 1;
         document.getElementById('input-qte').focus();
     }
@@ -481,20 +442,23 @@
             return;
         }
 
-        const tbody = document.querySelector('.grid-table tbody');
+        const tbody = document.querySelector('.data-table tbody');
         const emptyRow = document.getElementById('empty-row');
         if(emptyRow) emptyRow.style.display = 'none';
 
         const tr = document.createElement('tr');
+        tr.classList.add('existing-row', 'hover-row');
         tr.innerHTML = `
             <td>${currentSelectedProduct.reference || currentSelectedProduct.produitcode}</td>
             <td>${currentSelectedProduct.produitlibelle || ''}</td>
             <td>${currentSelectedProduct.taillelibelle || ''}</td>
             <td>${currentSelectedProduct.couleurlibelle || ''}</td>
-            <td>${qte}</td>
-            <td>${currentSelectedProduct.ttc_vente || ''}</td>
+            <td style="text-align: center; font-weight: 600;">${qte}</td>
+            <td style="text-align: right;">${currentSelectedProduct.ttc_vente ? parseFloat(currentSelectedProduct.ttc_vente).toFixed(2) + ' MAD' : ''}</td>
             <td style="text-align: center;">
-                <button type="button" class="btn-header" style="padding: 2px 6px; color: #ef4444; border-color: #ef4444;" onclick="this.closest('tr').remove(); updateFooter();">x</button>
+                <button type="button" class="action-btn-small delete" onclick="this.closest('tr').remove(); updateFooter();">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
                 <input type="hidden" name="lignes[${lineIndex}][produitid]" value="${currentSelectedProduct.produitid}">
                 <input type="hidden" name="lignes[${lineIndex}][produit2id]" value="${currentSelectedProduct.produit2id}">
                 <input type="hidden" name="lignes[${lineIndex}][qte]" value="${qte}">
@@ -502,7 +466,8 @@
             </td>
         `;
 
-        tbody.appendChild(tr);
+        // Insert before empty row
+        tbody.insertBefore(tr, emptyRow);
         lineIndex++;
         
         updateFooter();
@@ -510,7 +475,7 @@
     }
 
     function updateFooter() {
-        const rows = document.querySelectorAll('.grid-table tbody tr:not(.input-row):not(#empty-row)');
+        const rows = document.querySelectorAll('.data-table tbody tr.existing-row');
         let totalQte = 0;
         
         rows.forEach(row => {
@@ -520,17 +485,19 @@
             }
         });
 
-        const footerDivs = document.querySelectorAll('.footer-bar div');
-        if(footerDivs.length >= 2) {
-            footerDivs[0].textContent = 'Nombre de ligne ' + rows.length;
-            footerDivs[1].textContent = totalQte;
-        }
+        document.getElementById('total-lines').textContent = rows.length;
+        document.getElementById('total-qte').textContent = totalQte;
 
         if(rows.length === 0) {
             const emptyRow = document.getElementById('empty-row');
             if(emptyRow) emptyRow.style.display = 'table-row';
         }
     }
+
+    // Init footer on load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateFooter();
+    });
 
     // Support Enter key on Qte
     document.getElementById('input-qte').addEventListener('keypress', function(e) {
@@ -539,5 +506,74 @@
             addLine();
         }
     });
+
+    // Client-side filtering logic for the detail table
+    const localFilters = document.querySelectorAll('.local-filter');
+    localFilters.forEach(filter => {
+        filter.addEventListener('input', function() {
+            filterLocalTable();
+        });
+    });
+
+    function filterLocalTable() {
+        const rows = document.querySelectorAll('.data-table tbody tr.existing-row');
+        const filters = Array.from(localFilters).map(f => ({
+            col: parseInt(f.getAttribute('data-col')),
+            value: f.value.toLowerCase().trim()
+        }));
+
+        let visibleCount = 0;
+        let totalQte = 0;
+
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            let isMatch = true;
+
+            filters.forEach(f => {
+                if (f.value !== '') {
+                    // Extract text content. For Qte, we might need to handle the fact that we show raw text, 
+                    // but wait, Qte is displayed as text in existing rows, the input is hidden.
+                    const cellText = cells[f.col].textContent.toLowerCase();
+                    if (!cellText.includes(f.value)) {
+                        isMatch = false;
+                    }
+                }
+            });
+
+            if (isMatch) {
+                row.style.display = '';
+                visibleCount++;
+                const qteInput = row.querySelector('input[name$="[qte]"]');
+                if(qteInput) {
+                    totalQte += parseFloat(qteInput.value) || 0;
+                }
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Update footer based on visible rows only (or total? Usually total for the document, but visible if filtering)
+        // Let's update footer to show visible / total
+        const totalRows = rows.length;
+        document.getElementById('total-lines').textContent = visibleCount + ' (sur ' + totalRows + ')';
+        document.getElementById('total-qte').textContent = totalQte;
+        
+        const emptyRow = document.getElementById('empty-row');
+        if (visibleCount === 0 && totalRows > 0) {
+            // All rows filtered out
+            if(emptyRow) {
+                emptyRow.style.display = 'table-row';
+                emptyRow.querySelector('div').textContent = 'Aucun produit ne correspond aux filtres';
+            }
+        } else if (visibleCount > 0) {
+            if(emptyRow) emptyRow.style.display = 'none';
+        } else if (totalRows === 0) {
+            // No rows at all
+            if(emptyRow) {
+                emptyRow.style.display = 'table-row';
+                emptyRow.querySelector('div').textContent = 'Aucun produit ajouté';
+            }
+        }
+    }
 </script>
 @endsection

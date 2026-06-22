@@ -27,37 +27,73 @@ class ClientController extends Controller
             });
         }
 
-        // Column searches mapping based on data-col attributes
+        // Column searches mapping
         $colMap = [
-            '1' => 'clientcode', // Code
-            '2' => 'nom', // Raison Social
-            '7' => 'mf', // Code TVA
-            '11' => 'ville',
-            '12' => 'adressefacturation',
-            '13' => 'adresselivraison',
-            '14' => 'tel',
-            '15' => 'rc',
-            '16' => 'fax',
-            '17' => 'email',
-            '18' => 'clientid'
+            'f_code' => 'clientcode',
+            'f_nom' => 'nom',
+            'f_tarif' => 'tarif',
+            'f_remise' => 'remise',
+            'f_tva' => 'mf',
+            'f_solde' => 'solde',
+            'f_soldedep' => 'soldeinitial',
+            'f_ville' => 'ville',
+            'f_adrfact' => 'adressefacturation',
+            'f_adrliv' => 'adresselivraison',
+            'f_tel' => 'tel',
+            'f_rc' => 'rc',
+            'f_fax' => 'fax',
+            'f_email' => 'email',
+            'f_id' => 'clientid',
+            'f_soldefid' => 'soldefidelite',
+            'f_cumulfid' => 'cumulfidelite',
+            'f_pointfid' => 'pointfidelite'
         ];
 
-        foreach ($colMap as $colIndex => $dbCol) {
-            if ($request->filled('col_' . $colIndex)) {
-                $query->where($dbCol, 'ilike', '%' . $request->input('col_' . $colIndex) . '%');
+        foreach ($colMap as $reqKey => $dbCol) {
+            if ($request->filled($reqKey)) {
+                $query->where($dbCol, 'ilike', '%' . $request->{$reqKey} . '%');
             }
         }
-
-        $clients = $query->orderBy('clientcode', 'desc')->paginate(15)->withQueryString();
         
-        if ($request->ajax()) {
-            return response()->json([
-                'html' => view('vente.clients.partials.table_body', compact('clients'))->render(),
-                'pagination' => $clients->links()->toHtml()
-            ]);
+        // Specialized boolean filters
+        if ($request->filled('f_credit')) {
+            $val = strtolower($request->f_credit);
+            if ($val == 'bloqué' || $val == 'bloque') $query->where('credit', false);
+            elseif ($val == 'actif') $query->where('credit', true);
+        }
+        if ($request->filled('f_fidelite')) {
+            $val = strtolower($request->f_fidelite);
+            if ($val == 'oui') $query->where('fidelite', true);
+            elseif ($val == 'non') $query->where('fidelite', false);
         }
 
-        return view('vente.clients.index', compact('clients'));
+        if ($request->ajax()) {
+            $totalClients = (clone $query)->count();
+            $totalSolde = (clone $query)->sum('solde');
+            
+            $clients = $query->orderBy('clientcode', 'desc')->paginate(15);
+            $html = view('vente.clients.partials.table_body', compact('clients'))->render();
+
+            return response()->json([
+                'html' => $html,
+                'pagination' => $clients->links()->toHtml(),
+                'kpis' => [
+                    'nb_clients' => number_format((float)($totalClients ?? 0), 0, ',', ' '),
+                    'total_solde' => number_format((float)($totalSolde ?? 0), 3, ',', ' ')
+                ]
+            ]);
+        }
+        
+        $totalClients = (clone $query)->count();
+        $totalSolde = (clone $query)->sum('solde');
+
+        $kpis = [
+            'nb_clients' => number_format((float)($totalClients ?? 0), 0, ',', ' '),
+            'total_solde' => number_format((float)($totalSolde ?? 0), 3, ',', ' ')
+        ];
+
+        $clients = $query->orderBy('clientcode', 'desc')->paginate(15);
+        return view('vente.clients.index', compact('clients', 'kpis'));
     }
 
     /**

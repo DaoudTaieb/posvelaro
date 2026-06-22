@@ -31,14 +31,63 @@ class TicketController extends Controller
             ->orderBy('ctickets.cticketdate', 'desc');
 
         // Apply filters
-        if ($request->filled('date_du')) {
-            $query->whereDate('ctickets.cticketdate', '>=', $request->date_du);
+        $dateDu = $request->input('date_du');
+        if ($dateDu) {
+            $query->whereDate('ctickets.cticketdate', '>=', $dateDu);
         }
-        if ($request->filled('date_au')) {
-            $query->whereDate('ctickets.cticketdate', '<=', $request->date_au);
+        $dateAu = $request->input('date_au', now()->format('Y-m-d'));
+        if ($dateAu) {
+            $query->whereDate('ctickets.cticketdate', '<=', $dateAu);
         }
+
         if ($request->filled('statut')) {
-            $query->where('ctickets.statutdocumentid', $request->statut);
+            $statutId = $request->statut;
+            $statutObj = \Illuminate\Support\Facades\DB::table('statutdocuments')->where('statutdocumentid', $statutId)->first();
+            
+            if ($statutObj) {
+                $term = $statutObj->libelle;
+                $query->where(function($q) use ($statutId, $term) {
+                    $q->where('ctickets.statutdocumentid', $statutId);
+                    
+                    $termLower = mb_strtolower($term, 'UTF-8');
+                    $isNonPaye = str_contains($termLower, 'non') || str_contains($termLower, 'imp');
+                    $isPaye = !$isNonPaye && (str_contains($termLower, 'pay') || $termLower === 'payé');
+                    $isAcompte = str_contains($termLower, 'acomp');
+
+                    if ($isPaye) {
+                        $q->orWhere(function($sub) {
+                            $sub->whereNull('ctickets.statutdocumentid')
+                                ->where('ctickets.netapayer', '<=', 0)
+                                ->where('ctickets.totalttc', '>', 0);
+                        });
+                    }
+                    if ($isAcompte) {
+                        $q->orWhere(function($sub) {
+                            $sub->whereNull('ctickets.statutdocumentid')
+                                ->where('ctickets.acompte', '>', 0)
+                                ->where(function($s2) {
+                                    $s2->where('ctickets.netapayer', '>', 0)
+                                       ->orWhere('ctickets.totalttc', '<=', 0);
+                                });
+                        });
+                    }
+                    if ($isNonPaye) {
+                        $q->orWhere(function($sub) {
+                            $sub->whereNull('ctickets.statutdocumentid')
+                                ->where(function($s2) {
+                                    $s2->where('ctickets.netapayer', '>', 0)
+                                       ->orWhere('ctickets.totalttc', '<=', 0);
+                                })
+                                ->where(function($s2) {
+                                    $s2->where('ctickets.acompte', '<=', 0)
+                                       ->orWhereNull('ctickets.acompte');
+                                });
+                        });
+                    }
+                });
+            } else {
+                $query->where('ctickets.statutdocumentid', $statutId);
+            }
         }
         if ($request->filled('client')) {
             $query->where('ctickets.clientid', $request->client);
@@ -56,45 +105,115 @@ class TicketController extends Controller
         // Apply column filters
         $colMap = [
             'f_date' => 'ctickets.cticketdate',
-            'f_numero' => 'ctickets.numerointerne', // or cticketnumero
+            'f_numero' => 'ctickets.numerointerne',
             'f_statut' => 'statutdocuments.libelle',
             'f_code' => 'clients.clientcode',
             'f_client' => 'clients.nom',
             'f_code_vendeur' => 'vendeurs.matricule',
             'f_vendeur' => 'vendeurs.nom',
+            'f_qte' => 'ctickets.totalqte',
+            'f_brutht' => 'ctickets.totalbrutht',
+            'f_remise' => 'ctickets.remise',
+            'f_netht' => 'ctickets.totalnetht',
+            'f_tva' => 'ctickets.totaltva',
+            'f_ttc' => 'ctickets.totalttc',
+            'f_brutttc' => 'ctickets.totalttc',
+            'f_acompte' => 'ctickets.acompte',
+            'f_reste' => 'ctickets.netapayer',
         ];
 
         foreach ($colMap as $reqKey => $dbCol) {
             if ($request->filled($reqKey)) {
+                $term = $request->{$reqKey};
                 if ($reqKey == 'f_date') {
-                    $query->whereDate($dbCol, $request->{$reqKey});
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $term)) {
+                        $query->whereDate('ctickets.cticketdate', $term);
+                    } else {
+                        $query->where(\Illuminate\Support\Facades\DB::raw("to_char(ctickets.cticketdate, 'DD/MM/YYYY')"), 'like', '%' . $term . '%');
+                    }
+                } elseif ($reqKey == 'f_numero') {
+                    $query->where(function($q) use ($term) {
+                        $q->where('ctickets.numerointerne', 'ilike', '%' . $term . '%')
+                          ->orWhere('ctickets.cticketnumero', 'ilike', '%' . $term . '%');
+                    });
+                } elseif ($reqKey == 'f_statut') {
+                    $query->where(function($q) use ($term) {
+                        $termLower = mb_strtolower($term, 'UTF-8');
+                        $isNonPaye = str_contains($termLower, 'non') || str_contains($termLower, 'imp');
+                        $isPaye = !$isNonPaye && (str_contains($termLower, 'pay') || $termLower === 'payé');
+                        $isAcompte = str_contains($termLower, 'acomp');
+
+                        if ($isPaye) {
+                            $q->where('statutdocuments.libelle', 'ilike', 'Payé')
+                              ->orWhere(function($sub) {
+                                  $sub->whereNull('ctickets.statutdocumentid')
+                                      ->where('ctickets.netapayer', '<=', 0)
+                                      ->where('ctickets.totalttc', '>', 0);
+                              });
+                        } elseif ($isNonPaye) {
+                            $q->where('statutdocuments.libelle', 'ilike', 'Non Payé')
+                              ->orWhere(function($sub) {
+                                  $sub->whereNull('ctickets.statutdocumentid')
+                                      ->where(function($s2) {
+                                          $s2->where('ctickets.netapayer', '>', 0)
+                                             ->orWhere('ctickets.totalttc', '<=', 0);
+                                      })
+                                      ->where(function($s2) {
+                                          $s2->where('ctickets.acompte', '<=', 0)
+                                             ->orWhereNull('ctickets.acompte');
+                                      });
+                              });
+                        } elseif ($isAcompte) {
+                            $q->where('statutdocuments.libelle', 'ilike', 'Acompte')
+                              ->orWhere(function($sub) {
+                                  $sub->whereNull('ctickets.statutdocumentid')
+                                      ->where('ctickets.acompte', '>', 0)
+                                      ->where(function($s2) {
+                                          $s2->where('ctickets.netapayer', '>', 0)
+                                             ->orWhere('ctickets.totalttc', '<=', 0);
+                                      });
+                              });
+                        } else {
+                            $q->where('statutdocuments.libelle', 'ilike', '%' . $term . '%');
+                        }
+                    });
                 } elseif ($reqKey == 'f_client') {
-                    $query->where(function($q) use ($request, $reqKey) {
-                        $q->where('clients.nom', 'ilike', '%' . $request->{$reqKey} . '%')
-                          ->orWhere('clients.prenom', 'ilike', '%' . $request->{$reqKey} . '%');
+                    $query->where(function($q) use ($term) {
+                        $q->where('clients.nom', 'ilike', '%' . $term . '%')
+                          ->orWhere('clients.prenom', 'ilike', '%' . $term . '%');
                     });
                 } elseif ($reqKey == 'f_vendeur') {
-                    $query->where(function($q) use ($request, $reqKey) {
-                        $q->where('vendeurs.nom', 'ilike', '%' . $request->{$reqKey} . '%')
-                          ->orWhere('vendeurs.prenom', 'ilike', '%' . $request->{$reqKey} . '%');
+                    $query->where(function($q) use ($term) {
+                        $q->where('vendeurs.nom', 'ilike', '%' . $term . '%')
+                          ->orWhere('vendeurs.prenom', 'ilike', '%' . $term . '%');
                     });
+                } elseif (in_array($reqKey, ['f_qte', 'f_brutht', 'f_remise', 'f_netht', 'f_tva', 'f_ttc', 'f_brutttc', 'f_acompte', 'f_reste'])) {
+                    $cleanTerm = str_replace(',', '.', $term);
+                    if ($reqKey == 'f_qte') {
+                        $query->where(\Illuminate\Support\Facades\DB::raw("CAST(ROUND(" . $dbCol . "::numeric, 0) AS varchar)"), 'like', '%' . $cleanTerm . '%');
+                    } else {
+                        $query->where(\Illuminate\Support\Facades\DB::raw("CAST(ROUND(" . $dbCol . "::numeric, 3) AS varchar)"), 'like', '%' . $cleanTerm . '%');
+                    }
                 } else {
-                    $query->where($dbCol, 'ilike', '%' . $request->{$reqKey} . '%');
+                    $query->where($dbCol, 'ilike', '%' . $term . '%');
                 }
             }
         }
 
-        // Check if any filter is applied
-        $hasFilters = $request->filled('date_du') || $request->filled('date_au') || 
-                      $request->filled('statut') || $request->filled('client') || 
-                      $request->filled('caissier') || $request->filled('vendeur') || 
-                      $request->filled('q');
-
-        foreach ($colMap as $reqKey => $dbCol) {
-            if ($request->filled($reqKey)) {
-                $hasFilters = true;
-                break;
-            }
+        // Apply Global Search
+        if ($request->filled('q')) {
+            $searchTerm = '%' . $request->q . '%';
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('ctickets.numerointerne', 'ilike', $searchTerm)
+                  ->orWhere('ctickets.cticketnumero', 'ilike', $searchTerm)
+                  ->orWhere('clients.nom', 'ilike', $searchTerm)
+                  ->orWhere('clients.prenom', 'ilike', $searchTerm)
+                  ->orWhere('clients.clientcode', 'ilike', $searchTerm)
+                  ->orWhere('caissiers.login', 'ilike', $searchTerm)
+                  ->orWhere('vendeurs.nom', 'ilike', $searchTerm)
+                  ->orWhere('vendeurs.prenom', 'ilike', $searchTerm)
+                  ->orWhere('vendeurs.matricule', 'ilike', $searchTerm);
+            });
         }
 
         if ($request->ajax()) {
@@ -110,6 +229,13 @@ class TicketController extends Controller
             $totalAcompte = (clone $query)->sum('ctickets.acompte');
             $totalReste = (clone $query)->sum('ctickets.netapayer');
 
+            // KPI Calculations
+            $nbTickets = (clone $query)->count();
+            // A ticket is paid if netapayer <= 0 and totalttc > 0 (or simply we can sum the amounts paid: totalttc - netapayer)
+            // But let's use standard logic: total payé = totalttc - netapayer. Unpaid = netapayer.
+            $kpiTotalPaye = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(ctickets.totalttc, 0) - COALESCE(ctickets.netapayer, 0)'));
+            $kpiTotalNonPaye = $totalReste;
+
             $tickets = $query->paginate(15);
             $html = view('vente.tickets.partials.table_body', compact('tickets'))->render();
 
@@ -117,19 +243,59 @@ class TicketController extends Controller
                 'html' => $html,
                 'pagination' => $tickets->links()->toHtml(),
                 'totals' => [
-                    'qte' => number_format($totalQte ?? 0, 0, ',', ' '),
-                    'brut_ht' => number_format($totalBrutHt ?? 0, 3, ',', ' '),
-                    'remise' => number_format($totalRemise ?? 0, 3, ',', ' '),
-                    'net_ht' => number_format($totalNetHt ?? 0, 3, ',', ' '),
-                    'tva' => number_format($totalTva ?? 0, 3, ',', ' '),
-                    'ttc' => number_format($totalTtc ?? 0, 3, ',', ' '),
-                    'acompte' => number_format($totalAcompte ?? 0, 3, ',', ' '),
-                    'reste' => number_format($totalReste ?? 0, 3, ',', ' ')
+                    'qte' => number_format((float)($totalQte ?? 0), 0, ',', ' '),
+                    'brut_ht' => number_format((float)($totalBrutHt ?? 0), 3, ',', ' '),
+                    'remise' => number_format((float)($totalRemise ?? 0), 3, ',', ' '),
+                    'net_ht' => number_format((float)($totalNetHt ?? 0), 3, ',', ' '),
+                    'tva' => number_format((float)($totalTva ?? 0), 3, ',', ' '),
+                    'ttc' => number_format((float)($totalTtc ?? 0), 3, ',', ' '),
+                    'acompte' => number_format((float)($totalAcompte ?? 0), 3, ',', ' '),
+                    'reste' => number_format((float)($totalReste ?? 0), 3, ',', ' ')
+                ],
+                'kpis' => [
+                    'nb_tickets' => number_format((float)($nbTickets ?? 0), 0, ',', ' '),
+                    'ca_ttc' => number_format((float)($totalTtc ?? 0), 3, ',', ' '),
+                    'total_paye' => number_format((float)($kpiTotalPaye ?? 0), 3, ',', ' '),
+                    'total_non_paye' => number_format((float)($kpiTotalNonPaye ?? 0), 3, ',', ' ')
                 ]
             ]);
         }
 
+        // Initial Load (Non-AJAX) -> Just load tickets, no empty paginator logic.
         $tickets = $query->paginate(15);
+        
+        // Calculate initial totals to pass to the view to avoid layout flickers
+        $totalQte = (clone $query)->sum('ctickets.totalqte');
+        $totalBrutHt = (clone $query)->sum('ctickets.totalbrutht');
+        $totalRemise = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('ctickets.totalbrutht - ctickets.totalnetht'));
+        $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
+        $totalTva = (clone $query)->sum('ctickets.totaltva');
+        $totalTtc = (clone $query)->sum('ctickets.totalttc');
+        $totalAcompte = (clone $query)->sum('ctickets.acompte');
+        $totalReste = (clone $query)->sum('ctickets.netapayer');
+
+        // KPI Calculations
+        $nbTickets = (clone $query)->count();
+        $kpiTotalPaye = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(ctickets.totalttc, 0) - COALESCE(ctickets.netapayer, 0)'));
+        $kpiTotalNonPaye = $totalReste;
+
+        $totals = [
+            'qte' => number_format((float)($totalQte ?? 0), 0, ',', ' '),
+            'brut_ht' => number_format((float)($totalBrutHt ?? 0), 3, ',', ' '),
+            'remise' => number_format((float)($totalRemise ?? 0), 3, ',', ' '),
+            'net_ht' => number_format((float)($totalNetHt ?? 0), 3, ',', ' '),
+            'tva' => number_format((float)($totalTva ?? 0), 3, ',', ' '),
+            'ttc' => number_format((float)($totalTtc ?? 0), 3, ',', ' '),
+            'acompte' => number_format((float)($totalAcompte ?? 0), 3, ',', ' '),
+            'reste' => number_format((float)($totalReste ?? 0), 3, ',', ' ')
+        ];
+
+        $kpis = [
+            'nb_tickets' => number_format((float)($nbTickets ?? 0), 0, ',', ' '),
+            'ca_ttc' => number_format((float)($totalTtc ?? 0), 3, ',', ' '),
+            'total_paye' => number_format((float)($kpiTotalPaye ?? 0), 3, ',', ' '),
+            'total_non_paye' => number_format((float)($kpiTotalNonPaye ?? 0), 3, ',', ' ')
+        ];
         $clients = \Illuminate\Support\Facades\DB::table('clients')->select('clientid', 'nom', 'code')->orderBy('nom')->get();
         $statuts = \Illuminate\Support\Facades\DB::table('statutdocuments')
             ->select('statutdocumentid', 'libelle')
@@ -138,7 +304,7 @@ class TicketController extends Controller
         $caissiers = \Illuminate\Support\Facades\DB::table('users')->select('userid', 'login')->get();
         $vendeurs = \Illuminate\Support\Facades\DB::table('employees')->select('employeeid', 'nom', 'prenom')->where('isvendeur', true)->get();
 
-        return view('vente.tickets.index', compact('tickets', 'clients', 'statuts', 'caissiers', 'vendeurs'));
+        return view('vente.tickets.index', compact('tickets', 'clients', 'statuts', 'caissiers', 'vendeurs', 'totals', 'kpis'));
     }
 
     /**

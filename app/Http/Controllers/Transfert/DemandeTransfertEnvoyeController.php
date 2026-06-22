@@ -21,7 +21,7 @@ class DemandeTransfertEnvoyeController extends Controller
         $query = DB::table('demandetransfertsviews')
             ->where('siteid', $siteid);
 
-        // Application des filtres
+        // Application des filtres de la barre d'outils
         if ($request->filled('datedebut') && $request->filled('datefin')) {
             $query->whereBetween('demandetransfertdate', [$request->datedebut, $request->datefin]);
         } elseif ($request->filled('datedebut')) {
@@ -38,16 +38,72 @@ class DemandeTransfertEnvoyeController extends Controller
             $query->where('etatdemandetransfertid', $request->etatid);
         }
 
+        // --- Filtres de colonnes AJAX ---
+        if ($request->filled('f_emetteur')) {
+            $query->whereRaw("CAST(site AS text) ILIKE ?", ['%' . $request->f_emetteur . '%']);
+        }
+        if ($request->filled('f_recepteur')) {
+            $query->whereRaw("CAST(siterecepteur AS text) ILIKE ?", ['%' . $request->f_recepteur . '%']);
+        }
+        if ($request->filled('f_numero')) {
+            $query->whereRaw("CAST(demandetransfertnumero AS text) ILIKE ?", ['%' . $request->f_numero . '%']);
+        }
+        if ($request->filled('f_date')) {
+            $query->whereRaw("CAST(demandetransfertdate AS text) ILIKE ?", ['%' . $request->f_date . '%']);
+        }
+        if ($request->filled('f_etat')) {
+            $query->whereRaw("CAST(etatlibelle AS text) ILIKE ?", ['%' . $request->f_etat . '%']);
+        }
+        if ($request->filled('f_trajet')) {
+            $query->whereRaw("CAST(trajet AS text) ILIKE ?", ['%' . $request->f_trajet . '%']);
+        }
+        if ($request->filled('f_vehicule')) {
+            $query->whereRaw("CAST(vehicule AS text) ILIKE ?", ['%' . $request->f_vehicule . '%']);
+        }
+        if ($request->filled('f_matricule')) {
+            $query->whereRaw("CAST(matricule AS text) ILIKE ?", ['%' . $request->f_matricule . '%']);
+        }
+        if ($request->filled('f_description')) {
+            $query->whereRaw("CAST(description AS text) ILIKE ?", ['%' . $request->f_description . '%']);
+        }
+
+        // Global search (si utilisé)
+        if ($request->filled('search')) {
+            $search = '%' . $request->search . '%';
+            $query->where(function($q) use ($search) {
+                $q->whereRaw("CAST(demandetransfertnumero AS text) ILIKE ?", [$search])
+                  ->orWhereRaw("CAST(description AS text) ILIKE ?", [$search]);
+            });
+        }
+
+        // --- Calcul des KPIs avant pagination ---
+        $totalDemandes = (clone $query)->count();
+        $brouillons = (clone $query)->where('etatdemandetransfertid', 1)->count();
+        $envoyes = (clone $query)->where('etatdemandetransfertid', 2)->count();
+
         // Pagination
+        $perPage = $request->input('per_page', 20);
         $demandes = $query->orderBy('demandetransfertdate', 'desc')
                           ->orderBy('demandetransfertnumero', 'desc')
-                          ->paginate(20);
+                          ->paginate($perPage);
+
+        if ($request->ajax()) {
+            return response()->json([
+                'html' => view('transfert.demande_envoye.partials.table', compact('demandes'))->render(),
+                'pagination' => (string) $demandes->appends($request->all())->links('pagination::bootstrap-4'),
+                'kpis' => [
+                    'totalDemandes' => number_format($totalDemandes, 0, ',', ' '),
+                    'brouillons' => number_format($brouillons, 0, ',', ' '),
+                    'envoyes' => number_format($envoyes, 0, ',', ' ')
+                ]
+            ]);
+        }
 
         // Dates par défaut pour le formulaire
         $defaultDateDebut = $request->datedebut ?? Carbon::now()->format('Y-m-d');
         $defaultDateFin = $request->datefin ?? Carbon::now()->format('Y-m-d');
 
-        return view('transfert.demande_envoye.index', compact('demandes', 'sites', 'etats', 'defaultDateDebut', 'defaultDateFin'));
+        return view('transfert.demande_envoye.index', compact('demandes', 'sites', 'etats', 'defaultDateDebut', 'defaultDateFin', 'totalDemandes', 'brouillons', 'envoyes'));
     }
 
     public function create()

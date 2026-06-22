@@ -62,8 +62,86 @@ class MouvementsArticlesController extends Controller
             $query->where('produits.category4id', $request->saisonid);
         }
 
+        // Mapping des colonnes textuelles
+        $colFilters = [
+            'f_code' => 'produits.produitcode',
+            'code_search' => 'produits.produitcode',
+            'f_couleur' => 'couleurs.couleurlibelle',
+            'couleur_search' => 'couleurs.couleurlibelle',
+            'f_taille' => 'tailles.taillelibelle',
+            'taille_search' => 'tailles.taillelibelle',
+            'f_piece' => 'vdetmvtstcs.docid',
+            'piece_search' => 'vdetmvtstcs.docid',
+            'f_intitule' => 'vdetmvtstcs.doclibelle',
+            'intitule_search' => 'vdetmvtstcs.doclibelle',
+            'f_site' => 'sites.libelle',
+            'site_search' => 'sites.libelle',
+        ];
+
+        foreach ($colFilters as $param => $dbCol) {
+            if ($request->filled($param)) {
+                $query->where($dbCol, 'ilike', '%' . $request->input($param) . '%');
+            }
+        }
+
+        // Filtres numériques et de calcul
+        if ($request->filled('f_achat') || $request->filled('achat_search')) {
+            $val = $request->input('f_achat') ?? $request->input('achat_search');
+            $query->whereRaw('CAST(vdetmvtstcs.qteachat AS text) LIKE ?', ['%' . $val . '%']);
+        }
+        if ($request->filled('f_vente') || $request->filled('vente_search')) {
+            $val = $request->input('f_vente') ?? $request->input('vente_search');
+            $query->whereRaw('CAST(vdetmvtstcs.qtevente AS text) LIKE ?', ['%' . $val . '%']);
+        }
+        if ($request->filled('f_entrer') || $request->filled('entrer_search')) {
+            $val = $request->input('f_entrer') ?? $request->input('entrer_search');
+            $query->whereRaw('(vdetmvtstcs.qtetransfert + vdetmvtstcs.qteinout + vdetmvtstcs.qteecart) > 0')
+                  ->whereRaw('CAST((vdetmvtstcs.qtetransfert + vdetmvtstcs.qteinout + vdetmvtstcs.qteecart) AS text) LIKE ?', ['%' . $val . '%']);
+        }
+        if ($request->filled('f_sortie') || $request->filled('sortie_search')) {
+            $val = $request->input('f_sortie') ?? $request->input('sortie_search');
+            $query->whereRaw('(vdetmvtstcs.qtetransfert + vdetmvtstcs.qteinout + vdetmvtstcs.qteecart) < 0')
+                  ->whereRaw('CAST(ABS(vdetmvtstcs.qtetransfert + vdetmvtstcs.qteinout + vdetmvtstcs.qteecart) AS text) LIKE ?', ['%' . $val . '%']);
+        }
+        if ($request->filled('f_date')) {
+            $query->whereRaw("to_char(vdetmvtstcs.dateoperation, 'DD/MM/YYYY') LIKE ?", ['%' . $request->input('f_date') . '%']);
+        }
+        if ($request->filled('f_heure')) {
+            $query->whereRaw("to_char(vdetmvtstcs.dateoperation, 'HH24:MI') LIKE ?", ['%' . $request->input('f_heure') . '%']);
+        }
+
+        // Calcul des agrégats query-wide
+        $sumAchat = (clone $query)->sum('vdetmvtstcs.qteachat');
+        $sumVente = (clone $query)->sum('vdetmvtstcs.qtevente');
+        $adjustments = (clone $query)->select(DB::raw('COALESCE(vdetmvtstcs.qtetransfert, 0) + COALESCE(vdetmvtstcs.qteinout, 0) + COALESCE(vdetmvtstcs.qteecart, 0) as adj'))->get();
+        $sumEntrer = $adjustments->filter(fn($x) => $x->adj > 0)->sum('adj');
+        $sumSortie = $adjustments->filter(fn($x) => $x->adj < 0)->map(fn($x) => abs($x->adj))->sum();
+
         $mouvements = $query->orderBy('vdetmvtstcs.dateoperation', 'desc')->paginate(50);
 
-        return view('stock.mouvements.index', compact('mouvements', 'dateDu', 'dateAu', 'familles', 'sousFamilles', 'rayons', 'saisons'));
+        if ($request->ajax()) {
+            $html = view('stock.mouvements.partials.table_body', compact('mouvements'))->render();
+            $pagination = $mouvements->appends($request->query())->links('pagination::bootstrap-4')->toHtml();
+
+            return response()->json([
+                'html' => $html,
+                'pagination' => $pagination,
+                'totals' => [
+                    'mouvements_count' => $mouvements->total(),
+                    'achat' => number_format($sumAchat, 0, ',', ' '),
+                    'entrer' => number_format($sumEntrer, 0, ',', ' '),
+                    'sortie' => number_format($sumSortie, 0, ',', ' '),
+                    'vente' => number_format($sumVente, 0, ',', ' '),
+                ],
+                'kpis' => [
+                    'total_mouvements' => number_format($mouvements->total(), 0, ',', ' '),
+                    'total_achats' => number_format($sumAchat, 0, ',', ' '),
+                    'total_ventes' => number_format($sumVente, 0, ',', ' '),
+                    'ajustements_net' => number_format($sumEntrer - $sumSortie, 0, ',', ' '),
+                ]
+            ]);
+        }
+
+        return view('stock.mouvements.index', compact('mouvements', 'dateDu', 'dateAu', 'familles', 'sousFamilles', 'rayons', 'saisons', 'sumAchat', 'sumVente', 'sumEntrer', 'sumSortie'));
     }
 }

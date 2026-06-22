@@ -18,33 +18,42 @@ class StockDetailleController extends Controller
 
         $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
 
+        // Sous-requêtes d'agrégation pour éviter le produit cartésien
+        $mvtSub = DB::table('vdetmvtstcs')
+            ->select(
+                'produitid',
+                DB::raw('COALESCE(SUM(qteachat), 0) as total_achat'),
+                DB::raw('COALESCE(SUM(qtetransfert), 0) as total_transfert'),
+                DB::raw('COALESCE(SUM(qtevente), 0) as total_vente'),
+                DB::raw('COALESCE(SUM(qteinout), 0) as total_es'),
+                DB::raw('COALESCE(SUM(qteecart), 0) as total_ecart')
+            )
+            ->where('siteid', $siteid)
+            ->groupBy('produitid');
+
+        $stockSub = DB::table('vstockcts')
+            ->select(
+                'produitid',
+                DB::raw('COALESCE(SUM(qtestock), 0) as total_stock')
+            )
+            ->where('siteid', $siteid)
+            ->groupBy('produitid');
+
         // Requête principale
         $query = DB::table('produits')
-            ->leftJoin('vdetmvtstcs', function($join) use ($siteid) {
-                $join->on('produits.produitid', '=', 'vdetmvtstcs.produitid')
-                     ->where('vdetmvtstcs.siteid', '=', $siteid);
-            })
-            ->leftJoin('vstockcts', function($join) use ($siteid) {
-                $join->on('produits.produitid', '=', 'vstockcts.produitid')
-                     ->where('vstockcts.siteid', '=', $siteid);
-            })
+            ->leftJoinSub($mvtSub, 'mvt', 'produits.produitid', '=', 'mvt.produitid')
+            ->leftJoinSub($stockSub, 'stk', 'produits.produitid', '=', 'stk.produitid')
             ->select(
                 'produits.produitid',
                 'produits.reference',
                 'produits.produitcode',
                 'produits.produitlibelle',
-                DB::raw('COALESCE(SUM(vdetmvtstcs.qteachat), 0) as total_achat'),
-                DB::raw('COALESCE(SUM(vdetmvtstcs.qtetransfert), 0) as total_transfert'),
-                DB::raw('COALESCE(SUM(vdetmvtstcs.qtevente), 0) as total_vente'),
-                DB::raw('COALESCE(SUM(vdetmvtstcs.qteinout), 0) as total_es'),
-                DB::raw('COALESCE(SUM(vdetmvtstcs.qteecart), 0) as total_ecart'),
-                DB::raw('MAX(COALESCE(vstockcts.qtestock, 0)) as total_stock')
-            )
-            ->groupBy(
-                'produits.produitid',
-                'produits.reference',
-                'produits.produitcode',
-                'produits.produitlibelle'
+                DB::raw('COALESCE(mvt.total_achat, 0) as total_achat'),
+                DB::raw('COALESCE(mvt.total_transfert, 0) as total_transfert'),
+                DB::raw('COALESCE(mvt.total_vente, 0) as total_vente'),
+                DB::raw('COALESCE(mvt.total_es, 0) as total_es'),
+                DB::raw('COALESCE(mvt.total_ecart, 0) as total_ecart'),
+                DB::raw('COALESCE(stk.total_stock, 0) as total_stock')
             );
 
         // Application des filtres
@@ -64,6 +73,44 @@ class StockDetailleController extends Controller
         }
         if ($request->filled('saisonid')) {
             $query->where('produits.category4id', $request->saisonid);
+            $hasFilter = true;
+        }
+        if ($request->filled('ref_search')) {
+            $query->where('produits.reference', 'like', '%' . $request->ref_search . '%');
+            $hasFilter = true;
+        }
+        if ($request->filled('code_search')) {
+            $query->where('produits.produitcode', 'like', '%' . $request->code_search . '%');
+            $hasFilter = true;
+        }
+        if ($request->filled('libelle_search')) {
+            $query->where('produits.produitlibelle', 'like', '%' . $request->libelle_search . '%');
+            $hasFilter = true;
+        }
+
+        // Filtres sur les colonnes numériques calculées
+        if ($request->filled('achat_search')) {
+            $query->whereRaw('CAST(COALESCE(mvt.total_achat, 0) as text) like ?', ['%' . $request->achat_search . '%']);
+            $hasFilter = true;
+        }
+        if ($request->filled('transfert_search')) {
+            $query->whereRaw('CAST(COALESCE(mvt.total_transfert, 0) as text) like ?', ['%' . $request->transfert_search . '%']);
+            $hasFilter = true;
+        }
+        if ($request->filled('vente_search')) {
+            $query->whereRaw('CAST(COALESCE(mvt.total_vente, 0) as text) like ?', ['%' . $request->vente_search . '%']);
+            $hasFilter = true;
+        }
+        if ($request->filled('es_search')) {
+            $query->whereRaw('CAST(COALESCE(mvt.total_es, 0) as text) like ?', ['%' . $request->es_search . '%']);
+            $hasFilter = true;
+        }
+        if ($request->filled('stock_search')) {
+            $query->whereRaw('CAST(COALESCE(stk.total_stock, 0) as text) like ?', ['%' . $request->stock_search . '%']);
+            $hasFilter = true;
+        }
+        if ($request->filled('ecart_search')) {
+            $query->whereRaw('CAST(COALESCE(mvt.total_ecart, 0) as text) like ?', ['%' . $request->ecart_search . '%']);
             $hasFilter = true;
         }
 

@@ -1,3 +1,42 @@
+<?php
+
+$old_content = file_get_contents('resources/views/vente/clients/index.blade.php');
+
+// Extract Modals
+$modal_start = strpos($old_content, '<!-- Modal Nouveau Client -->');
+$modal_end = strpos($old_content, '@endsection', $modal_start);
+$modals = '';
+if ($modal_start !== false && $modal_end !== false) {
+    $modals = substr($old_content, $modal_start, $modal_end - $modal_start);
+} else {
+    echo "Warning: Modals not found!\n";
+}
+
+// Extract Modals CSS
+$modal_css_start = strpos($old_content, '/* Modal Styles */');
+$modal_css_end = strpos($old_content, '/* Form Styles */', $modal_css_start);
+if ($modal_css_end === false) {
+    $modal_css_end = strpos($old_content, '/* Global Search */', $modal_css_start);
+}
+
+$modal_css = '';
+if ($modal_css_start !== false && $modal_css_end !== false) {
+    // Also extract Form styles
+    $form_css_start = strpos($old_content, '/* Form Styles */');
+    $form_css_end = strpos($old_content, '/* Action Buttons */', $form_css_start);
+    if ($form_css_end === false) {
+        $form_css_end = strpos($old_content, '/* Global Search */', $form_css_start);
+    }
+    
+    $action_css_start = strpos($old_content, '/* Action Buttons */');
+    $action_css_end = strpos($old_content, '/* Global Search */', $action_css_start);
+
+    $modal_css = substr($old_content, $modal_css_start, $modal_css_end - $modal_css_start) . "\n" . 
+                 substr($old_content, $form_css_start, $form_css_end - $form_css_start) . "\n" . 
+                 substr($old_content, $action_css_start, $action_css_end - $action_css_start);
+}
+
+$new_content = <<<HTML
 @extends('layouts.app')
 
 @section('title', 'Consultation des Clients')
@@ -42,7 +81,7 @@
             </div>
             <div class="kpi-info">
                 <span class="kpi-label">Nombre de Clients</span>
-                <span class="kpi-value" id="kpi_nb_clients">{{ $kpis['nb_clients'] ?? 0 }}</span>
+                <span class="kpi-value" id="kpi_nb_clients">{{ \$kpis['nb_clients'] ?? 0 }}</span>
             </div>
         </div>
         <div class="kpi-card">
@@ -54,7 +93,7 @@
             </div>
             <div class="kpi-info">
                 <span class="kpi-label">Total Solde</span>
-                <span class="kpi-value text-danger" id="kpi_total_solde">{{ $kpis['total_solde'] ?? '0' }}</span>
+                <span class="kpi-value text-danger" id="kpi_total_solde">{{ \$kpis['total_solde'] ?? '0' }}</span>
             </div>
         </div>
     </div>
@@ -154,119 +193,12 @@
 
         <!-- Pagination -->
         <div class="pagination-wrapper" id="paginationWrapper">
-            {{ $clients->links() }}
+            {{ \$clients->links() }}
         </div>
     </div>
 </div>
 
-<!-- Modal Nouveau Client -->
-<div class="modal-backdrop" id="newClientModal">
-    <div class="modal-container">
-        <div class="modal-header">
-            <h3 class="modal-title">Nouveau Client</h3>
-            <button class="btn-close" id="btnCloseModal">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </button>
-        </div>
-        <div class="modal-body">
-            <form id="newClientForm" action="{{ route('vente.clients.store') }}" method="POST">
-                @csrf
-                <div class="form-grid">
-                    <!-- Row 1 -->
-                    <div class="form-group col-8">
-                        <label class="form-label">Raison</label>
-                        <input type="text" class="form-control" id="raison" name="raison" required>
-                    </div>
-                    <div class="form-group col-4 row-align">
-                        <input type="checkbox" id="bloqueCredit" name="bloque_credit" class="form-checkbox">
-                        <label for="bloqueCredit" class="checkbox-label">Bloque Crédit</label>
-                    </div>
-
-                    <!-- Row 2 -->
-                    <div class="form-group col-4">
-                        <label class="form-label">Matricule Fiscal</label>
-                        <input type="text" class="form-control" id="matricule_fiscal" name="matricule_fiscal">
-                    </div>
-                    <div class="form-group col-4 row-align" style="padding-top: 28px;">
-                        <input type="checkbox" id="gFidelite" name="g_fidelite" class="form-checkbox" checked>
-                        <label for="gFidelite" class="checkbox-label">G.Fidélite</label>
-                    </div>
-                    <div class="form-group col-4">
-                        <label class="form-label">N° Carte Fid</label>
-                        <input type="text" class="form-control" id="carte_fid" name="carte_fid">
-                    </div>
-
-                    <!-- Row 3 -->
-                    <div class="form-group col-6">
-                        <label class="form-label">Telephone</label>
-                        <input type="text" class="form-control" id="telephone" name="telephone">
-                    </div>
-                    <div class="form-group col-6">
-                        <label class="form-label">E-mail</label>
-                        <input type="email" class="form-control" id="email" name="email">
-                    </div>
-
-                    <!-- Row 4 -->
-                    <div class="form-group col-6">
-                        <label class="form-label">Date de Naissance</label>
-                        <input type="date" class="form-control" id="date_naissance" name="date_naissance" value="{{ date('Y-m-d') }}">
-                    </div>
-                    <div class="form-group col-6">
-                        <label class="form-label">Ville</label>
-                        <input type="text" class="form-control" id="ville" name="ville">
-                    </div>
-
-                    <!-- Row 5 -->
-                    <div class="form-group col-12">
-                        <label class="form-label">Adresse</label>
-                        <textarea class="form-control" id="adresse" name="adresse" rows="2"></textarea>
-                    </div>
-                </div>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <button type="submit" form="newClientForm" class="btn-action confirm" id="btnSubmitForm" title="Valider">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-            </button>
-            <button type="button" class="btn-action cancel" id="btnCancelForm" title="Annuler">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Confirmation Suppression -->
-<div class="modal-backdrop" id="confirmDeleteModal">
-    <div class="modal-container" style="max-width: 400px; text-align: center; padding: 30px;">
-        <div style="color: var(--danger); margin-bottom: 20px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-            </svg>
-        </div>
-        <h3 style="margin-bottom: 10px; color: var(--text);">Confirmer la suppression</h3>
-        <p style="color: var(--text-secondary); margin-bottom: 30px;">Voulez-vous vraiment supprimer ce client ? Cette action est irréversible.</p>
-        
-        <div style="display: flex; gap: 12px; justify-content: center;">
-            <button type="button" class="btn" id="btnCancelDelete" style="background: #f1f5f9; color: var(--text); border: none; padding: 10px 24px; border-radius: 8px; font-weight: 500; cursor: pointer;">
-                Annuler
-            </button>
-            <button type="button" class="btn" id="btnConfirmDelete" style="background: var(--danger); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 500; cursor: pointer;">
-                Supprimer
-            </button>
-        </div>
-    </div>
-</div>
-
+{\$modals}
 @endsection
 
 @section('styles')
@@ -676,201 +608,7 @@
         }
     }
 
-/* Modal Styles */
-    .modal-backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(15, 23, 42, 0.5);
-        backdrop-filter: blur(4px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease;
-    }
-
-    .modal-backdrop.show {
-        opacity: 1;
-        visibility: visible;
-    }
-
-    .modal-container {
-        background: var(--bg-card);
-        border-radius: 12px;
-        width: 100%;
-        max-width: 800px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        transform: scale(0.95);
-        transition: transform 0.3s ease;
-        display: flex;
-        flex-direction: column;
-        max-height: 90vh;
-    }
-
-    .modal-backdrop.show .modal-container {
-        transform: scale(1);
-    }
-
-    .modal-header {
-        padding: 20px 24px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: #f8fafc;
-        border-radius: 12px 12px 0 0;
-    }
-
-    .modal-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text);
-    }
-
-    .btn-close {
-        background: transparent;
-        border: none;
-        color: var(--text-muted);
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 6px;
-        transition: all 0.2s;
-    }
-    .btn-close:hover {
-        background: var(--border);
-        color: var(--text);
-    }
-
-    .modal-body {
-        padding: 24px;
-        overflow-y: auto;
-    }
-
-    .modal-footer {
-        padding: 16px 24px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-        background: #f8fafc;
-        border-radius: 0 0 12px 12px;
-    }
-
-    
-/* Form Styles */
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(12, 1fr);
-        gap: 20px;
-    }
-
-    .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-
-    .form-group.col-12 { grid-column: span 12; }
-    .form-group.col-8 { grid-column: span 8; }
-    .form-group.col-6 { grid-column: span 6; }
-    .form-group.col-4 { grid-column: span 4; }
-    .form-group.col-3 { grid-column: span 3; }
-
-    .form-group.row-align {
-        flex-direction: row;
-        align-items: center;
-        gap: 10px;
-        height: 100%;
-        padding-top: 24px; /* Align with inputs that have labels */
-    }
-
-    .form-label {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--text-secondary);
-    }
-
-    .form-control {
-        padding: 10px 12px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-size: 14px;
-        font-family: inherit;
-        color: var(--text);
-        transition: all 0.2s;
-        width: 100%;
-    }
-
-    .form-control:focus {
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px var(--primary-light);
-    }
-
-    textarea.form-control {
-        resize: vertical;
-        min-height: 80px;
-    }
-
-    .form-checkbox {
-        width: 18px;
-        height: 18px;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        cursor: pointer;
-        accent-color: var(--primary);
-    }
-
-    .checkbox-label {
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--text);
-        cursor: pointer;
-        user-select: none;
-    }
-
-    
-/* Action Buttons */
-    .btn-action {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 48px;
-        height: 40px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: white;
-        color: var(--text);
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .btn-action:hover {
-        background: #f1f5f9;
-    }
-
-    .btn-action.confirm {
-        border-color: var(--primary);
-        color: var(--primary);
-    }
-    .btn-action.confirm:hover {
-        background: var(--primary-light);
-    }
-
-    .btn-action.cancel {
-        border-color: var(--danger-border);
-        color: var(--danger);
-    }
-    .btn-action.cancel:hover {
-        background: var(--danger-bg);
-    }
-
-    
+{\$modal_css}
 </style>
 @endsection
 
@@ -897,7 +635,7 @@
                 if (input.value && !input.disabled) params.append(input.getAttribute('data-col'), input.value);
             });
 
-            const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}${params.toString()}`;
+            const fetchUrl = `\${url}\${url.includes('?') ? '&' : '?'}\${params.toString()}`;
 
             // Show loading state
             tableBody.style.opacity = '0.5';
@@ -1008,7 +746,7 @@
                 btn.addEventListener('click', function() {
                     const id = this.getAttribute('data-id');
                     if (newClientForm) {
-                        newClientForm.action = `/vente/clients/${id}`;
+                        newClientForm.action = `/vente/clients/\${id}`;
                         
                         // Add method spoofing for PUT
                         let methodInput = newClientForm.querySelector('input[name="_method"]');
@@ -1060,7 +798,7 @@
         if (btnConfirmDelete) {
             btnConfirmDelete.addEventListener('click', () => {
                 if (clientToDelete) {
-                    fetch(`/vente/clients/${clientToDelete}`, {
+                    fetch(`/vente/clients/\${clientToDelete}`, {
                         method: 'DELETE',
                         headers: {
                             'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -1086,3 +824,12 @@
     });
 </script>
 @endsection
+HTML;
+
+$new_content = str_replace('{$modals}', $modals, $new_content);
+$new_content = str_replace('{$modal_css}', $modal_css, $new_content);
+
+file_put_contents('resources/views/vente/clients/index.blade.php', $new_content);
+
+echo "Success!\n";
+

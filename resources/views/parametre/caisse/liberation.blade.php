@@ -1,163 +1,78 @@
 @extends('layouts.app')
 
-@section('title', 'Libération de caisse')
-
-@section('styles')
-<style>
-    .page-header {
-        padding: 15px 20px;
-        background: white;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .page-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--text);
-        margin: 0;
-    }
-
-    .table-container {
-        padding: 20px;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        background: white;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    th {
-        background: #f8fafc;
-        padding: 12px 15px;
-        text-align: left;
-        font-weight: 600;
-        color: var(--text-secondary);
-        border-bottom: 1px solid var(--border);
-        font-size: 13px;
-    }
-
-    td {
-        padding: 12px 15px;
-        border-bottom: 1px solid var(--border);
-        color: var(--text);
-        font-size: 14px;
-    }
-
-    tr:last-child td {
-        border-bottom: none;
-    }
-
-    tr:hover {
-        background: #f1f5f9;
-    }
-
-    .status-badge {
-        display: inline-block;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-    
-    .status-connected {
-        background: #fef08a; /* yellow-200 */
-        color: #854d0e; /* yellow-800 */
-    }
-
-    .status-free {
-        background: #bbf7d0; /* green-200 */
-        color: #166534; /* green-800 */
-    }
-
-    .btn-liberer {
-        background: #ef4444; /* red-500 */
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 500;
-        transition: background 0.2s;
-    }
-
-    .btn-liberer:hover {
-        background: #dc2626; /* red-600 */
-    }
-
-    .btn-liberer:disabled {
-        background: #fca5a5;
-        cursor: not-allowed;
-    }
-
-    .alert-success {
-        background: #dcfce7;
-        color: #166534;
-        padding: 10px 15px;
-        border-radius: 4px;
-        margin: 20px 20px 0 20px;
-        border: 1px solid #bbf7d0;
-    }
-</style>
-@endsection
+@section('title', 'Libération de caisse - Velaro')
 
 @section('content')
-<div class="main-content-inner full-width" style="padding: 0;">
-    
+<div class="pos-container">
     <div class="page-header">
-        <h1 class="page-title">Libération de caisse</h1>
+        <div>
+            <h1 class="page-title">Libération de Caisse</h1>
+            <p class="page-subtitle">Déconnectez les caisses des machines qui y sont actuellement rattachées.</p>
+        </div>
     </div>
 
     @if(session('success'))
-        <div class="alert-success">
+        <div style="background: var(--success); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
             {{ session('success') }}
         </div>
     @endif
 
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Caisse</th>
-                    <th>Site</th>
-                    <th>État</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($caisses as $caisse)
-                <tr>
-                    <td>{{ $caisse->caisseid }}</td>
-                    <td style="font-weight: 500;">{{ $caisse->libelle }}</td>
-                    <td>{{ $caisse->site_libelle }}</td>
-                    <td>
-                        @if($caisse->machineid)
-                            <span class="status-badge status-connected">Connectée (Machine: {{ $caisse->machineid }})</span>
-                        @else
-                            <span class="status-badge status-free">Libre</span>
-                        @endif
-                    </td>
-                    <td>
-                        <form action="{{ route('parametre.caisse.liberer', $caisse->caisseid) }}" method="POST" onsubmit="return confirm('Êtes-vous sûr de vouloir libérer cette caisse ?');">
-                            @csrf
-                            <button type="submit" class="btn-liberer" {{ !$caisse->machineid ? 'disabled' : '' }}>
-                                Libérer
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
+    <div class="content-card">
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 10%;">ID</th>
+                        <th style="width: 30%;">Caisse</th>
+                        <th style="width: 25%;">Site</th>
+                        <th style="width: 20%; text-align: center;">État</th>
+                        <th style="width: 15%; text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($caisses as $caisse)
+                    <tr class="hover-row">
+                        <td style="font-weight: 600; color: var(--text-muted);">{{ str_pad($caisse->caisseid, 3, '0', STR_PAD_LEFT) }}</td>
+                        <td class="font-medium" style="color: var(--primary);">{{ $caisse->libelle }}</td>
+                        <td>{{ $caisse->site_libelle }}</td>
+                        <td style="text-align: center;">
+                            @if($caisse->machineid)
+                                <span class="status-badge status-draft" style="background: #fef3c7; color: #92400e; border-color: #fde68a;">
+                                    <span style="display: flex; align-items: center; gap: 4px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                                        ID: {{ $caisse->machineid }}
+                                    </span>
+                                </span>
+                            @else
+                                <span class="status-badge status-paid" style="background: #dcfce7; color: #166534; border-color: #bbf7d0;">Libre</span>
+                            @endif
+                        </td>
+                        <td style="text-align: center;">
+                            <form action="{{ route('parametre.caisse.liberer', $caisse->caisseid) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Êtes-vous sûr de vouloir libérer cette caisse ?');">
+                                @csrf
+                                <button type="submit" class="btn btn-outline" style="padding: 4px 12px; height: auto; {{ !$caisse->machineid ? 'opacity: 0.5; cursor: not-allowed;' : 'color: #dc2626; border-color: #fca5a5; background: #fef2f2;' }}" {{ !$caisse->machineid ? 'disabled' : '' }}>
+                                    Libérer
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="5" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; opacity: 0.5;">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line>
+                            </svg>
+                            <div style="font-weight: 600; font-size: 15px; margin-bottom: 8px;">Aucune caisse trouvée</div>
+                        </td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </div>
-
 </div>
 @endsection

@@ -1,424 +1,428 @@
 @extends('layouts.app')
-
 @section('title', 'Mouvements Des Produits')
 
-@section('styles')
-<style>
-    .pagination { display: flex; list-style: none; padding: 0; margin: 0; gap: 4px; align-items: center; }
-    .pagination li a, .pagination li span { display: block; padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; color: var(--text); text-decoration: none; background: white; font-size: 12px; }
-    .pagination li.active span { background: #0284c7; color: white; border-color: #0284c7; }
-    .pagination li.disabled span { opacity: 0.5; background: #f1f5f9; cursor: not-allowed; }
-    .pagination li a:hover { background: #f8fafc; }
-    
-    .filter-bar {
-        display: flex;
-        align-items: center;
-        background: white;
-        padding: 10px 15px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        box-shadow: var(--shadow-sm);
-        margin-bottom: 20px;
-        gap: 15px;
-    }
-
-    .date-label {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-
-    .date-input, .text-input {
-        padding: 6px 10px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 13px;
-        outline: none;
-    }
-    
-    .btn-action {
-        background: white;
-        border: 1px solid var(--border);
-        padding: 6px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        height: 32px;
-        color: var(--text);
-    }
-    
-    .btn-action:hover {
-        background: #f8fafc;
-    }
-
-    /* Modal styles */
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-    }
-
-    .modal-content {
-        background: white;
-        border-radius: 8px;
-        width: 600px;
-        max-width: 90%;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
-
-    .modal-header {
-        padding: 15px 20px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: #f8fafc;
-        border-top-left-radius: 8px;
-        border-top-right-radius: 8px;
-    }
-
-    .modal-title {
-        font-weight: 700;
-        font-size: 16px;
-    }
-
-    .modal-close {
-        cursor: pointer;
-        background: none;
-        border: none;
-        font-size: 20px;
-        color: var(--text-muted);
-    }
-
-    .modal-body {
-        padding: 20px;
-    }
-
-    .modal-footer {
-        padding: 15px 20px;
-        border-top: 1px solid var(--border);
-        text-align: center;
-    }
-
-    .filter-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 15px;
-        margin-bottom: 15px;
-    }
-
-    .filter-group label {
-        display: block;
-        font-size: 12px;
-        color: var(--text-secondary);
-        margin-bottom: 5px;
-    }
-
-    .filter-group select {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 13px;
-    }
-
-    .search-input {
-        width: 100%;
-        padding: 4px 8px;
-        border: 1px solid #cbd5e1;
-        border-radius: 4px;
-        font-size: 11px;
-        margin-top: 4px;
-    }
-</style>
-@endsection
-
 @section('content')
-<div class="main-content-inner full-width" style="padding: 0 20px;">
+<form method="GET" action="{{ route('stock.mouvements.index') }}" id="filterForm">
+<div class="pos-container">
     
-    <form method="GET" action="{{ route('stock.mouvements.index') }}" id="filterForm">
-        <!-- Barre du haut -->
-        <div class="filter-bar">
-            <div style="font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center;">
-                Mouvements Des Produits
-            </div>
-            
-            <div style="display: flex; align-items: center; gap: 8px; margin-left: 20px;">
-                <span class="date-label">DU</span>
-                <input type="date" name="date_du" class="date-input" value="{{ $dateDu }}">
-                
-                <span class="date-label" style="margin-left: 10px;">AU</span>
-                <input type="date" name="date_au" class="date-input" value="{{ $dateAu }}">
-            </div>
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Mouvements des Produits</h1>
+            <p class="page-subtitle">Suivi chronologique et comptable des mouvements de stock de vos articles.</p>
+        </div>
+        <div class="header-actions">
+            <button type="button" class="btn btn-outline" onclick="openFilterModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                Filtres
+            </button>
+            <a href="{{ route('stock.mouvements.index') }}" class="btn btn-outline" title="Réinitialiser tous les filtres">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                </svg>
+                Réinitialiser
+            </a>
+            <button type="button" class="btn btn-outline" onclick="window.print()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Imprimer
+            </button>
+        </div>
+    </div>
 
-            <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-                <button type="submit" class="btn-action">
+    <!-- KPI Summary Grid -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-indigo-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">Total Mouvements (Lignes)</span>
+                <span class="kpi-value" id="kpi_total_mouvements">{{ number_format($mouvements->total(), 0, ',', ' ') }}</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-green-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="9" cy="21" r="1"></circle>
+                    <circle cx="20" cy="21" r="1"></circle>
+                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                </svg>
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">Total Achats (Global)</span>
+                <span class="kpi-value text-success" id="kpi_total_achats">{{ number_format($sumAchat, 0, ',', ' ') }}</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-blue-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">Total Ventes (Global)</span>
+                <span class="kpi-value text-primary" id="kpi_total_ventes">{{ number_format($sumVente, 0, ',', ' ') }}</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-red-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 4v6h-6"></path>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">Ajustements Net</span>
+                <span class="kpi-value text-danger" id="kpi_ajustements_net">{{ number_format($sumEntrer - $sumSortie, 0, ',', ' ') }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Card -->
+    <div class="content-card" style="min-height: 450px; display: flex; flex-direction: column;">
+        
+        <!-- Toolbar / Filters -->
+        <div class="toolbar">
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label class="form-label" style="margin: 0; white-space: nowrap; text-transform: uppercase; font-size: 11px; font-weight: 600; color: var(--text-secondary);">Du</label>
+                    <input type="date" name="date_du" class="form-control" value="{{ $dateDu }}" style="width: auto; padding: 6px 12px; height: 38px;">
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <label class="form-label" style="margin: 0; white-space: nowrap; text-transform: uppercase; font-size: 11px; font-weight: 600; color: var(--text-secondary);">Au</label>
+                    <input type="date" name="date_au" class="form-control" value="{{ $dateAu }}" style="width: auto; padding: 6px 12px; height: 38px;">
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="height: 38px; padding: 0 16px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
+                    Filtrer
                 </button>
-                <button type="button" class="btn-action" onclick="document.getElementById('filterModal').style.display='flex'">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                    </svg>
-                </button>
-                <button type="button" class="btn-action" onclick="window.print()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                        <rect x="6" y="14" width="12" height="8"></rect>
-                    </svg>
-                </button>
-                <a href="{{ route('stock.mouvements.index') }}" class="btn-action">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </a>
             </div>
         </div>
 
-        <!-- Modal Filtre -->
-        <div id="filterModal" class="modal-overlay">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <span class="modal-title">Filtre</span>
-                    <button type="button" class="modal-close" onclick="document.getElementById('filterModal').style.display='none'">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="filter-grid">
-                        <div class="filter-group">
-                            <label>Sous Famille</label>
-                            <select name="sousfamilleid">
-                                <option value="">Select Sous Famille...</option>
-                                @foreach($sousFamilles as $sf)
-                                    <option value="{{ $sf->sousfamilleid }}" {{ request('sousfamilleid') == $sf->sousfamilleid ? 'selected' : '' }}>
-                                        {{ $sf->sousfamillelibelle }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Famille</label>
-                            <select name="familleid">
-                                <option value="">Select Famille...</option>
-                                @foreach($familles as $f)
-                                    <option value="{{ $f->familleid }}" {{ request('familleid') == $f->familleid ? 'selected' : '' }}>
-                                        {{ $f->famillelibelle }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Saison</label>
-                            <select name="saisonid">
-                                <option value="">Select Saison...</option>
-                                @foreach($saisons as $s)
-                                    <option value="{{ $s->category4id }}" {{ request('saisonid') == $s->category4id ? 'selected' : '' }}>
-                                        {{ $s->category4libelle }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-                    <div class="filter-grid" style="grid-template-columns: 1fr; width: 33%;">
-                        <div class="filter-group">
-                            <label>Rayon</label>
-                            <select name="rayonid">
-                                <option value="">Select Rayon...</option>
-                                @foreach($rayons as $r)
-                                    <option value="{{ $r->categoryid }}" {{ request('rayonid') == $r->categoryid ? 'selected' : '' }}>
-                                        {{ $r->categorylibelle }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn-action" style="padding: 8px 30px; border-color: var(--border);">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </form>
-
-    <div style="background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; display: flex; flex-direction: column; min-height: 600px;">
-        <div style="overflow-x: auto; flex: 1;">
-            <table id="dataTable" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
+        <!-- Table Grid -->
+        <div class="table-responsive" style="flex: 1;">
+            <table class="data-table" id="dataTable" style="font-size: 12px;">
                 <thead>
-                    <tr style="background: #f8fafc; border-bottom: 1px solid var(--border);">
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border);">
-                            Code <input type="text" class="search-input" onkeyup="filterTable(0, this.value)">
-                        </th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border);">
-                            Couleur <input type="text" class="search-input" onkeyup="filterTable(1, this.value)">
-                        </th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border);">
-                            Taille <input type="text" class="search-input" onkeyup="filterTable(2, this.value)">
-                        </th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border); text-align: right;">Achat</th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border); text-align: right;">Entrer</th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border); text-align: right;">Sortie</th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border); text-align: right;">Vente</th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border);">
-                            N° Piece <input type="text" class="search-input" onkeyup="filterTable(7, this.value)">
-                        </th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border);">
-                            Date <input type="text" class="search-input" onkeyup="filterTable(8, this.value)">
-                        </th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border);">
-                            Heure <input type="text" class="search-input" onkeyup="filterTable(9, this.value)">
-                        </th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary); border-right: 1px solid var(--border);">
-                            Intitule <input type="text" class="search-input" onkeyup="filterTable(10, this.value)">
-                        </th>
-                        <th style="padding: 8px 10px; font-weight: 600; color: var(--text-secondary);">
-                            Site <input type="text" class="search-input" onkeyup="filterTable(11, this.value)">
-                        </th>
+                    <tr>
+                        <th style="border-right: 1px solid var(--border);">Code</th>
+                        <th style="border-right: 1px solid var(--border);">Couleur</th>
+                        <th style="border-right: 1px solid var(--border);">Taille</th>
+                        <th class="text-right" style="width: 80px; border-right: 1px solid var(--border);">Achat</th>
+                        <th class="text-right" style="width: 80px; border-right: 1px solid var(--border);">Entrer</th>
+                        <th class="text-right" style="width: 80px; border-right: 1px solid var(--border);">Sortie</th>
+                        <th class="text-right" style="width: 80px; border-right: 1px solid var(--border);">Vente</th>
+                        <th style="border-right: 1px solid var(--border);">N° Piece</th>
+                        <th style="border-right: 1px solid var(--border); width: 90px; text-align: center;">Date</th>
+                        <th style="border-right: 1px solid var(--border); width: 60px; text-align: center;">Heure</th>
+                        <th style="border-right: 1px solid var(--border);">Intitule</th>
+                        <th>Site</th>
+                    </tr>
+                    <tr class="filter-row">
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col" data-col="f_code" value="{{ request('code_search') }}" placeholder="Filtrer Code..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col" data-col="f_couleur" value="{{ request('couleur_search') }}" placeholder="Filtrer Couleur..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col" data-col="f_taille" value="{{ request('taille_search') }}" placeholder="Filtrer Taille..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col text-right" data-col="f_achat" placeholder="..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col text-right" data-col="f_entrer" placeholder="..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col text-right" data-col="f_sortie" placeholder="..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col text-right" data-col="f_vente" placeholder="..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col" data-col="f_piece" value="{{ request('piece_search') }}" placeholder="Filtrer Pièce..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col text-center" data-col="f_date" placeholder="Filtrer Date..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col text-center" data-col="f_heure" placeholder="Filtrer Heure..."></th>
+                        <th style="border-right: 1px solid var(--border);"><input type="text" class="filter-col" data-col="f_intitule" value="{{ request('intitule_search') }}" placeholder="Filtrer Intitulé..."></th>
+                        <th><input type="text" class="filter-col" data-col="f_site" value="{{ request('site_search') }}" placeholder="Filtrer Site..."></th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    @php
-                        $sumAchat = 0;
-                        $sumEntrer = 0;
-                        $sumSortie = 0;
-                        $sumVente = 0;
-                        
-                        $groupedItems = collect($mouvements->items())->groupBy('reference');
-                    @endphp
-                    @forelse($groupedItems as $reference => $items)
-                        @php
-                            $grpCount = count($items);
-                            $grpAchat = 0;
-                            $grpEntrer = 0;
-                            $grpSortie = 0;
-                            $grpVente = 0;
-                            
-                            foreach($items as $m) {
-                                $a = $m->qteachat ?? 0;
-                                $v = $m->qtevente ?? 0;
-                                $adj = ($m->qtetransfert ?? 0) + ($m->qteinout ?? 0) + ($m->qteecart ?? 0);
-                                $e = $adj > 0 ? $adj : 0;
-                                $s = $adj < 0 ? abs($adj) : 0;
-                                
-                                $grpAchat += $a;
-                                $grpEntrer += $e;
-                                $grpSortie += $s;
-                                $grpVente += $v;
-                            }
-                            
-                            $sumAchat += $grpAchat;
-                            $sumEntrer += $grpEntrer;
-                            $sumSortie += $grpSortie;
-                            $sumVente += $grpVente;
-                        @endphp
-                        
-                        <!-- Ligne de groupe -->
-                        <tr class="group-header" onclick="toggleGroup('group-{{ Str::slug($reference ?? 'sans-ref') }}-{{ $loop->index }}')" style="background: #f8fafc; cursor: pointer; border-bottom: 1px solid var(--border);">
-                            <td colspan="12" style="padding: 6px 10px; font-weight: 700; color: var(--text);">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 5px;">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                                Référence: {{ $reference }} (Nombre {{ $grpCount }}, Achat {{ $grpAchat != 0 ? number_format($grpAchat, 0, '', '') : '0' }}, Entrer {{ $grpEntrer != 0 ? number_format($grpEntrer, 0, '', '') : '0' }}, Sortie {{ $grpSortie != 0 ? number_format($grpSortie, 0, '', '') : '0' }}, Vente {{ $grpVente != 0 ? number_format($grpVente, 0, '', '') : '0' }})
-                            </td>
-                        </tr>
-                        
-                        <!-- Lignes de détail du groupe -->
-                        @foreach($items as $mvt)
-                            @php
-                                $achat = $mvt->qteachat ?? 0;
-                                $vente = $mvt->qtevente ?? 0;
-                                $adj = ($mvt->qtetransfert ?? 0) + ($mvt->qteinout ?? 0) + ($mvt->qteecart ?? 0);
-                                $entrer = $adj > 0 ? $adj : 0;
-                                $sortie = $adj < 0 ? abs($adj) : 0;
-                                $dt = \Carbon\Carbon::parse($mvt->dateoperation);
-                            @endphp
-                            <tr class="data-row group-{{ Str::slug($reference ?? 'sans-ref') }}-{{ $loop->parent->index }}" style="border-bottom: 1px solid var(--border); transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border);">{{ $mvt->produitcode }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border);">{{ $mvt->couleurlibelle }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border);">{{ $mvt->taillelibelle }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border); text-align: right;">{{ $achat != 0 ? number_format($achat, 0, '', '') : '' }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border); text-align: right;">{{ $entrer != 0 ? number_format($entrer, 0, '', '') : '' }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border); text-align: right;">{{ $sortie != 0 ? number_format($sortie, 0, '', '') : '' }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border); text-align: right;">{{ $vente != 0 ? number_format($vente, 0, '', '') : '' }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border);">{{ $mvt->docid }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border);">{{ $dt->format('d/m/Y') }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border);">{{ $dt->format('H:i') }}</td>
-                                <td style="padding: 6px 10px; color: var(--text); border-right: 1px solid var(--border);">{{ $mvt->doclibelle }}</td>
-                                <td style="padding: 6px 10px; color: var(--text);">{{ $mvt->sitelibelle }}</td>
-                            </tr>
-                        @endforeach
-                    @empty
-                    <tr>
-                        <td colspan="12" style="padding: 50px; text-align: center; color: var(--text-muted); font-size: 16px; font-weight: 600;">
-                            No data to display
-                        </td>
-                    </tr>
-                    @endforelse
+                    @include('stock.mouvements.partials.table_body')
                 </tbody>
+                @if(count($mouvements) > 0)
                 <tfoot>
-                    <tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid var(--border);">
-                        <td colspan="3" style="padding: 10px 12px; border-right: 1px solid var(--border);">Nombre {{ $mouvements->total() }}</td>
-                        <td style="padding: 10px 12px; text-align: right; border-right: 1px solid var(--border);">{{ $sumAchat != 0 ? number_format($sumAchat, 0, '', '') : '0' }}</td>
-                        <td style="padding: 10px 12px; text-align: right; border-right: 1px solid var(--border);">{{ $sumEntrer != 0 ? number_format($sumEntrer, 0, '', '') : '0' }}</td>
-                        <td style="padding: 10px 12px; text-align: right; border-right: 1px solid var(--border);">{{ $sumSortie != 0 ? number_format($sumSortie, 0, '', '') : '0' }}</td>
-                        <td style="padding: 10px 12px; text-align: right; border-right: 1px solid var(--border);">{{ $sumVente != 0 ? number_format($sumVente, 0, '', '') : '0' }}</td>
+                    <tr class="table-totals">
+                        <td colspan="3" class="totals-label" style="border-right: 1px solid var(--border);" id="tot_label">Total ({{ $mouvements->total() }} Mouvements)</td>
+                        <td class="amount-cell text-success" style="border-right: 1px solid var(--border);" id="tot_achat">{{ $sumAchat != 0 ? number_format($sumAchat, 0, ',', ' ') : '0' }}</td>
+                        <td class="amount-cell" style="border-right: 1px solid var(--border);" id="tot_entrer">{{ $sumEntrer != 0 ? number_format($sumEntrer, 0, ',', ' ') : '0' }}</td>
+                        <td class="amount-cell text-danger" style="border-right: 1px solid var(--border);" id="tot_sortie">{{ $sumSortie != 0 ? number_format($sumSortie, 0, ',', ' ') : '0' }}</td>
+                        <td class="amount-cell text-primary font-bold" style="border-right: 1px solid var(--border);" id="tot_vente">{{ $sumVente != 0 ? number_format($sumVente, 0, ',', ' ') : '0' }}</td>
                         <td colspan="5"></td>
                     </tr>
                 </tfoot>
+                @endif
             </table>
         </div>
         
-        <div style="padding: 10px 15px; border-top: 1px solid var(--border); background: white; display: flex; justify-content: flex-end; align-items: center;">
-            <div>
-                {{ $mouvements->appends(request()->query())->links('pagination::bootstrap-4') }}
+        <!-- Pagination Wrapper -->
+        <div class="pagination-wrapper" id="paginationWrapper">
+            @if($mouvements->hasPages())
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    {{ $mouvements->appends(request()->query())->links('pagination::bootstrap-4') }}
+                </div>
+                <div style="font-size: 13px; color: var(--text-muted); font-weight: 500;" id="pagination_summary">
+                    Affichage de {{ $mouvements->firstItem() }} à {{ $mouvements->lastItem() }} sur {{ $mouvements->total() }} résultats
+                </div>
             </div>
+            @endif
         </div>
     </div>
 </div>
 
+<!-- Modal Filtre (Modal Backdrop layout) -->
+<div id="filterModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-content" style="max-width: 600px; padding: 24px; border-radius: var(--radius-lg); transform: scale(0.95); transition: transform 0.3s;">
+        <!-- Modal close button -->
+        <button type="button" onclick="closeFilterModal()" class="modal-close" style="top: 20px; right: 20px;">×</button>
+        
+        <!-- Header title inside modal -->
+        <div style="font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary" style="color: var(--primary);">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            Filtres des Mouvements Articles
+        </div>
+        
+        <div class="modal-body-wrapper">
+            <!-- Row 1 -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px;">
+                <div class="form-group">
+                    <label class="form-label">Famille</label>
+                    <select name="familleid" class="form-control" style="height: 38px; padding: 6px 12px;">
+                        <option value="">Sélectionner Famille...</option>
+                        @foreach($familles as $f)
+                            <option value="{{ $f->familleid }}" {{ request('familleid') == $f->familleid ? 'selected' : '' }}>{{ $f->famillelibelle }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sous-Famille</label>
+                    <select name="sousfamilleid" class="form-control" style="height: 38px; padding: 6px 12px;">
+                        <option value="">Sélectionner Sous-Famille...</option>
+                        @foreach($sousFamilles as $sf)
+                            <option value="{{ $sf->sousfamilleid }}" {{ request('sousfamilleid') == $sf->sousfamilleid ? 'selected' : '' }}>{{ $sf->sousfamillelibelle }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Saison</label>
+                    <select name="saisonid" class="form-control" style="height: 38px; padding: 6px 12px;">
+                        <option value="">Sélectionner Saison...</option>
+                        @foreach($saisons as $s)
+                            <option value="{{ $s->category4id }}" {{ request('saisonid') == $s->category4id ? 'selected' : '' }}>{{ $s->category4libelle }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Row 2 -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-top: 16px;">
+                <div class="form-group" style="max-width: 32%;">
+                    <label class="form-label">Rayon</label>
+                    <select name="rayonid" class="form-control" style="height: 38px; padding: 6px 12px;">
+                        <option value="">Sélectionner Rayon...</option>
+                        @foreach($rayons as $r)
+                            <option value="{{ $r->categoryid }}" {{ request('rayonid') == $r->categoryid ? 'selected' : '' }}>{{ $r->categorylibelle }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <!-- Modal footer / actions -->
+            <div class="filters-actions" style="margin-top: 24px; padding-top: 16px; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px dashed var(--border);">
+                <button type="button" class="btn btn-outline" onclick="closeFilterModal()">Annuler</button>
+                <a href="{{ route('stock.mouvements.index') }}" class="btn btn-outline">Réinitialiser</a>
+                <button type="submit" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Appliquer les Filtres
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+</form>
+
 <script>
+// Toggle collapsible groups of movements
 function toggleGroup(className) {
     const rows = document.getElementsByClassName(className);
+    const chevron = document.getElementById('icon-' + className);
+    
+    let isCollapsed = false;
     for(let i=0; i<rows.length; i++) {
         if (rows[i].style.display === 'none') {
             rows[i].style.display = '';
+            isCollapsed = false;
         } else {
             rows[i].style.display = 'none';
+            isCollapsed = true;
+        }
+    }
+    
+    // Rotate chevron arrow dynamically
+    if (chevron) {
+        if (isCollapsed) {
+            chevron.style.transform = 'rotate(-90deg)';
+        } else {
+            chevron.style.transform = 'rotate(0deg)';
         }
     }
 }
 
-function filterTable(colIndex, value) {
-    // Note : Le filtre simple est désactivé ou à adapter pour la vue groupée
-    const table = document.getElementById("dataTable");
-    const rows = table.getElementsByClassName("data-row");
-    const filter = value.toUpperCase();
+// Modal handling
+function openFilterModal() {
+    const modal = document.getElementById('filterModal');
+    modal.style.display = 'flex';
+    void modal.offsetWidth;
+    modal.classList.add('show');
+}
 
-    for (let i = 0; i < rows.length; i++) {
-        const td = rows[i].getElementsByTagName("td")[colIndex];
-        if (td) {
-            const textValue = td.textContent || td.innerText;
-            if (textValue.toUpperCase().indexOf(filter) > -1) {
-                rows[i].style.display = "";
-            } else {
-                rows[i].style.display = "none";
+function closeFilterModal() {
+    const modal = document.getElementById('filterModal');
+    modal.classList.remove('show');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 300);
+}
+
+// Click outside close trigger
+document.getElementById('filterModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeFilterModal();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Elements
+    const filterInputs = document.querySelectorAll('.filter-col');
+    const filterForm = document.getElementById('filterForm');
+    const tableBody = document.getElementById('tableBody');
+    const paginationWrapper = document.getElementById('paginationWrapper');
+    
+    let debounceTimer;
+
+    function fetchFilteredData(url = '{{ route("stock.mouvements.index") }}') {
+        const params = new URLSearchParams();
+        
+        // Date filters
+        const dateDu = document.querySelector('input[name="date_du"]');
+        const dateAu = document.querySelector('input[name="date_au"]');
+        if (dateDu && dateDu.value) params.append('date_du', dateDu.value);
+        if (dateAu && dateAu.value) params.append('date_au', dateAu.value);
+
+        // Modal category filters
+        const famille = document.querySelector('select[name="familleid"]');
+        const sousFamille = document.querySelector('select[name="sousfamilleid"]');
+        const rayon = document.querySelector('select[name="rayonid"]');
+        const saison = document.querySelector('select[name="saisonid"]');
+        if (famille && famille.value) params.append('familleid', famille.value);
+        if (sousFamille && sousFamille.value) params.append('sousfamilleid', sousFamille.value);
+        if (rayon && rayon.value) params.append('rayonid', rayon.value);
+        if (saison && saison.value) params.append('saisonid', saison.value);
+
+        // Column filters
+        filterInputs.forEach(input => {
+            if (input.value) {
+                params.append(input.getAttribute('data-col'), input.value);
             }
-        }
+        });
+
+        const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}${params.toString()}`;
+        
+        // Show loading state
+        tableBody.style.opacity = '0.5';
+
+        fetch(fetchUrl, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            tableBody.style.opacity = '1';
+            tableBody.innerHTML = data.html;
+            if (paginationWrapper) {
+                paginationWrapper.innerHTML = data.pagination;
+            }
+            attachPaginationEvents();
+
+            // Update footer totals
+            if (data.totals) {
+                if (document.getElementById('tot_label')) document.getElementById('tot_label').textContent = `Total (${data.totals.mouvements_count} Mouvements)`;
+                if (document.getElementById('tot_achat')) document.getElementById('tot_achat').textContent = data.totals.achat;
+                if (document.getElementById('tot_entrer')) document.getElementById('tot_entrer').textContent = data.totals.entrer;
+                if (document.getElementById('tot_sortie')) document.getElementById('tot_sortie').textContent = data.totals.sortie;
+                if (document.getElementById('tot_vente')) document.getElementById('tot_vente').textContent = data.totals.vente;
+            }
+
+            // Update KPIs
+            if (data.kpis) {
+                if (document.getElementById('kpi_total_mouvements')) document.getElementById('kpi_total_mouvements').textContent = data.kpis.total_mouvements;
+                if (document.getElementById('kpi_total_achats')) document.getElementById('kpi_total_achats').textContent = data.kpis.total_achats;
+                if (document.getElementById('kpi_total_ventes')) document.getElementById('kpi_total_ventes').textContent = data.kpis.total_ventes;
+                if (document.getElementById('kpi_ajustements_net')) document.getElementById('kpi_ajustements_net').textContent = data.kpis.ajustements_net;
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching movements:', err);
+            tableBody.style.opacity = '1';
+        });
     }
-}
+
+    function handleInput() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchFilteredData(), 400);
+    }
+
+    // Attach search input listeners
+    filterInputs.forEach(input => {
+        input.addEventListener('input', handleInput);
+        input.addEventListener('change', handleInput);
+    });
+
+    // Attach inline date changes
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    dateInputs.forEach(input => {
+        input.addEventListener('change', handleInput);
+    });
+
+    // Prevent default form submission and filter dynamically
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            fetchFilteredData();
+            closeFilterModal();
+        });
+    }
+
+    function attachPaginationEvents() {
+        const paginationLinks = document.querySelectorAll('.pagination-wrapper a');
+        paginationLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                fetchFilteredData(this.href);
+            });
+        });
+    }
+
+    attachPaginationEvents();
+});
 </script>
 @endsection

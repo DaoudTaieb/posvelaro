@@ -20,9 +20,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Protected routes
 Route::middleware(['auth'])->group(function () {
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
 
     // -- Section STOCK --
     Route::prefix('stock')->name('stock.')->group(function () {
@@ -52,6 +50,8 @@ Route::middleware(['auth'])->group(function () {
         
         // Transfert Reçu
         Route::get('/recu', [\App\Http\Controllers\Transfert\TransfertRecuController::class, 'index'])->name('transfert.recu.index');
+        Route::get('/recu/{id}/receptionner', [\App\Http\Controllers\Transfert\TransfertRecuController::class, 'receptionner'])->name('transfert.recu.receptionner');
+        Route::post('/recu/{id}/receptionner', [\App\Http\Controllers\Transfert\TransfertRecuController::class, 'storeReception'])->name('transfert.recu.store_reception');
     });
 
     // -- Section PARAMETRES --

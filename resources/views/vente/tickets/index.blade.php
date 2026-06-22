@@ -3,182 +3,271 @@
 @section('title', 'Consultation des Tickets')
 
 @section('content')
-<div class="main-content-inner full-width">
+<div class="pos-container">
     
-    <!-- Table Card container -->
-    <div class="table-container" style="background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; margin-top: 20px;">
-        
-        <!-- Table Header -->
-        <div class="table-header-wrapper" style="padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
-            <h2 class="table-title" style="font-size: 18px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; margin: 0;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Consultation des Tickets</h1>
+            <p class="page-subtitle">Analysez vos ventes, surveillez vos indicateurs et gérez vos encaissements.</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-outline" id="btnExport">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Exporter
+            </button>
+            <button class="btn btn-primary" onclick="window.location.reload()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                Actualiser
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-indigo-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                     <line x1="16" y1="13" x2="8" y2="13"></line>
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                     <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
-                Consultation des Tickets
-            </h2>
-            <!-- The actions div with the close button has been removed -->
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">Nombre de Tickets</span>
+                <span class="kpi-value" id="kpi_nb_tickets">{{ $kpis['nb_tickets'] ?? 0 }}</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-blue-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">CA Global (TTC)</span>
+                <span class="kpi-value text-info" id="kpi_ca_ttc">{{ $kpis['ca_ttc'] ?? '0' }}</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-green-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">Total Encaissé</span>
+                <span class="kpi-value text-success" id="kpi_total_paye">{{ $kpis['total_paye'] ?? '0' }}</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon-wrapper bg-red-light">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+            </div>
+            <div class="kpi-info">
+                <span class="kpi-label">Reste à Payer</span>
+                <span class="kpi-value text-danger" id="kpi_total_non_paye">{{ $kpis['total_non_paye'] ?? '0' }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Card -->
+    <div class="content-card">        
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="search-wrapper">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="globalSearch" class="search-input" placeholder="Recherche rapide (N°, Client, Vendeur...)">
+            </div>
         </div>
 
-        <!-- Advanced Filters Area -->
-        <div style="background: #f8fafc; padding: 16px 24px; border-bottom: 1px solid var(--border);">
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: end;">
-                <!-- Dates -->
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Du</label>
-                    <input type="date" class="form-control filter-date" name="date_du" id="filter_date_du" value="{{ request('date_du') }}" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+        <!-- Advanced Filters -->
+        <div class="advanced-filters show" id="advancedFilters" style="display: block;">
+            <div class="filters-grid">
+                <div class="form-group">
+                    <label class="form-label">Date Début</label>
+                    <input type="date" class="form-control filter-date" name="date_du" id="filter_date_du" value="{{ request('date_du') }}">
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Au</label>
-                    <input type="date" class="form-control filter-date" name="date_au" id="filter_date_au" value="{{ request('date_au', now()->format('Y-m-d')) }}" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+                <div class="form-group">
+                    <label class="form-label">Date Fin</label>
+                    <input type="date" class="form-control filter-date" name="date_au" id="filter_date_au" value="{{ request('date_au', now()->format('Y-m-d')) }}">
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Statut</label>
-                    <select class="form-control filter-dropdown" name="statut" id="filter_statut" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+                <div class="form-group">
+                    <label class="form-label">Statut</label>
+                    <select class="form-control filter-dropdown" name="statut" id="filter_statut">
                         <option value=""></option>
                         @foreach($statuts as $st)
                             <option value="{{ $st->statutdocumentid }}" {{ request('statut') == $st->statutdocumentid ? 'selected' : '' }}>{{ $st->libelle }}</option>
                         @endforeach
                     </select>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Client</label>
-                    <select class="form-control filter-dropdown" name="client" id="filter_client" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+                <div class="form-group">
+                    <label class="form-label">Client</label>
+                    <select class="form-control filter-dropdown" name="client" id="filter_client">
                         <option value=""></option>
                         @foreach($clients as $c)
                             <option value="{{ $c->clientid }}" {{ request('client') == $c->clientid ? 'selected' : '' }}>{{ $c->nom }}</option>
                         @endforeach
                     </select>
                 </div>
-
-                <!-- Second Row of Dropdowns -->
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Caissier</label>
-                    <select class="form-control filter-dropdown" name="caissier" id="filter_caissier" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+                <div class="form-group">
+                    <label class="form-label">Caissier</label>
+                    <select class="form-control filter-dropdown" name="caissier" id="filter_caissier">
                         <option value=""></option>
                         @foreach($caissiers as $c)
-                            <option value="{{ $c->userid }}" {{ request('caissier', Auth::id()) == $c->userid ? 'selected' : '' }}>{{ $c->login }}</option>
+                            <option value="{{ $c->userid }}" {{ request('caissier') == $c->userid ? 'selected' : '' }}>{{ $c->login }}</option>
                         @endforeach
                     </select>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Vendeur</label>
-                    <select class="form-control filter-dropdown" name="vendeur" id="filter_vendeur" style="width: 100%; border-radius: 6px; border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;">
+                <div class="form-group">
+                    <label class="form-label">Vendeur</label>
+                    <select class="form-control filter-dropdown" name="vendeur" id="filter_vendeur">
                         <option value=""></option>
                         @foreach($vendeurs as $v)
                             <option value="{{ $v->employeeid }}" {{ request('vendeur') == $v->employeeid ? 'selected' : '' }}>{{ $v->nom }}</option>
                         @endforeach
                     </select>
                 </div>
-                <div></div>
-                <div style="text-align: right;">
-                    <button type="button" id="btnFilter" style="background: var(--primary); color: white; border: none; padding: 8px 24px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                        </svg>
-                        Appliquer
-                    </button>
-                </div>
+            </div>
+            <div class="filters-actions">
+                <button type="button" class="btn btn-outline btn-reset" id="btnClear">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    Réinitialiser
+                </button>
+                <button type="button" class="btn btn-primary btn-apply" id="btnFilter">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Appliquer
+                </button>
             </div>
         </div>
 
-        <!-- Global Search -->
-        <div style="padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: flex-end; background: white;">
-            <div style="position: relative; width: 300px;">
-                <input type="text" id="globalSearch" class="form-control" placeholder="Recherche globale..." style="width: 100%; padding: 10px 16px 10px 40px; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; outline: none;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%);">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-            </div>
-        </div>
-
-        <div class="table-responsive" style="min-height: 400px; overflow-x: auto;">
+        <!-- Table -->
+        <div class="table-responsive">
             <table class="data-table" id="ticketsTable">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Numero</th>
+                        <th style="width: 90px;">Date</th>
+                        <th>N° Ticket</th>
                         <th>Statut</th>
-                        <th>Code</th>
+                        <th>Code C.</th>
                         <th>Client</th>
-                        <th>Code Vendeur</th>
+                        <th>Code V.</th>
                         <th>Vendeur</th>
-                        <th>QTE</th>
-                        <th>Brut HT</th>
-                        <th>%Rem</th>
-                        <th>Net HT</th>
-                        <th>TVA</th>
-                        <th>Total TTC</th>
-                        <th>Brut TTC</th>
-                        <th>Acompte</th>
-                        <th>Reste à Payer</th>
+                        <th class="text-right">Qté</th>
+                        <th class="text-right">Brut HT</th>
+                        <th class="text-right">Remise</th>
+                        <th class="text-right">Net HT</th>
+                        <th class="text-right">TVA</th>
+                        <th class="text-right">TTC</th>
+                        <th class="text-right">Brut TTC</th>
+                        <th class="text-right">Acompte</th>
+                        <th class="text-right">Reste</th>
                     </tr>
                     <tr class="filter-row">
+                        <th><input type="date" class="filter-col" data-col="f_date" title="Filtrer par date"></th>
+                        <th><input type="text" class="filter-col" data-col="f_numero" placeholder="Filtrer..."></th>
                         <th>
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                <input type="text" class="filter-col" data-col="f_date">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
-                                </svg>
-                            </div>
+                            <select class="filter-col" data-col="f_statut">
+                                <option value=""></option>
+                                @foreach($statuts as $st)
+                                    <option value="{{ $st->libelle }}">{{ $st->libelle }}</option>
+                                @endforeach
+                            </select>
                         </th>
-                        <th><input type="text" class="filter-col" data-col="f_numero"></th>
-                        <th><input type="text" class="filter-col" data-col="f_statut"></th>
-                        <th><input type="text" class="filter-col" data-col="f_code"></th>
-                        <th><input type="text" class="filter-col" data-col="f_client"></th>
-                        <th><input type="text" class="filter-col" data-col="f_code_vendeur"></th>
-                        <th><input type="text" class="filter-col" data-col="f_vendeur"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
-                        <th><input type="text" class="filter-col" disabled style="background: #f1f5f9;"></th>
+                        <th><input type="text" class="filter-col" data-col="f_code" placeholder="Filtrer..."></th>
+                        <th>
+                            <select class="filter-col" data-col="f_client">
+                                <option value=""></option>
+                                @foreach($clients as $c)
+                                    <option value="{{ $c->nom }}">{{ $c->nom }}</option>
+                                @endforeach
+                            </select>
+                        </th>
+                        <th><input type="text" class="filter-col" data-col="f_code_vendeur" placeholder="Filtrer..."></th>
+                        <th>
+                            <select class="filter-col" data-col="f_vendeur">
+                                <option value=""></option>
+                                @foreach($vendeurs as $v)
+                                    @php
+                                        $vName = $v->nom;
+                                        if (($v->prenom ?? '') && ($v->prenom !== $v->nom)) {
+                                            $vName .= ' ' . $v->prenom;
+                                        }
+                                    @endphp
+                                    <option value="{{ $v->nom }}">{{ $vName }}</option>
+                                @endforeach
+                            </select>
+                        </th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_qte" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_brutht" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_remise" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_netht" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_tva" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_ttc" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_brutttc" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_acompte" placeholder="..."></th>
+                        <th><input type="text" class="filter-col text-right" data-col="f_reste" placeholder="..."></th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
                     @include('vente.tickets.partials.table_body')
                 </tbody>
                 <tfoot>
-                    <tr style="background: #f8fafc; font-weight: 700; border-top: 2px solid var(--border);">
-                        <td colspan="7" style="text-align: right; padding: 12px 16px; color: var(--text);">Totaux</td>
-                        <td class="amount-cell" id="tot_qte">0</td>
-                        <td class="amount-cell" id="tot_brutht">0</td>
-                        <td class="amount-cell" id="tot_remise">0</td>
-                        <td class="amount-cell" id="tot_netht">0</td>
-                        <td class="amount-cell" id="tot_tva">0</td>
-                        <td class="amount-cell" id="tot_ttc">0</td>
-                        <td class="amount-cell" id="tot_brutttc">0</td>
-                        <td class="amount-cell" id="tot_acompte">0</td>
-                        <td class="amount-cell" id="tot_reste">0</td>
+                    <tr class="table-totals">
+                        <td colspan="7" class="totals-label">Totaux</td>
+                        <td class="amount-cell" id="tot_qte">{{ $totals['qte'] }}</td>
+                        <td class="amount-cell text-muted" id="tot_brutht">{{ $totals['brut_ht'] }}</td>
+                        <td class="amount-cell text-muted" id="tot_remise">{{ $totals['remise'] }}</td>
+                        <td class="amount-cell text-muted" id="tot_netht">{{ $totals['net_ht'] }}</td>
+                        <td class="amount-cell text-muted" id="tot_tva">{{ $totals['tva'] }}</td>
+                        <td class="amount-cell font-bold text-primary" id="tot_ttc">{{ $totals['ttc'] }}</td>
+                        <td class="amount-cell text-muted" id="tot_brutttc">{{ $totals['ttc'] }}</td>
+                        <td class="amount-cell text-warning" id="tot_acompte">{{ $totals['acompte'] }}</td>
+                        <td class="amount-cell text-danger" id="tot_reste">{{ $totals['reste'] }}</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
 
         <!-- Pagination -->
-        <div class="pagination-wrapper" id="paginationWrapper" style="padding: 12px 16px; border-top: 1px solid var(--border);">
+        <div class="pagination-wrapper" id="paginationWrapper">
             {{ $tickets->links() }}
         </div>
     </div>
 </div>
 
 <!-- Ticket Modal -->
-<div id="ticketModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-    <div style="background: white; border-radius: 8px; padding: 20px; max-width: 380px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-        <button id="closeTicketModal" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
-        <button id="printTicketBtn" style="position: absolute; top: 10px; left: 10px; background: var(--primary, #0ea5e9); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+<div id="ticketModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-content">
+        <button id="closeTicketModal" class="modal-close">&times;</button>
+        <button id="printTicketBtn" class="btn btn-primary modal-action">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
             Imprimer
         </button>
-        <div id="ticketModalContent" style="margin-top: 30px; display: flex; justify-content: center;">
+        <div id="ticketModalContent" class="modal-body">
             <!-- Receipt content goes here -->
         </div>
     </div>
@@ -187,189 +276,24 @@
 @endsection
 
 @section('styles')
-<style>
-    /* Table Card container */
-    .table-container {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        box-shadow: var(--shadow-sm);
-        overflow: hidden;
-        margin-top: 20px;
-    }
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
-    .data-table {
-        width: 100%;
-        border-collapse: collapse;
-        text-align: left;
-        font-size: 13px;
-    }
-
-    .data-table th, 
-    .data-table td {
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border);
-        white-space: nowrap;
-    }
-
-    .data-table th {
-        background: #f8fafc;
-        color: var(--text-secondary);
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 12px;
-        letter-spacing: 0.5px;
-    }
-
-    .data-table tr:hover td {
-        background: #f1f5f9;
-    }
-
-    .filter-row th {
-        padding: 8px 16px;
-        background: #f8fafc;
-        border-bottom: 2px solid var(--border);
-    }
-
-    .filter-col {
-        width: 100%;
-        padding: 6px 10px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 12px;
-        outline: none;
-        transition: border-color 0.2s;
-    }
-
-    .filter-col:focus {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 2px var(--primary-light);
-    }
-
-    .amount-cell {
-        font-family: 'Courier New', Courier, monospace;
-        font-weight: 600;
-        text-align: right;
-        color: var(--text);
-    }
-
-    .pagination-wrapper {
-        padding: 16px 24px;
-        border-top: 1px solid var(--border);
-        background: #fff;
-    }
-    
-    .pagination-wrapper svg {
-        width: 1.25rem;
-        height: 1.25rem;
-    }
-    
-    .pagination-wrapper nav {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 13px;
-    }
-
-    .pagination-wrapper nav > div:first-child {
-        display: none; /* Hide mobile pagination for desktop */
-    }
-
-    .pagination-wrapper nav > div:last-child {
-        display: flex;
-        justify-content: space-between;
-        width: 100%;
-        align-items: center;
-    }
-
-    .pagination-wrapper p {
-        margin: 0;
-        color: var(--text-secondary);
-    }
-
-    .pagination-wrapper span.relative,
-    .pagination-wrapper a.relative {
-        display: inline-flex;
-        align-items: center;
-        padding: 8px 12px;
-        margin-left: -1px;
-        background: #fff;
-        border: 1px solid var(--border);
-        color: var(--text-secondary);
-        text-decoration: none;
-        transition: background 0.2s;
-    }
-
-    .pagination-wrapper a.relative:hover {
-        background: #f1f5f9;
-        color: var(--primary);
-    }
-
-    .pagination-wrapper span[aria-current="page"] > span {
-        background: var(--primary-light);
-        color: var(--primary);
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        padding: 8px 12px;
-        border: 1px solid var(--border);
-        margin-left: -1px;
-    }
-
-    .pagination-wrapper span.relative svg,
-    .pagination-wrapper a.relative svg {
-        width: 16px;
-        height: 16px;
-    }
-
-    /* Bootstrap 5 Pagination Fallback Styles */
-    .pagination {
-        display: flex;
-        padding-left: 0;
-        list-style: none;
-        margin: 0;
-        gap: 4px;
-    }
-    .page-item .page-link {
-        position: relative;
-        display: block;
-        color: var(--text-secondary);
-        text-decoration: none;
-        background-color: #fff;
-        border: 1px solid var(--border);
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    .page-item .page-link:hover {
-        background-color: #f1f5f9;
-        color: var(--primary);
-    }
-    .page-item.active .page-link {
-        z-index: 3;
-        color: #fff;
-        background-color: var(--primary);
-        border-color: var(--primary);
-    }
-    .page-item.disabled .page-link {
-        color: #94a3b8;
-        pointer-events: none;
-        background-color: #f8fafc;
-        border-color: var(--border);
-    }
-</style>
 @endsection
 
 @section('scripts')
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Elements
         const globalSearch = document.getElementById('globalSearch');
         const filterInputs = document.querySelectorAll('.filter-col');
         const dropdownFilters = document.querySelectorAll('.filter-dropdown, .filter-date');
         const btnFilter = document.getElementById('btnFilter');
         const tableBody = document.getElementById('tableBody');
-        const paginationWrapper = document.querySelector('.pagination-wrapper');
+        const paginationWrapper = document.getElementById('paginationWrapper');
+        const advancedFilters = document.getElementById('advancedFilters');
+        const modal = document.getElementById('ticketModal');
 
         let debounceTimer;
 
@@ -391,6 +315,9 @@
 
             const fetchUrl = `${url}${url.includes('?') ? '&' : '?'}${params.toString()}`;
 
+            // Optional: Show loading state on table body
+            tableBody.style.opacity = '0.5';
+
             fetch(fetchUrl, {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -399,11 +326,12 @@
             })
             .then(res => res.json())
             .then(data => {
+                tableBody.style.opacity = '1';
                 tableBody.innerHTML = data.html;
-                paginationWrapper.innerHTML = data.pagination;
+                if(paginationWrapper) paginationWrapper.innerHTML = data.pagination;
                 attachPaginationEvents();
 
-                // Update Totals
+                // Update Totals Footer
                 if (data.totals) {
                     if(document.getElementById('tot_qte')) document.getElementById('tot_qte').textContent = data.totals.qte;
                     if(document.getElementById('tot_brutht')) document.getElementById('tot_brutht').textContent = data.totals.brut_ht;
@@ -411,12 +339,23 @@
                     if(document.getElementById('tot_netht')) document.getElementById('tot_netht').textContent = data.totals.net_ht;
                     if(document.getElementById('tot_tva')) document.getElementById('tot_tva').textContent = data.totals.tva;
                     if(document.getElementById('tot_ttc')) document.getElementById('tot_ttc').textContent = data.totals.ttc;
-                    if(document.getElementById('tot_brutttc')) document.getElementById('tot_brutttc').textContent = data.totals.ttc; // brut ttc is same as ttc?
+                    if(document.getElementById('tot_brutttc')) document.getElementById('tot_brutttc').textContent = data.totals.ttc;
                     if(document.getElementById('tot_acompte')) document.getElementById('tot_acompte').textContent = data.totals.acompte;
                     if(document.getElementById('tot_reste')) document.getElementById('tot_reste').textContent = data.totals.reste;
                 }
+
+                // Update KPI Cards dynamically
+                if (data.kpis) {
+                    if(document.getElementById('kpi_nb_tickets')) document.getElementById('kpi_nb_tickets').textContent = data.kpis.nb_tickets;
+                    if(document.getElementById('kpi_ca_ttc')) document.getElementById('kpi_ca_ttc').textContent = data.kpis.ca_ttc;
+                    if(document.getElementById('kpi_total_paye')) document.getElementById('kpi_total_paye').textContent = data.kpis.total_paye;
+                    if(document.getElementById('kpi_total_non_paye')) document.getElementById('kpi_total_non_paye').textContent = data.kpis.total_non_paye;
+                }
             })
-            .catch(err => console.error('Error fetching tickets:', err));
+            .catch(err => {
+                console.error('Error fetching tickets:', err);
+                tableBody.style.opacity = '1';
+            });
         }
 
         function handleInput() {
@@ -427,22 +366,54 @@
         // Attach events
         globalSearch.addEventListener('input', handleInput);
         filterInputs.forEach(input => {
-            if (!input.disabled) input.addEventListener('input', handleInput);
+            if (!input.disabled) {
+                input.addEventListener('input', handleInput);
+                input.addEventListener('change', handleInput);
+            }
         });
         
-        // The main filter button handles dropdowns & dates
-        btnFilter.addEventListener('click', function() {
-            fetchFilteredData();
-        });
+        btnFilter.addEventListener('click', fetchFilteredData);
 
-        // Handle enter on main filters
+        // Clear Filters logic
+        const btnClear = document.getElementById('btnClear');
+        if (btnClear) {
+            btnClear.addEventListener('click', function() {
+                globalSearch.value = '';
+                filterInputs.forEach(input => input.value = '');
+                dropdownFilters.forEach(input => input.value = '');
+                
+                // Reset select2
+                if ($('#filter_client').length) {
+                    $('#filter_client').val('').trigger('change.select2');
+                }
+
+                fetchFilteredData();
+            });
+        }
+
+        // Initialize Select2
+        if (typeof $ !== 'undefined') {
+            $('.filter-dropdown').each(function() {
+                const placeholder = $(this).attr('name') === 'client' ? "Rechercher un client..." : "Sélectionner...";
+                $(this).select2({
+                    placeholder: placeholder,
+                    allowClear: true,
+                    width: '100%'
+                }).on('select2:select select2:unselect', handleInput);
+            });
+        }
+
+        // Handle enter and change on main filters
         dropdownFilters.forEach(input => {
+            if(input.tagName === 'INPUT' && input.type === 'date') {
+                input.addEventListener('change', handleInput);
+            }
             input.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') fetchFilteredData();
             });
         });
 
-        // Double click on table row to show ticket
+        // Modal Logic (Double click on table row)
         tableBody.addEventListener('dblclick', function(e) {
             const row = e.target.closest('.ticket-row');
             if (row && row.dataset.id) {
@@ -453,18 +424,25 @@
                 .then(res => res.text())
                 .then(html => {
                     document.getElementById('ticketModalContent').innerHTML = html;
-                    document.getElementById('ticketModal').style.display = 'flex';
+                    modal.style.display = 'flex';
+                    // Trigger reflow to apply transition
+                    void modal.offsetWidth;
+                    modal.classList.add('show');
                 })
                 .catch(err => console.error('Error fetching ticket details:', err));
             }
         });
 
         document.getElementById('closeTicketModal').addEventListener('click', function() {
-            document.getElementById('ticketModal').style.display = 'none';
+            modal.classList.remove('show');
+            setTimeout(() => modal.style.display = 'none', 300);
         });
 
-        document.getElementById('ticketModal').addEventListener('click', function(e) {
-            if (e.target === this) this.style.display = 'none';
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('show');
+                setTimeout(() => this.style.display = 'none', 300);
+            }
         });
 
         document.getElementById('printTicketBtn').addEventListener('click', function() {
@@ -480,6 +458,61 @@
                 printWindow.close();
             }, 500);
         });
+
+        // Client-side Export to CSV
+        const btnExport = document.getElementById('btnExport');
+        if (btnExport) {
+            btnExport.addEventListener('click', function() {
+                // Header columns
+                const headers = [];
+                document.querySelectorAll('#ticketsTable thead tr:first-of-type th').forEach(th => {
+                    headers.push(th.textContent.trim());
+                });
+                
+                // Rows data
+                const rows = [];
+                document.querySelectorAll('#ticketsTable tbody tr').forEach(tr => {
+                    if (tr.classList.contains('empty-state') || tr.querySelector('.empty-state') || tr.querySelector('.empty-state') !== null) return;
+                    const cells = [];
+                    tr.querySelectorAll('td').forEach(td => {
+                        let text = td.textContent.trim().replace(/\s+/g, ' ');
+                        cells.push(text);
+                    });
+                    if (cells.length > 0) {
+                        rows.push(cells);
+                    }
+                });
+
+                if (rows.length === 0) {
+                    alert('Aucune donnée à exporter.');
+                    return;
+                }
+
+                // Build CSV content with UTF-8 BOM
+                let csvContent = "\uFEFF";
+                csvContent += headers.join(';') + '\n';
+                rows.forEach(row => {
+                    const rowData = row.map(val => {
+                        let cleanVal = val.replace(/"/g, '""');
+                        if (cleanVal.includes(';') || cleanVal.includes('\n')) {
+                            cleanVal = `"${cleanVal}"`;
+                        }
+                        return cleanVal;
+                    });
+                    csvContent += rowData.join(';') + '\n';
+                });
+
+                // Download trigger
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", `export_tickets_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        }
 
         function attachPaginationEvents() {
             const paginationLinks = document.querySelectorAll('.pagination-wrapper a');

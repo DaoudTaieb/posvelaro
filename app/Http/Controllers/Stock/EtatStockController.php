@@ -74,14 +74,107 @@ class EtatStockController extends Controller
             $hasFilter = true;
         }
 
+        // Global Search
+        if ($request->filled('search')) {
+            $term = '%' . $request->search . '%';
+            $query->where(function($q) use ($term) {
+                $q->where('vproduit2stocks.produitcode', 'ilike', $term)
+                  ->orWhere('vproduit2stocks.couleurlibelle', 'ilike', $term)
+                  ->orWhere('vproduit2stocks.taillelibelle', 'ilike', $term);
+            });
+            $hasFilter = true;
+        }
+
+        // Text-based column filters
+        $colFilters = [
+            'f_code' => 'vproduit2stocks.produitcode',
+            'f_couleur' => 'vproduit2stocks.couleurlibelle',
+            'f_taille' => 'vproduit2stocks.taillelibelle',
+        ];
+
+        foreach ($colFilters as $param => $dbCol) {
+            if ($request->filled($param)) {
+                $query->where($dbCol, 'ilike', '%' . $request->input($param) . '%');
+                $hasFilter = true;
+            }
+        }
+
+        // Numeric cast filters
+        $numFilters = [
+            'f_entrer' => 'COALESCE(mouvements.total_entrer, 0)',
+            'f_sortie' => 'COALESCE(mouvements.total_sortie, 0)',
+            'f_achat' => 'COALESCE(mouvements.total_achat, 0)',
+            'f_ret_achat' => 'COALESCE(mouvements.total_ret_achat, 0)',
+            'f_vente' => 'COALESCE(mouvements.total_vente, 0)',
+            'f_ret_vente' => 'COALESCE(mouvements.total_ret_vente, 0)',
+            'f_dispo' => 'COALESCE(vproduit2stocks.qtestock, 0)',
+            'f_pv_ttc' => 'COALESCE(vproduit2stocks.ttc_vente, 0)',
+            'f_val_pv' => '(COALESCE(vproduit2stocks.qtestock, 0) * COALESCE(vproduit2stocks.ttc_vente, 0))',
+        ];
+
+        foreach ($numFilters as $param => $rawExpr) {
+            if ($request->filled($param)) {
+                $query->whereRaw("CAST({$rawExpr} AS text) LIKE ?", ['%' . $request->input($param) . '%']);
+                $hasFilter = true;
+            }
+        }
+
         // Si aucun filtre n'est appliqué, on force la requête à retourner vide
         if (!$hasFilter) {
             $query->whereRaw('1 = 0');
         }
 
+        // Calcul des agrégats pour la requête filtrée
+        if ($hasFilter) {
+            $totalsQuery = clone $query;
+            $sumEntrer = $totalsQuery->sum('mouvements.total_entrer');
+            $sumSortie = $totalsQuery->sum('mouvements.total_sortie');
+            $sumAchat = $totalsQuery->sum('mouvements.total_achat');
+            $sumRetAchat = $totalsQuery->sum('mouvements.total_ret_achat');
+            $sumVente = $totalsQuery->sum('mouvements.total_vente');
+            $sumRetVente = $totalsQuery->sum('mouvements.total_ret_vente');
+            $sumDispo = $totalsQuery->sum('vproduit2stocks.qtestock');
+            $sumPv = $totalsQuery->sum('vproduit2stocks.ttc_vente');
+            $sumValPv = $totalsQuery->sum(DB::raw('COALESCE(vproduit2stocks.qtestock, 0) * COALESCE(vproduit2stocks.ttc_vente, 0)'));
+            $articlesCount = $totalsQuery->count();
+        } else {
+            $sumEntrer = $sumSortie = $sumAchat = $sumRetAchat = $sumVente = $sumRetVente = $sumDispo = $sumPv = $sumValPv = $articlesCount = 0;
+        }
+
         // Pagination
         $etatStocks = $query->orderBy('vproduit2stocks.produitcode', 'asc')->paginate(50);
 
-        return view('stock.etat.index', compact('etatStocks', 'familles', 'sousFamilles', 'rayons', 'saisons'));
+        if ($request->ajax()) {
+            $html = view('stock.etat.partials.table_body', compact('etatStocks'))->render();
+            $pagination = $etatStocks->appends($request->query())->links('pagination::bootstrap-4')->toHtml();
+
+            return response()->json([
+                'html' => $html,
+                'pagination' => $pagination,
+                'totals' => [
+                    'articles_count' => $articlesCount,
+                    'entrer' => number_format($sumEntrer, 0, '', ' '),
+                    'sortie' => number_format($sumSortie, 0, '', ' '),
+                    'achat' => number_format($sumAchat, 0, '', ' '),
+                    'ret_achat' => number_format($sumRetAchat, 0, '', ' '),
+                    'vente' => number_format($sumVente, 0, '', ' '),
+                    'ret_vente' => number_format($sumRetVente, 0, '', ' '),
+                    'dispo' => number_format($sumDispo, 0, '', ' '),
+                    'pv' => number_format($sumPv, 3, ',', ' '),
+                    'val_pv' => number_format($sumValPv, 3, ',', ' '),
+                ],
+                'kpis' => [
+                    'articles_count' => number_format($articlesCount, 0, '', ' '),
+                    'dispo_total' => number_format($sumDispo, 0, '', ' '),
+                    'vente_total' => number_format($sumVente, 0, '', ' '),
+                    'val_pv_total' => number_format($sumValPv, 3, ',', ' '),
+                ]
+            ]);
+        }
+
+        return view('stock.etat.index', compact(
+            'etatStocks', 'familles', 'sousFamilles', 'rayons', 'saisons',
+            'sumEntrer', 'sumSortie', 'sumAchat', 'sumRetAchat', 'sumVente', 'sumRetVente', 'sumDispo', 'sumPv', 'sumValPv'
+        ));
     }
 }

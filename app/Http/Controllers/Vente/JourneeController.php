@@ -372,17 +372,24 @@ class JourneeController extends Controller
         ];
         
         $totalRecettesDetails = $recettes['espece'] + $recettes['cheque'] + $recettes['carte_credit'] + $recettes['bon_achats'] + $recettes['cheque_cadeau'] + $recettes['autres'];
-        $recetteBrute = $totalRecettesDetails;
-        $recetteNette = $recetteBrute - $recettes['depense'];
+        
+        $acomptes_nv = (float) ($journalCaisse->acomptenewticket ?? 0);
+        $acomptes_av = (float) ($journalCaisse->complementacompte ?? 0);
+        $acomptes_personnels = (float) ($journalCaisse->acomptepersonnel ?? 0);
+        $commissions = (float) ($journalCaisse->totalcommission ?? 0);
+
+        // Recette Brute & Nette calculations
+        $recetteBrute = $totalRecettesDetails + $acomptes_nv + $acomptes_av;
+        $recetteNette = $recetteBrute - $recettes['depense'] - $acomptes_personnels - $commissions;
         
         $caisseTotaux = [
-            'ventes_reglees' => $recetteBrute,
-            'acomptes_nv' => 0,
-            'acomptes_av' => 0,
+            'ventes_reglees' => $totalRecettesDetails,
+            'acomptes_nv' => $acomptes_nv,
+            'acomptes_av' => $acomptes_av,
             'recette_brute' => $recetteBrute,
             'depenses_divers' => $recettes['depense'],
-            'acomptes_personnels' => 0,
-            'commissions' => 0,
+            'acomptes_personnels' => $acomptes_personnels,
+            'commissions' => $commissions,
             'recette_nette' => $recetteNette,
         ];
 
