@@ -91,8 +91,8 @@ class CaisseController extends Controller
                 'totalnetht' => $totalht,
                 'totaltva' => $totaltva,
                 'totalttc' => $totalttc,
-                'acompte' => 0,
-                'netapayer' => $totalttc,
+                'acompte' => floatval($request->input('acompte', 0)),
+                'netapayer' => floatval($request->input('netapayer', $totalttc)),
                 'totalqte' => $totalqte,
                 'caissierid' => $caissierid,
                 'employeeid' => $employeeid,
@@ -465,5 +465,157 @@ class CaisseController extends Controller
             'clientid' => $ticket->clientid,
             'lignes' => $formattedLignes
         ]);
+    }
+
+    /**
+     * Récupérer les tickets avec un reste à payer (netapayer > 0)
+     */
+    public function getTicketsWithReste(Request $request)
+    {
+        $du = $request->query('du', date('Y-m-d'));
+        $au = $request->query('au', date('Y-m-d'));
+        $clientid = $request->query('clientid');
+        $numero = $request->query('numero');
+
+        $query = DB::table('ctickets')
+            ->leftJoin('clients', 'ctickets.clientid', '=', 'clients.clientid')
+            ->leftJoin('users as caissiers', 'ctickets.caissierid', '=', 'caissiers.userid')
+            ->leftJoin('employees as vendeurs', 'ctickets.employeeid', '=', 'vendeurs.employeeid')
+            ->where('ctickets.netapayer', '>', 0)
+            ->where('ctickets.enattente', 0)
+            ->whereBetween(DB::raw('DATE(ctickets.datecreation)'), [$du, $au]);
+
+        if ($clientid) {
+            $query->where('ctickets.clientid', $clientid);
+        }
+        if ($numero) {
+            $query->where('ctickets.cticketnumero', 'like', '%' . $numero . '%');
+        }
+
+        $tickets = $query->select(
+            'ctickets.cticketid',
+            'ctickets.cticketnumero',
+            'ctickets.datecreation',
+            'ctickets.totalttc',
+            'ctickets.totalqte',
+            'ctickets.acompte',
+            'ctickets.netapayer',
+            'clients.nom as client_nom',
+            'clients.clientid',
+            'caissiers.login as caissier_nom',
+            'vendeurs.nom as vendeur_nom'
+        )
+        ->orderBy('ctickets.cticketid', 'desc')
+        ->limit(500)
+        ->get();
+
+        // Récupérer la liste des clients pour le filtre
+        $clients = DB::table('clients')->select('clientid', 'nom')->orderBy('nom')->get();
+
+        return response()->json([
+            'success' => true,
+            'tickets' => $tickets,
+            'clients' => $clients
+        ]);
+    }
+
+    /**
+     * Enregistrer un complément d'acompte
+     */
+    public function storeComplementAcompte(Request $request)
+    {
+        try {
+            DB::beginTransaction();
+
+            $user = auth()->user();
+            $siteid = $user->siteid ?? 102;
+            $caissierid = $user->userid;
+            $employeeid = $user->employeeid ?? 1;
+
+            $cticketid = $request->input('cticketid');
+            $reglements = $request->input('reglements', []);
+            if (empty($reglements)) {
+                // Fallback for single payment
+                $reglements = [
+                    [
+                        'modereglementid' => intval($request->input('modereglementid', 1)),
+                        'montant' => floatval($request->input('montant'))
+                    ]
+                ];
+            }
+
+            $totalAdded = 0;
+            foreach ($reglements as $reg) {
+                $montant = floatval($reg['montant'] ?? 0);
+                $modereglementid = intval($reg['modereglementid'] ?? 1);
+
+                if ($montant <= 0) continue;
+                if ($montant > $ticket->netapayer) {
+                    $montant = $ticket->netapayer; // Plafonner au reste à payer
+                }
+
+                // Insérer le règlement complement
+                DB::table('creglements')->insert([
+                    'clientid' => $ticket->clientid,
+                    'siteid' => $siteid,
+                    'date' => $now,
+                    'datecreation' => $now,
+                    'echeance' => $now,
+                    'montant' => $montant,
+                    'modereglementid' => $modereglementid,
+                    'statusreglementid' => 1,
+                    'documentid' => $cticketid,
+                    'typeid' => 1,
+                    'numero' => $ticket->cticketnumero,
+                    'montantnet' => $montant,
+                    'montantrs' => 0,
+                    'tauxrs' => 0,
+                    'ismultiple' => 0,
+                    'retenuevalide' => 0,
+                    'employeeid' => $employeeid,
+                'userid' => $caissierid,
+                'agencebid' => $agencebid,
+                    'userid' => $caissierid,
+                    'agencebid' => $agencebid,
+                    'cours' => 1,
+                    'nonaffecte' => 0,
+                    'iscomplement' => 1,
+                    'journalcaisseid' => $journalcaisseid,
+                    'rendu' => 0,
+                    'deviseid' => 1
+                ]);
+
+                $totalAdded += $montant;
+                // Update netapayer for next iteration if multiple
+                $ticket->netapayer -= $montant;
+            }
+
+            if ($totalAdded <= 0) {
+                return response()->json(['success' => false, 'message' => 'Veuillez saisir un montant valide.']);
+            }
+
+            // Mettre à jour le ticket avec le total des acomptes ajoutés
+            DB::table('ctickets')
+                ->where('cticketid', $cticketid)
+                ->update([
+                    'acompte' => DB::raw("acompte + $totalAdded"),
+                    'netapayer' => DB::raw("netapayer - $totalAdded")
+                ]);
+
+            // Mettre à jour le journal caisse
+            DB::table('journalcaisses')->where('journalcaisseid', $journalcaisseid)->increment('complementacompte', $totalAdded);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Complément acompte enregistré avec succès.',
+                'nouveau_reste' => $ticket->netapayer - $montant
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Erreur Complement Acompte: ' . $e->getMessage() . ' - Ligne: ' . $e->getLine());
+            return response()->json(['success' => false, 'message' => 'Erreur: ' . $e->getMessage()]);
+        }
     }
 }

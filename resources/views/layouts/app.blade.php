@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Velaro POS')</title>
+    <title>@yield('title', config('app.name'))</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -944,7 +944,7 @@
                     <path d="M16 10a4 4 0 01-8 0"/>
                 </svg>
             </div>
-            <span class="brand-name">Velaro POS</span>
+            <span class="brand-name">{{ config('app.name') }}</span>
         </a>
 
         <div class="topbar-user">

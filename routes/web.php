@@ -101,12 +101,15 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/caisse/pos/send-sms', [\App\Http\Controllers\PosController::class, 'sendSms'])->name('caisse.pos.send_sms');
         Route::get('/caisse/pos/check-stock/{produit2id}', [\App\Http\Controllers\PosController::class, 'checkStock'])->name('caisse.pos.check_stock');
         Route::get('/caisse/pos/advanced-check-stock', [\App\Http\Controllers\PosController::class, 'advancedCheckStock'])->name('caisse.pos.advanced_check_stock');
+        Route::get('/caisse/pos/check-avoir', [\App\Http\Controllers\PosController::class, 'checkAvoir'])->name('caisse.pos.check_avoir');
         Route::post('/caisse', [\App\Http\Controllers\Vente\CaisseController::class, 'store'])->name('caisse.store');
         Route::get('/caisse/en-attente', [\App\Http\Controllers\Vente\CaisseController::class, 'getEnAttente'])->name('caisse.en_attente');
         Route::get('/caisse/reprise/{id}', [\App\Http\Controllers\Vente\CaisseController::class, 'reprise'])->name('caisse.reprise');
         Route::get('/caisse/journal-data', [\App\Http\Controllers\Vente\CaisseController::class, 'journalVenteData'])->name('caisse.journal_data');
         Route::get('/caisse/ticket-details/{numero}', [\App\Http\Controllers\Vente\CaisseController::class, 'ticketDetails'])->name('caisse.ticket_details');
         Route::get('/caisse/mouvements', [\App\Http\Controllers\Vente\CaisseController::class, 'getMouvements'])->name('caisse.mouvements');
+        Route::get('/caisse/tickets-reste', [\App\Http\Controllers\Vente\CaisseController::class, 'getTicketsWithReste'])->name('caisse.tickets_reste');
+        Route::post('/caisse/store-complement-acompte', [\App\Http\Controllers\Vente\CaisseController::class, 'storeComplementAcompte'])->name('caisse.store_complement_acompte');
         
         // Consultation Tickets
         Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');

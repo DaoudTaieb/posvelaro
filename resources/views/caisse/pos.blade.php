@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Caisse VELARO</title>
+    <title>Caisse {{ $siteName }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -270,7 +270,7 @@
             text-transform: uppercase;
         }
         
-        .align-right { text-align: right; }
+        .align-right { text-align: right !important; }
 
         /* Editable cells */
         input[type=number]::-webkit-inner-spin-button, 
@@ -419,7 +419,7 @@
     <div class="pos-header" style="flex-direction: column; padding: 10px; border-bottom: 1px solid var(--border);">
         <!-- TOP LCD DISPLAY -->
         <div class="top-display" style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 15px;">
-            <div class="display-value" id="display-qte-prix" style="flex: 1; text-align: left;">***BIENVENUE CHEZ VELARO***</div>
+            <div class="display-value" id="display-qte-prix" style="flex: 1; text-align: left;">***BIENVENUE CHEZ {{ strtoupper($siteName) }}***</div>
             <div class="display-value" id="display-remise" style="flex: 1; text-align: center;"></div>
             <div class="display-value" id="display-total" style="flex: 1; text-align: right;"></div>
         </div>
@@ -563,20 +563,20 @@
         <div class="grid-col">
             <div class="grid-header">Règlements</div>
             <div class="split-col">
-                <button class="grid-btn" style="font-weight: bold;" onclick="openPaymentModal(1, 'Espèce')">Espèce</button>
-                <button class="grid-btn" onclick="openPaymentModal(2, 'Chèque')">Cheque</button>
+                <button class="grid-btn" style="font-weight: bold;" onclick="openMultiPaymentModal(1)">Espèce</button>
+                <button class="grid-btn" onclick="openMultiPaymentModal(2)">Cheque</button>
             </div>
             <div class="split-col">
-                <button class="grid-btn" onclick="openPaymentModal(4, 'Carte Bancaire')">C.B</button>
-                <button class="grid-btn" onclick="openPaymentModal(5, 'Chèque Cadeau')">Chq.Cad</button>
+                <button class="grid-btn" onclick="openMultiPaymentModal(3)">C.B</button>
+                <button class="grid-btn" onclick="openMultiPaymentModal()">Chq.Cad</button>
             </div>
             <div class="split-col">
                 <button class="grid-btn" onclick="openRetourModal()">Retour</button>
                 <button class="grid-btn" onclick="handleRetour2Click()">Retour2</button>
             </div>
             <div class="split-col">
-                <button class="grid-btn" onclick="openPaymentModal(12, 'Crédit')">Crédit</button>
-                <button class="grid-btn" onclick="openPaymentModal(12, 'C.Acompte')">C.Acompte</button>
+                <button class="grid-btn" onclick="openMultiPaymentModal()">Crédit</button>
+                <button class="grid-btn" onclick="openComplementAcompteFlow()">C.Acompte</button>
             </div>
         </div>
     </div>
@@ -1032,7 +1032,8 @@
         .then(r => r.json())
         .then(res => {
             if (res.success) {
-                closePaymentModal();
+                if (typeof closePaymentModal === 'function') closePaymentModal();
+                if (typeof closeMultiPaymentModal === 'function') closeMultiPaymentModal();
                 alert(res.message);
                 if (res.print_url) {
                     window.open(res.print_url, '_blank').focus();
@@ -1121,7 +1122,7 @@
         let product = {
             produitid: productData.produitid,
             produit2id: productData.produit2id,
-            ref: productData.produitcode || productData.reference,
+            ref: productData.reference || productData.produitcode,
             code: productData.produitcode || productData.reference,
             reference: productData.reference || productData.produitcode,
             designation: productData.produitlibelle,
@@ -1175,7 +1176,7 @@
             document.getElementById('product-info-name').innerText = `${line.designation || ''}`;
             document.getElementById('product-info-stock').innerText = `Stock ${line.stock || 0}`;
         } else {
-            document.getElementById('display-qte-prix').innerText = '***BIENVENUE CHEZ VELARO***';
+            document.getElementById('display-qte-prix').innerText = '***BIENVENUE CHEZ {{ strtoupper($siteName) }}***';
             document.getElementById('display-remise').innerText = '';
             document.getElementById('display-total').innerText = '';
             
@@ -1212,7 +1213,7 @@
             }
 
             tr.innerHTML = `
-                <td>${line.ref || ''}</td>
+                <td>${line.reference || line.ref || ''}</td>
                 <td>${line.designation || ''} ${line.taille ? ' - ' + line.taille : ''} ${line.couleur ? ' - ' + line.couleur : ''}</td>
                 <td class="align-right">
                     <input type="number" value="${qte}" class="editable-cell" onchange="updateQty(${index}, this.value)" onfocus="this.select(); selectLine(${index});">
@@ -1293,18 +1294,7 @@
         renderTable();
     }
 
-    function validerTicket() {
-        if (ticketLines.length === 0) {
-            alert('Le ticket est vide !');
-            return;
-        }
-        
-        // Ici on préparerait les données pour l'enregistrement (POST vers /vente/caisse)
-        console.log("Validation du ticket", ticketLines);
-        
-        alert('Ticket validé avec succès ! (Simulation prête pour Backend)');
-        annulerTicket(); // Reset for next customer
-    }
+    // validerTicket moved to bottom script
 
     function searchTicket(ticketId) {
         if (!ticketId) return;
@@ -1314,6 +1304,10 @@
     }
 
     function annulerTicket() {
+        if (complementMode) {
+            exitComplementMode();
+            return;
+        }
         ticketLines = [];
         currentClientId = null;
         document.getElementById('clientCode').value = '';
@@ -1490,6 +1484,9 @@
     function closeClientModal() {
         document.getElementById('clientModal').style.display = 'none';
         document.getElementById('scanInput').focus();
+        if (typeof pendingPaymentMode !== 'undefined') {
+            pendingPaymentMode = null;
+        }
     }
 
     function confirmClientSelection() {
@@ -1647,6 +1644,25 @@
                 document.body.appendChild(msg);
                 setTimeout(() => msg.remove(), 4000);
             }
+        }
+        
+        if (typeof pendingPaymentMode !== 'undefined' && pendingPaymentMode && currentClientId && currentClientId != 1) {
+            let mode = pendingPaymentMode;
+            pendingPaymentMode = null;
+            closeClientModal();
+            setTimeout(() => {
+                openPaymentModal(mode.id, mode.name);
+            }, 150);
+            return;
+        }
+
+        if (typeof pendingComplementAcompte !== 'undefined' && pendingComplementAcompte && currentClientId && currentClientId != 1) {
+            pendingComplementAcompte = false;
+            closeClientModal();
+            setTimeout(() => {
+                openComplementAcompteModal();
+            }, 150);
+            return;
         }
         
         closeClientModal();
@@ -2123,7 +2139,7 @@
                 </style>
             </head>
             <body>
-                <div class="center bold" style="font-size: 16px;">VELARO</div>
+                <div class="center bold" style="font-size: 16px;">{{ strtoupper($siteName) }}</div>
                 <div class="center">Ticket Provisoire</div>
                 <div class="line"></div>
                 <div>Date: ${dateStr}</div>
@@ -2814,33 +2830,131 @@
     });
 
     function validerTicket() {
-        openPaymentModal(1, 'Espèce'); // Par défaut on propose Espèce quand on clique sur le bouton de validation principal
+        openMultiPaymentModal(1); // Default pre-fill Espèce
     }
 
-    function openPaymentModal(modeId, modeName) {
-        if (ticketLines.length === 0) {
+    let mpTotalDu = 0;
+
+    function openMultiPaymentModal(defaultModeId = null) {
+        if (ticketLines.length === 0 && !complementMode) {
             alert("Le ticket est vide.");
             return;
         }
 
-        if (modeId === 2) {
-            openChequeModal();
-            return;
-        }
+        document.getElementById('multiPaymentModal').style.display = 'flex';
+        
+        let vendeur = document.getElementById('vendeurName').value || document.getElementById('vendeurName').dataset.name || 'Vendeur';
+        document.getElementById('mpVendeurName').innerText = vendeur;
+        document.getElementById('mpClientName').innerText = document.getElementById('clientName').innerText;
 
-        if (modeId === 5) {
-            openChequeCadeauModal();
-            return;
-        }
+        mpTotalDu = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+        document.getElementById('mpNetAPayer').value = mpTotalDu.toFixed(3);
+        
+        mpReglementsArray = [];
+        document.getElementById('mpEspece').value = '';
+        document.getElementById('mpCheque').value = '';
+        document.getElementById('mpCB').value = '';
+        
+        if (defaultModeId === 1) document.getElementById('mpEspece').value = mpTotalDu.toFixed(3);
+        else if (defaultModeId === 2) document.getElementById('mpCheque').value = mpTotalDu.toFixed(3);
+        else if (defaultModeId === 3) document.getElementById('mpCB').value = mpTotalDu.toFixed(3);
 
-        let total = parseFloat(document.getElementById('grandTotal').innerText);
-        document.getElementById('paymentModeId').value = modeId;
-        document.getElementById('paymentModalTitle').innerText = 'Paiement - ' + modeName;
-        document.getElementById('paymentTotal').innerText = total.toFixed(3);
-        document.getElementById('paymentMontant').value = total.toFixed(3);
-        document.getElementById('paymentRendu').innerText = '0.000';
-        document.getElementById('paymentModal').style.display = 'flex';
-        document.getElementById('paymentMontant').select();
+        toggleMpAddBtn('Espece');
+        toggleMpAddBtn('Cheque');
+        toggleMpAddBtn('CB');
+
+        renderMpTable();
+    }
+
+    function closeMultiPaymentModal() {
+        document.getElementById('multiPaymentModal').style.display = 'none';
+    }
+
+    function toggleMpAddBtn(type) {
+        let val = parseFloat(document.getElementById('mp' + type).value);
+        let btn = document.getElementById('mpBtn' + type);
+        if (val > 0) {
+            btn.style.display = 'block';
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    function mpAddLine(type, modeId) {
+        let input = document.getElementById('mp' + type);
+        let val = parseFloat(input.value) || 0;
+        if (val <= 0) return;
+        
+        let modeName = '';
+        if (type === 'Espece') modeName = 'Espèce';
+        else if (type === 'Cheque') modeName = 'Cheque';
+        else if (type === 'CB') modeName = 'C.B';
+
+        // Add to array
+        let today = new Date().toISOString().split('T')[0];
+        mpReglementsArray.push({
+            id: Date.now(),
+            modeId: modeId,
+            mode: modeName,
+            montant: val,
+            numero: '',
+            date: today,
+            banque: ''
+        });
+
+        // Clear input
+        input.value = '';
+        toggleMpAddBtn(type);
+        renderMpTable();
+    }
+
+    function renderMpTable() {
+        let tbody = document.getElementById('mpReglementsTbody');
+        tbody.innerHTML = '';
+        
+        let paye = 0;
+        if (mpReglementsArray.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 30px; font-weight: bold;">No data to display</td></tr>';
+        } else {
+            mpReglementsArray.forEach((row, index) => {
+                paye += row.montant;
+                let tr = document.createElement('tr');
+                
+                let detailsHTML = `
+                    <td style="padding: 2px; border-right: 1px solid #ddd;"></td>
+                    <td style="padding: 2px; border-right: 1px solid #ddd;"></td>
+                    <td style="padding: 2px; border-right: 1px solid #ddd;"></td>
+                `;
+
+                if (row.modeId === 2 || row.modeId === 3 || row.modeId === 4 || row.modeId === 9) {
+                    detailsHTML = `
+                        <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${row.numero}" onchange="updateMpRow(${index}, 'numero', this.value)" style="width: 100%; border: 1px solid #eee; padding: 4px; box-sizing: border-box; outline: none;" placeholder="Numéro"></td>
+                        <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="date" value="${row.date}" onchange="updateMpRow(${index}, 'date', this.value)" style="width: 100%; border: 1px solid #eee; padding: 4px; box-sizing: border-box; outline: none;"></td>
+                        <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${row.banque}" onchange="updateMpRow(${index}, 'banque', this.value)" style="width: 100%; border: 1px solid #eee; padding: 4px; box-sizing: border-box; outline: none;" placeholder="Banque"></td>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td style="padding: 5px; border-right: 1px solid #ddd;">${row.mode}</td>
+                    <td style="padding: 5px; border-right: 1px solid #ddd; text-align: right; font-weight: bold;">${row.montant.toFixed(3)}</td>
+                    ${detailsHTML}
+                    <td style="padding: 2px; text-align: center;"><button onclick="removeMpRow(${index})" style="background:none; border:none; color:red; cursor:pointer; font-weight:bold; padding: 0 5px;">X</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        let reste = mpTotalDu - paye;
+        document.getElementById('mpResteAPayer').value = reste.toFixed(3);
+    }
+
+    function updateMpRow(index, field, val) {
+        mpReglementsArray[index][field] = val;
+    }
+
+    function removeMpRow(index) {
+        mpReglementsArray.splice(index, 1);
+        renderMpTable();
     }
 
     // CHEQUE LOGIC
@@ -2994,32 +3108,227 @@
         document.getElementById('paymentRendu').innerText = rendu >= 0 ? rendu.toFixed(3) : '0.000';
     }
 
-    function validerPaiement() {
-        let total = parseFloat(document.getElementById('paymentTotal').innerText);
-        let recu = parseFloat(document.getElementById('paymentMontant').value || 0);
-        
-        if (recu < total) {
-            alert("Le montant reçu ne peut pas être inférieur au total à payer.");
+    function mpGetReglements() {
+        return mpReglementsArray.map(r => ({
+            modereglementid: r.modeId,
+            montant: r.montant,
+            numero: r.numero || '',
+            banque: r.banque || '',
+            date: r.date || ''
+        }));
+    }
+
+    // BON D'ACHAT LOGIC
+    let baLignes = [];
+
+    function openBonAchatModal() {
+        document.getElementById('bonAchatModal').style.display = 'flex';
+        document.getElementById('baNetAPayer').innerText = mpTotalDu.toFixed(3);
+        document.getElementById('baCodeInput').value = '';
+        document.getElementById('baNom').value = document.getElementById('clientName').innerText === 'PASSAGER' ? '' : document.getElementById('clientName').innerText;
+        document.getElementById('baTelephone').value = '';
+        baLignes = [];
+        renderBaTable();
+    }
+
+    function closeBonAchatModal() {
+        document.getElementById('bonAchatModal').style.display = 'none';
+    }
+
+    function baAddLine() {
+        let code = document.getElementById('baCodeInput').value.trim();
+        baLignes.push({ numero: code, montant: 0, remise: 0 });
+        document.getElementById('baCodeInput').value = '';
+        renderBaTable();
+    }
+
+    function renderBaTable() {
+        let tbody = document.getElementById('baTbody');
+        tbody.innerHTML = '';
+        if (baLignes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; font-weight: bold;">No data to display</td></tr>';
             return;
         }
 
-        let modeId = document.getElementById('paymentModeId').value;
-        let rendu = parseFloat(document.getElementById('paymentRendu').innerText);
+        baLignes.forEach((l, index) => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${l.numero}" onchange="baUpdate(${index}, 'numero', this.value)" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;"></td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="number" step="0.001" value="${l.montant}" onchange="baUpdate(${index}, 'montant', this.value)" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;"></td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="number" step="0.01" value="${l.remise}" onchange="baUpdate(${index}, 'remise', this.value)" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;"></td>
+                <td style="padding: 2px; text-align: center;"><button onclick="baRemove(${index})" style="background: none; border: none; color: red; cursor: pointer; font-weight: bold;">X</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
 
-        let data = {
-            clientid: currentClientId,
-            en_attente: false,
-            lignes: ticketLines,
-            rendu: rendu,
-            reglements: [
-                {
-                    modereglementid: modeId,
-                    montant: total // On enregistre le montant exact dû
+    function baUpdate(index, field, val) {
+        if (field === 'numero') baLignes[index].numero = val;
+        else baLignes[index][field] = parseFloat(val) || 0;
+    }
+
+    function baRemove(index) {
+        baLignes.splice(index, 1);
+        renderBaTable();
+    }
+
+    function validerBonAchat() {
+        let nom = document.getElementById('baNom').value.trim();
+        if (nom === '') {
+            alert("Nom et Prénom sont obligatoires.");
+            return;
+        }
+
+        let totalBA = baLignes.reduce((sum, l) => sum + l.montant, 0);
+        if (totalBA > 0) {
+            baLignes.forEach(l => {
+                if(l.montant > 0) {
+                    let today = new Date().toISOString().split('T')[0];
+                    mpReglementsArray.push({
+                        id: Date.now() + Math.random(),
+                        modeId: 4,
+                        mode: "Bon d'achat",
+                        montant: l.montant,
+                        numero: l.numero,
+                        date: today,
+                        banque: ''
+                    });
                 }
-            ]
+            });
+            renderMpTable();
+        }
+        
+        closeBonAchatModal();
+    }
+
+    // AVOIR LOGIC
+    function openAvoirModal() {
+        document.getElementById('avoirModal').style.display = 'flex';
+        let input = document.getElementById('avoirBarcodeInput');
+        input.value = '';
+        setTimeout(() => input.focus(), 100);
+    }
+
+    function closeAvoirModal() {
+        document.getElementById('avoirModal').style.display = 'none';
+    }
+
+    function validerAvoir() {
+        let barcode = document.getElementById('avoirBarcodeInput').value.trim();
+        if (barcode === '') {
+            alert("Veuillez saisir ou scanner un code à barre.");
+            return;
+        }
+
+        fetch(`/vente/caisse/pos/check-avoir?code=${encodeURIComponent(barcode)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    let av = data.avoir;
+
+                    // Warn if avoir client doesn't match current client (except if current is PASSAGER)
+                    if (av.clientid && av.clientid != currentClientId && currentClientId != 1) {
+                        if (!confirm(`Cet avoir appartient à ${av.client_name}. Voulez-vous quand même l'utiliser ?`)) {
+                            return;
+                        }
+                    }
+
+                    let paye = mpReglementsArray.reduce((sum, r) => sum + r.montant, 0);
+                    let reste = mpTotalDu - paye;
+
+                    if (reste <= 0) {
+                        alert("Le ticket est déjà entièrement réglé.");
+                        return;
+                    }
+
+                    let montantAUtiliser = Math.min(av.montant, reste);
+                    let today = new Date().toISOString().split('T')[0];
+
+                    mpReglementsArray.push({
+                        id: Date.now() + Math.random(),
+                        modeId: 9,
+                        mode: "Avoir",
+                        montant: montantAUtiliser,
+                        numero: av.numerointerne || av.cavoirnumero || barcode,
+                        date: today,
+                        banque: ''
+                    });
+
+                    renderMpTable();
+                    closeAvoirModal();
+                } else {
+                    alert(data.message || "Avoir invalide ou introuvable.");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erreur lors de la vérification de l'avoir.");
+            });
+    }
+
+    function mpSubmitValider(isAcompte) {
+        let reglements = mpGetReglements();
+        let paye = reglements.reduce((sum, r) => sum + r.montant, 0);
+        let reste = mpTotalDu - paye;
+
+        if (paye <= 0) {
+            alert("Veuillez saisir au moins un montant.");
+            return;
+        }
+
+        if (!isAcompte && reste > 0.005) {
+            alert("Le total n'est pas réglé. Cliquez sur 'Valider Acompte' si vous souhaitez valider un paiement partiel.");
+            return;
+        }
+
+        if (paye > mpTotalDu + 0.005) {
+            alert("Le montant reçu ne peut pas dépasser le total (pas de rendu automatique pour les paiements multiples).");
+            return;
+        }
+
+        if (complementMode) {
+            // Send array of reglements
+            fetch('/vente/caisse/store-complement-acompte', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ 
+                    cticketid: complementTicketId, 
+                    reglements: reglements 
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Complément enregistré avec succès!');
+                    closeMultiPaymentModal();
+                    exitComplementMode();
+                    document.getElementById('complementAcompteModal').style.display = 'none';
+                } else {
+                    alert('Erreur: ' + (data.message || ''));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erreur de communication.");
+            });
+            return;
+        }
+
+        // Standard Ticket Mode
+        let payload = {
+            vendeurid: document.getElementById('vendeurName').dataset.id || null,
+            clientid: currentClientId,
+            lignes: ticketLines,
+            reglements: reglements,
+            totalttc: parseFloat(document.getElementById('grandTotal').innerText),
+            acompte: paye,
+            netapayer: reste < 0 ? 0 : reste
         };
 
-        window.submitTicketToBackend(data);
+        window.submitTicketToBackend(payload, false);
     }
 
     function openRepriseModal() {
@@ -3373,30 +3682,190 @@
 
 </script>
 
-<!-- PAYMENT MODAL -->
-<div id="paymentModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
-    <div class="modal-content" style="background: white; width: 400px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif;">
+<!-- MULTI PAYMENT MODAL -->
+<div id="multiPaymentModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 800px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif; display: flex; flex-direction: column;">
+        <!-- Header -->
         <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
-            <h2 id="paymentModalTitle" style="margin: 0; font-size: 16px; font-weight: bold; color: #333;">Paiement</h2>
-            <button type="button" onclick="closePaymentModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">&times;</button>
+            <h2 style="margin: 0; font-size: 16px; font-weight: bold; color: #333;">Réglement Client</h2>
+            <div>Vendeur <span id="mpVendeurName" style="font-weight: bold; margin-right: 20px;"></span></div>
+            <button type="button" onclick="closeMultiPaymentModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">&times;</button>
         </div>
+        
+        <!-- Client Name -->
+        <div style="text-align: center; padding: 10px; font-weight: bold; color: #0284c7; border-bottom: 1px solid #eee;">
+            <a href="#" id="mpClientName" style="text-decoration: none; color: inherit;">PASSAGER</a>
+        </div>
+
+        <!-- Body split -->
+        <div style="display: flex; padding: 15px; gap: 20px;">
+            <!-- Left Panel: Détails Règlements -->
+            <div style="flex: 3; border: 1px solid #ddd; min-height: 200px; display: flex; flex-direction: column;">
+                <div style="padding: 5px; background: #f8f9fa; border-bottom: 1px solid #ddd; color: #0284c7;">Détails Règlements</div>
+                <div style="flex: 1; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                        <thead>
+                            <tr style="background: #f1f5f9; border-bottom: 1px solid #ddd;">
+                                <th style="padding: 5px; border-right: 1px solid #ddd;">Mode</th>
+                                <th style="padding: 5px; border-right: 1px solid #ddd; text-align: right;">Montant</th>
+                                <th style="padding: 5px; border-right: 1px solid #ddd;">Numéro</th>
+                                <th style="padding: 5px; border-right: 1px solid #ddd;">Echéance</th>
+                                <th style="padding: 5px;">Banque</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mpReglementsTbody">
+                            <tr><td colspan="5" style="text-align: center; padding: 30px; font-weight: bold;">No data to display</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Panel: Inputs -->
+            <div style="flex: 2; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; color: #16a34a; font-size: 16px; font-weight: bold;">
+                    <span>Net À PAYER</span>
+                    <input type="text" id="mpNetAPayer" readonly style="width: 120px; padding: 4px; border: 1px solid #ddd; text-align: right; background: #f8f9fa; font-weight: bold; color: #16a34a;" value="0.000">
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; color: #dc2626; font-size: 16px; font-weight: bold;">
+                    <span>RESTE À PAYER</span>
+                    <input type="text" id="mpResteAPayer" readonly style="width: 120px; padding: 4px; border: 1px solid #ddd; text-align: right; background: #f8f9fa; font-weight: bold; color: #dc2626;" value="0.000">
+                </div>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 5px 0;">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Espèce</span>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="mpEspece" step="0.001" style="width: 120px; padding: 4px; border: 1px solid #ccc; text-align: right;" oninput="toggleMpAddBtn('Espece')">
+                        <button id="mpBtnEspece" onclick="mpAddLine('Espece', 1)" style="padding: 0 5px; border: 1px solid #ccc; background: white; cursor: pointer; display: none; color: green; font-weight: bold;">✓</button>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Cheque</span>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="mpCheque" step="0.001" style="width: 120px; padding: 4px; border: 1px solid #ccc; text-align: right;" oninput="toggleMpAddBtn('Cheque')">
+                        <button id="mpBtnCheque" onclick="mpAddLine('Cheque', 2)" style="padding: 0 5px; border: 1px solid #ccc; background: white; cursor: pointer; display: none; color: green; font-weight: bold;">✓</button>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Carte Crédit</span>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="mpCB" step="0.001" style="width: 120px; padding: 4px; border: 1px solid #ccc; text-align: right;" oninput="toggleMpAddBtn('CB')">
+                        <button id="mpBtnCB" onclick="mpAddLine('CB', 3)" style="padding: 0 5px; border: 1px solid #ccc; background: white; cursor: pointer; display: none; color: green; font-weight: bold;">✓</button>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Bon d'achat</span>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="openBonAchatModal()" style="padding: 4px 10px; border: 1px solid #ccc; background: white; cursor: pointer; font-weight: bold; width: 153px;">...</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding: 10px 15px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+            <div style="display: flex; gap: 10px;">
+                <button onclick="openAvoirModal()" style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Avoir</button>
+                <button style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Chèque Cadeaux</button>
+                <button style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Coupon</button>
+            </div>
+        </div>
+        <div style="padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: white;">
+            <button id="btnMpValiderAcompte" onclick="mpSubmitValider(true)" style="padding: 8px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Valider Acompte</button>
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="mpSubmitValider(false)" style="width: 80px; height: 35px; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button onclick="closeMultiPaymentModal()" style="width: 80px; height: 35px; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold;">
+                    &times;
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BON D'ACHAT MODAL -->
+<div id="bonAchatModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1030; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 600px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Bon d'achat</h2>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-weight: bold;">Net à Payer <span id="baNetAPayer">0.000</span></span>
+                <button type="button" onclick="closeBonAchatModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+        </div>
+
         <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
-            <input type="hidden" id="paymentModeId">
-            <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: bold;">
-                <span>Total à Payer:</span>
-                <span id="paymentTotal">0.000</span>
+            <!-- Code Input -->
+            <input type="text" id="baCodeInput" style="width: 100%; padding: 8px; border: 1px solid #ccc;" onkeydown="if(event.key==='Enter') baAddLine()" placeholder="Scannez ou saisissez le code...">
+
+            <!-- Table -->
+            <div style="border: 1px solid #ddd; min-height: 100px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
+                    <thead style="background: #f8f9fa; border-bottom: 1px solid #ddd;">
+                        <tr>
+                            <th style="padding: 5px; border-right: 1px solid #ddd;">Numéro</th>
+                            <th style="padding: 5px; border-right: 1px solid #ddd;">MONTANT</th>
+                            <th style="padding: 5px; border-right: 1px solid #ddd;">REMISE %</th>
+                            <th style="padding: 5px; text-align: center;"><a href="#" onclick="baAddLine()" style="color: #0284c7; text-decoration: none;">New</a></th>
+                        </tr>
+                    </thead>
+                    <tbody id="baTbody">
+                        <tr><td colspan="4" style="text-align: center; padding: 20px; font-weight: bold;">No data to display</td></tr>
+                    </tbody>
+                </table>
             </div>
-            <div>
-                <label style="font-weight: bold;">Montant Reçu:</label>
-                <input type="number" id="paymentMontant" style="width: 100%; padding: 8px; font-size: 18px; border: 1px solid #ccc; text-align: right;" oninput="calcRendu()" onkeydown="if(event.key==='Enter') validerPaiement()">
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: bold; color: #dc2626;">
-                <span>Rendu:</span>
-                <span id="paymentRendu">0.000</span>
+
+            <!-- Client Info -->
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label style="font-weight: bold; white-space: nowrap;">Nom Prenom</label>
+                <input type="text" id="baNom" style="flex: 1; padding: 6px; border: 1px solid #ccc;">
+                <label style="font-weight: bold; white-space: nowrap;">Telephone</label>
+                <input type="text" id="baTelephone" style="flex: 1; padding: 6px; border: 1px solid #ccc;">
             </div>
         </div>
-        <div style="padding: 10px 15px; border-top: 1px solid #ddd; background: #f8f9fa; display: flex; justify-content: flex-end;">
-            <button type="button" onclick="validerPaiement()" style="padding: 10px 20px; border: none; background: #16a34a; color: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Valider le Paiement</button>
+
+        <!-- Footer -->
+        <div style="padding: 10px 15px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <div style="color: #dc2626; font-weight: bold; font-size: 16px;">Nom && Prenom Obligatoire</div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="validerBonAchat()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button onclick="closeBonAchatModal()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold;">
+                    &times;
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AVOIR MODAL -->
+<div id="avoirModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1030; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 480px; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); font-family: Arial, sans-serif; overflow: hidden; border: 1px solid #ccc;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; font-size: 14px; font-weight: normal; color: #333;">
+            Saisie Avoir Client
+        </div>
+
+        <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px; align-items: center;">
+            <!-- Code Input -->
+            <div style="display: flex; align-items: center; width: 100%; gap: 10px;">
+                <label style="font-size: 13px; color: #475569; font-weight: normal; white-space: nowrap; width: 100px;">Code à barre</label>
+                <input type="text" id="avoirBarcodeInput" style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter') validerAvoir()">
+            </div>
+
+            <!-- Buttons -->
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px; width: 100%;">
+                <button onclick="validerAvoir()" style="width: 80px; height: 38px; border: 1px solid #1e293b; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;" title="Valider">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button onclick="closeAvoirModal()" style="width: 80px; height: 38px; border: 1px solid #1e293b; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;" title="Annuler">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1e293b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -3425,6 +3894,367 @@
         </div>
     </div>
 </div>
+
+<!-- COMPLEMENT ACOMPTE MODAL -->
+<div id="complementAcompteModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 950px; max-height: 85%; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 12px; font-family: Arial, sans-serif; display: flex; flex-direction: column;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Complement acomptes</h2>
+            <button type="button" onclick="closeComplementAcompteModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        <!-- Filters -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <label style="font-weight: bold; white-space: nowrap;">DU :</label>
+                <input type="date" id="compAcompte_du" style="padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <label style="font-weight: bold; white-space: nowrap;">AU :</label>
+                <input type="date" id="compAcompte_au" style="padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <label style="font-weight: bold; white-space: nowrap;">Client :</label>
+                <select id="compAcompte_client" style="padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px; min-width: 150px;">
+                    <option value="">-- Tous --</option>
+                </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+                <label style="font-weight: bold; white-space: nowrap;">N° :</label>
+                <input type="text" id="compAcompte_numero" placeholder="Numéro ticket" style="padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px; width: 100px;">
+            </div>
+            <button onclick="fetchComplementTickets()" style="padding: 5px 15px; border: none; background: #2563eb; color: white; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold;">Filtrer</button>
+        </div>
+        <!-- Table -->
+        <div style="padding: 10px 15px; overflow-y: auto; flex: 1;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f1f5f9;">
+                        <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px;">N° Ticket</th>
+                        <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Date</th>
+                        <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Client</th>
+                        <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Caissier</th>
+                        <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Vendeur</th>
+                        <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Total Qte</th>
+                        <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Total TTC</th>
+                        <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Acompte</th>
+                        <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Reste</th>
+                        <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Montant reçu</th>
+                        <th style="padding: 6px 8px; text-align: center; border-bottom: 2px solid #e5e7eb; font-size: 11px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="complementAcompteTbody">
+                    <tr><td colspan="11" style="padding: 20px; text-align: center; color: #999;">Cliquez sur Filtrer pour charger les tickets</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Footer totals -->
+        <div style="padding: 8px 15px; border-top: 1px solid #ddd; background: #f8f9fa; display: flex; justify-content: flex-end; gap: 20px; font-weight: bold; font-size: 11px;">
+            <span>Total Qte: <span id="compAcompte_totalQte">0</span></span>
+            <span>Total TTC: <span id="compAcompte_totalTTC">0.000</span></span>
+            <span>Total Reste: <span id="compAcompte_totalReste">0.000</span></span>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    // ===== COMPLEMENT ACOMPTE LOGIC =====
+    let pendingComplementAcompte = false;
+    let compAcompteTicketsData = [];
+    let complementMode = false;
+    let complementTicketId = null;
+    let complementReste = 0;
+    let complementNumero = '';
+
+    function openComplementAcompteFlow() {
+        // Si pas de client sélectionné (PASSAGER), demander de choisir un client d'abord
+        if (!currentClientId || currentClientId == 1) {
+            pendingComplementAcompte = true;
+            openClientModal();
+            return;
+        }
+        openComplementAcompteModal();
+    }
+
+    function openComplementAcompteModal() {
+        let today = new Date().toISOString().split('T')[0];
+        let oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        document.getElementById('compAcompte_du').value = oneYearAgo.toISOString().split('T')[0];
+        document.getElementById('compAcompte_au').value = today;
+        document.getElementById('compAcompte_numero').value = '';
+        
+        document.getElementById('complementAcompteModal').style.display = 'flex';
+        fetchComplementTickets();
+    }
+
+    function closeComplementAcompteModal() {
+        document.getElementById('complementAcompteModal').style.display = 'none';
+    }
+
+    function fetchComplementTickets() {
+        let du = document.getElementById('compAcompte_du').value;
+        let au = document.getElementById('compAcompte_au').value;
+        let clientid = document.getElementById('compAcompte_client').value;
+        let numero = document.getElementById('compAcompte_numero').value;
+
+        let params = new URLSearchParams({ du, au });
+        if (clientid) params.append('clientid', clientid);
+        if (numero) params.append('numero', numero);
+
+        document.getElementById('complementAcompteTbody').innerHTML = '<tr><td colspan="11" style="padding: 20px; text-align: center; color: #999;">Chargement...</td></tr>';
+
+        fetch(`/vente/caisse/tickets-reste?${params.toString()}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    compAcompteTicketsData = data.tickets;
+                    renderComplementTickets(data.tickets);
+                    let sel = document.getElementById('compAcompte_client');
+                    let currentVal = sel.value;
+                    sel.innerHTML = '<option value="">-- Tous --</option>';
+                    if (data.clients) {
+                        data.clients.forEach(c => {
+                            let opt = document.createElement('option');
+                            opt.value = c.clientid;
+                            opt.textContent = c.nom;
+                            sel.appendChild(opt);
+                        });
+                    }
+                    sel.value = currentVal;
+                } else {
+                    document.getElementById('complementAcompteTbody').innerHTML = '<tr><td colspan="11" style="padding: 20px; text-align: center; color: #dc2626;">Erreur de chargement</td></tr>';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('complementAcompteTbody').innerHTML = '<tr><td colspan="11" style="padding: 20px; text-align: center; color: #dc2626;">Erreur réseau</td></tr>';
+            });
+    }
+
+    function renderComplementTickets(tickets) {
+        let tbody = document.getElementById('complementAcompteTbody');
+        tbody.innerHTML = '';
+
+        if (!tickets || tickets.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" style="padding: 20px; text-align: center; color: #999;">Aucun ticket avec reste à payer</td></tr>';
+            document.getElementById('compAcompte_totalQte').textContent = '0';
+            document.getElementById('compAcompte_totalTTC').textContent = '0.000';
+            document.getElementById('compAcompte_totalReste').textContent = '0.000';
+            return;
+        }
+
+        let totalQte = 0, totalTTC = 0, totalReste = 0;
+
+        tickets.forEach(t => {
+            let date = t.datecreation ? new Date(t.datecreation).toLocaleDateString('fr-FR') : '';
+            let reste = parseFloat(t.netapayer) || 0;
+            let acompte = parseFloat(t.acompte) || 0;
+            let ttc = parseFloat(t.totalttc) || 0;
+            let qte = parseFloat(t.totalqte) || 0;
+
+            totalQte += qte;
+            totalTTC += ttc;
+            totalReste += reste;
+
+            let tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.onmouseover = function() { this.style.background = '#f0f7ff'; };
+            tr.onmouseout = function() { this.style.background = ''; };
+            tr.innerHTML = `
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.cticketnumero || ''}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${date}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.client_nom || ''}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.caissier_nom || ''}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.vendeur_nom || ''}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right;">${qte}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right;">${ttc.toFixed(3)}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right;">${acompte.toFixed(3)}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right; color: #dc2626; font-weight: bold;">${reste.toFixed(3)}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right;">
+                    <input type="number" step="0.001" value="${reste.toFixed(3)}" style="width: 80px; padding: 2px 4px; border: 1px solid #ccc; border-radius: 2px; text-align: right; font-size: 11px;" id="compMontant_${t.cticketid}">
+                </td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; text-align: center;">
+                    <button onclick="selectComplementTicket(${t.cticketid}, '${t.cticketnumero}', ${reste}, ${t.clientid || 0})" style="padding: 3px 10px; border: none; background: #16a34a; color: white; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold;" title="Charger dans le panier">✓</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('compAcompte_totalQte').textContent = totalQte;
+        document.getElementById('compAcompte_totalTTC').textContent = totalTTC.toFixed(3);
+        document.getElementById('compAcompte_totalReste').textContent = totalReste.toFixed(3);
+    }
+
+    function selectComplementTicket(cticketid, numero, reste, clientid) {
+        if (ticketLines.length > 0) {
+            if (!confirm("Le panier n'est pas vide. Voulez-vous le remplacer par ce ticket ?")) {
+                return;
+            }
+        }
+
+        // Récupérer le montant personnalisé si modifié
+        let montantInput = document.getElementById('compMontant_' + cticketid);
+        let montantCustom = montantInput ? parseFloat(montantInput.value) : reste;
+        if (isNaN(montantCustom) || montantCustom <= 0) montantCustom = reste;
+        if (montantCustom > reste) montantCustom = reste;
+
+        // Charger les détails du ticket dans le panier
+        fetch(`/vente/caisse/ticket-details/${numero}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    // Activer le mode complément
+                    complementMode = true;
+                    complementTicketId = cticketid;
+                    complementReste = montantCustom;
+                    complementNumero = numero;
+
+                    // Charger les lignes du ticket dans le panier
+                    ticketLines = [];
+                    res.lines.forEach(l => {
+                        ticketLines.push({
+                            produitid: l.produitid || 0,
+                            produit2id: l.produit2id || 0,
+                            ref: l.article_ref || '',
+                            code: l.article_ref || '',
+                            reference: l.article_ref || '',
+                            designation: l.article_designation || '',
+                            taille: l.taille || '',
+                            couleur: l.couleur || '',
+                            qte: parseFloat(l.qte) || 0,
+                            prix: parseFloat(l.prix) || 0,
+                            remise: parseFloat(l.remise) || 0,
+                            prixNet: parseFloat(l.prix) * (1 - (parseFloat(l.remise) || 0) / 100),
+                            total: parseFloat(l.totalttc) || 0,
+                            stock: 0
+                        });
+                    });
+
+                    // Mettre à jour le client
+                    if (clientid && clientid != 1) {
+                        currentClientId = clientid;
+                        fetch(`/vente/caisse/pos/client/${clientid}`)
+                            .then(cRes => cRes.json())
+                            .then(cData => {
+                                if (cData.success) {
+                                    document.getElementById('clientName').innerText = cData.client.nom;
+                                    document.getElementById('clientCode').value = cData.client.clientcode || cData.client.clientid;
+                                    let soldeInfoDiv = document.getElementById('clientSoldeInfo');
+                                    soldeInfoDiv.style.display = 'block';
+                                    let solde = parseFloat(cData.client.solde || 0).toFixed(3);
+                                    let soldeFid = parseFloat(cData.client.soldefidelite || 0).toFixed(3);
+                                    let pFid = parseFloat(cData.client.pointfidelite || 0).toFixed(1);
+                                    soldeInfoDiv.innerText = `Solde : ${solde} DT | Solde.Fid : ${soldeFid} DT | P.Fid: ${pFid}`;
+                                }
+                            });
+                    }
+
+                    // Render le panier
+                    renderTable();
+
+                    // Afficher le reste dans le header
+                    updateComplementDisplay();
+
+                    closeComplementAcompteModal();
+                } else {
+                    alert("Erreur: " + (res.message || 'Ticket introuvable'));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Erreur réseau lors du chargement du ticket.');
+            });
+    }
+
+    function updateComplementDisplay() {
+        if (!complementMode) return;
+        let reste = complementReste;
+        // Afficher le reste dans le grandTotal
+        document.getElementById('grandTotal').innerText = reste.toFixed(3);
+        document.getElementById('grandTotal').style.color = '#dc2626';
+
+        // Mettre à jour le footer
+        let totalTTC = 0;
+        ticketLines.forEach(l => totalTTC += parseFloat(l.total) || 0);
+        let acompte = totalTTC - reste;
+        document.getElementById('lblAcompte').innerText = acompte.toFixed(3);
+        document.getElementById('lblRestePayer').innerText = reste.toFixed(3);
+        document.getElementById('lblRestePayer').style.color = '#dc2626';
+
+        // Afficher un bandeau "Mode Complément" dans le display
+        document.getElementById('display-qte-prix').innerText = `COMPLEMENT TICKET N° ${complementNumero}`;
+        document.getElementById('display-qte-prix').style.color = '#dc2626';
+        document.getElementById('display-remise').innerText = '';
+        document.getElementById('display-total').innerText = `RESTE: ${reste.toFixed(3)}`;
+        document.getElementById('display-total').style.color = '#dc2626';
+
+        // Mettre le N° du ticket dans le champ
+        document.getElementById('ticketNumber').value = complementNumero;
+    }
+
+    function exitComplementMode() {
+        complementMode = false;
+        complementTicketId = null;
+        complementReste = 0;
+        complementNumero = '';
+        ticketLines = [];
+
+        // Reset les styles
+        document.getElementById('grandTotal').style.color = '';
+        document.getElementById('lblRestePayer').style.color = '';
+        document.getElementById('display-qte-prix').style.color = '';
+        document.getElementById('display-total').style.color = '';
+        document.getElementById('lblAcompte').innerText = '0.000';
+        document.getElementById('ticketNumber').value = '';
+
+        // Reset le client
+        currentClientId = {{ $client ? $client->clientid : 1 }};
+        document.getElementById('clientName').innerText = 'PASSAGER';
+        document.getElementById('clientSoldeInfo').style.display = 'none';
+        document.getElementById('clientCode').value = '4110001';
+
+        renderTable();
+    }
+
+    function validerComplementAcompte() {
+        // Cette fonction est appelée depuis validerPaiement quand complementMode est actif
+        let modeId = document.getElementById('paymentModeId').value;
+        let montant = complementReste;
+
+        fetch('/vente/caisse/store-complement-acompte', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                cticketid: complementTicketId,
+                montant: montant,
+                modereglementid: modeId
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                closePaymentModal();
+                let msg = document.createElement('div');
+                msg.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#10b981;color:white;padding:10px 20px;border-radius:5px;z-index:9999;font-family:Arial;font-size:13px;';
+                msg.textContent = data.message || 'Complément enregistré !';
+                document.body.appendChild(msg);
+                setTimeout(() => msg.remove(), 3000);
+                exitComplementMode();
+            } else {
+                alert(data.message || "Erreur lors de l'enregistrement.");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Erreur réseau.');
+        });
+    }
+</script>
 
 </body>
 </html>

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Velaro POS — Dashboard')
+@section('title', config('app.name') . ' — Dashboard')
 
 @section('styles')
 <style>
@@ -86,6 +86,10 @@
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         position: relative;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
     }
 
     .kpi-card:hover {

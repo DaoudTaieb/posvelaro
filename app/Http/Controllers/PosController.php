@@ -54,13 +54,20 @@ class PosController extends Controller
             $defaultVendeur = DB::table('employees')->where('employeeid', $user->employeeid)->first();
         }
 
+        // Récupérer le nom du site de l'utilisateur connecté
+        $site = null;
+        if ($user && $user->siteid) {
+            $site = DB::table('sites')->where('siteid', $user->siteid)->first();
+        }
+        $siteName = $site ? $site->libelle : 'VELARO';
+
         // Générer un numéro de ticket provisoire (ou afficher le prochain numéro)
         $lastTicket = DB::table('ctickets')->orderBy('cticketid', 'desc')->first();
         $draftId = $lastTicket && $lastTicket->cticketnumero ? (intval($lastTicket->cticketnumero) + 1) : date('y') . '000001';
 
         $typeChequeCadeaus = DB::table('typechequecadeaus')->orderBy('priorite')->get();
 
-        return view('caisse.pos', compact('client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 'defaultVendeur', 'draftId', 'typeChequeCadeaus'));
+        return view('caisse.pos', compact('client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 'defaultVendeur', 'draftId', 'typeChequeCadeaus', 'siteName'));
     }
 
     /**
@@ -471,6 +478,58 @@ class PosController extends Controller
             'stock' => $stock
         ]);
     }
+
+    /**
+     * Check avoir details by barcode/number
+     */
+    public function checkAvoir(Request $request)
+    {
+        $code = $request->input('code');
+        if (empty($code)) {
+            return response()->json(['success' => false, 'message' => 'Veuillez saisir un code à barre.']);
+        }
+
+        // Search in cavoirs table
+        $avoir = DB::table('cavoirs')
+            ->where('numerointerne', $code)
+            ->orWhere('cavoirnumero', $code)
+            ->first();
+
+        if (!$avoir) {
+            return response()->json(['success' => false, 'message' => 'Avoir introuvable.']);
+        }
+
+        if ($avoir->cloture) {
+            return response()->json(['success' => false, 'message' => 'Cet avoir est déjà clôturé (consommé).']);
+        }
+
+        $montant = floatval($avoir->netapayer ?? $avoir->totalttc ?? 0);
+        if ($montant <= 0) {
+            return response()->json(['success' => false, 'message' => 'Cet avoir n\'a pas de solde restant à consommer.']);
+        }
+
+        // Get client name
+        $clientName = 'Inconnu';
+        if ($avoir->clientid) {
+            $client = DB::table('clients')->where('clientid', $avoir->clientid)->first();
+            if ($client) {
+                $clientName = $client->nom . ' ' . ($client->prenom ?? '');
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'avoir' => [
+                'cavoirid' => $avoir->cavoirid,
+                'cavoirnumero' => $avoir->cavoirnumero,
+                'numerointerne' => $avoir->numerointerne,
+                'montant' => $montant,
+                'clientid' => $avoir->clientid,
+                'client_name' => trim($clientName)
+            ]
+        ]);
+    }
+
 
     /**
      * Recherche de clients pour le POS

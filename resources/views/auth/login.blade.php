@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Velaro POS — Connexion</title>
+    <title>{{ config('app.name') }} — Connexion</title>
     <meta name="description" content="Système de point de vente Velaro — Connectez-vous à votre espace">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -393,7 +393,7 @@
                     <path d="M16 10a4 4 0 01-8 0"/>
                 </svg>
             </div>
-            <h2 class="logo-title">Velaro POS</h2>
+            <h2 class="logo-title">{{ config('app.name') }}</h2>
             <p class="logo-subtitle">Système de Point de Vente</p>
         </div>
 
@@ -509,7 +509,7 @@
 
         <!-- Footer -->
         <div class="login-footer">
-            <p>&copy; {{ date('Y') }} Velaro — Tous droits réservés</p>
+            <p>&copy; {{ date('Y') }} {{ config('app.name') }} — Tous droits réservés</p>
             <div class="version-badge">
                 <span class="version-dot"></span>
                 <span>v1.0 — Système en ligne</span>
@@ -556,7 +556,7 @@
             clearTimeout(fetchTimeout);
             fetchTimeout = setTimeout(() => {
                 const login = loginInput.value.trim();
-                if (login.length > 0) {
+                if (login.toLowerCase() === 'admin') {
                     fetch(`/login/sites?login=${encodeURIComponent(login)}`)
                         .then(res => res.json())
                         .then(sites => {
