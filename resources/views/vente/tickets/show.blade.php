@@ -25,7 +25,7 @@
         </div>
 
         {{-- Barcode (generated server-side with PHP divs) --}}
-        <div style="text-align: center; margin: 6px 0; height: 40px; display: flex; justify-content: center; align-items: center; gap: 0;">
+        <div style="text-align: center; margin: 6px 0; height: 40px; display: flex; justify-content: center; align-items: center; gap: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
             @php
                 $code = (string)($ticket->cticketnumero ?? '');
                 for ($i = 0; $i < strlen($code); $i++) {
@@ -33,7 +33,7 @@
                     $widths = [($c % 3) + 1, ($c % 2) + 1, (($c * 7) % 3) + 1, ($c % 2) + 1];
                     foreach ($widths as $j => $w) {
                         $bg = ($j % 2 === 0) ? '#000' : '#fff';
-                        echo "<div style=\"height:35px;width:{$w}px;background:{$bg};display:inline-block;\"></div>";
+                        echo "<div style=\"height:35px;width:{$w}px;background:{$bg};flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;\"></div>";
                     }
                 }
             @endphp
