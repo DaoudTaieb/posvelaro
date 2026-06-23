@@ -563,19 +563,19 @@
         <div class="grid-col">
             <div class="grid-header">Règlements</div>
             <div class="split-col">
-                <button class="grid-btn" style="font-weight: bold;" onclick="openMultiPaymentModal(1)">Espèce</button>
-                <button class="grid-btn" onclick="openMultiPaymentModal(2)">Cheque</button>
+                <button class="grid-btn" style="font-weight: bold;" onclick="openQuickPaymentModal(1, 'Réglement Espèce')">Espèce</button>
+                <button class="grid-btn" onclick="openChequeModal()">Cheque</button>
             </div>
             <div class="split-col">
-                <button class="grid-btn" onclick="openMultiPaymentModal(3)">C.B</button>
-                <button class="grid-btn" onclick="openMultiPaymentModal()">Chq.Cad</button>
+                <button class="grid-btn" onclick="openQuickPaymentModal(3, 'Réglement Carte Bancaire')">C.B</button>
+                <button class="grid-btn" onclick="openChequeCadeauxModal()">Chq.Cad</button>
             </div>
             <div class="split-col">
                 <button class="grid-btn" onclick="openRetourModal()">Retour</button>
                 <button class="grid-btn" onclick="handleRetour2Click()">Retour2</button>
             </div>
             <div class="split-col">
-                <button class="grid-btn" onclick="openMultiPaymentModal()">Crédit</button>
+                <button class="grid-btn" onclick="openCreditFlow()">Crédit</button>
                 <button class="grid-btn" onclick="openComplementAcompteFlow()">C.Acompte</button>
             </div>
         </div>
@@ -1020,6 +1020,33 @@
     console.log("=== VELARO POS SCRIPT START ===");
     
     // Global functions definition at the very top
+    function sendSmsDirectly(tel, msg) {
+        let formData = new FormData();
+        formData.append('telephone', tel);
+        formData.append('message', msg);
+        formData.append('_token', '{{ csrf_token() }}');
+
+        fetch("{{ route('vente.caisse.pos.send_sms') }}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('SMS envoyé avec succès !');
+            } else {
+                alert('Erreur lors de l\'envoi du SMS: ' + (data.message || ''));
+            }
+        })
+        .catch(error => {
+            console.error(error);
+            alert('Erreur réseau lors de l\'envoi du SMS.');
+        });
+    }
+
     window.submitTicketToBackend = function(data) {
         fetch(`{{ route('vente.caisse.store') }}`, {
             method: 'POST',
@@ -1035,6 +1062,21 @@
                 if (typeof closePaymentModal === 'function') closePaymentModal();
                 if (typeof closeMultiPaymentModal === 'function') closeMultiPaymentModal();
                 alert(res.message);
+                
+                // Prompt to send SMS if client phone is available
+                if (res.client_tel) {
+                    let message = "";
+                    if (res.is_first_sale) {
+                        message = `Bienvenue chez Velaro, ${res.client_nom}! Nous vous remercions pour votre premier achat. Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
+                    } else {
+                        message = `Merci pour votre fidélité chez Velaro, ${res.client_nom}! Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
+                    }
+                    
+                    if (confirm(`Voulez-vous envoyer un SMS de confirmation au client (${res.client_tel}) ?`)) {
+                        sendSmsDirectly(res.client_tel, message);
+                    }
+                }
+
                 if (res.print_url) {
                     window.open(res.print_url, '_blank').focus();
                 }
@@ -1043,6 +1085,11 @@
                 document.getElementById('clientName').innerText = 'PASSAGER';
                 document.getElementById('clientSoldeInfo').style.display = 'none';
                 document.getElementById('clientCode').value = '4110001';
+                
+                // Refresh and increment the ticket number automatically
+                if (res.cticketnumero) {
+                    document.getElementById('ticketNumber').value = parseInt(res.cticketnumero) + 1;
+                }
                 
                 // Keep the same currentVendeurId (vendor persists across tickets)
                 
@@ -2407,57 +2454,6 @@
     </div>
 </div>
 
-<!-- INFORMATIONS CHEQUE MODAL -->
-<div id="chequeModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
-    <div class="modal-content" style="background: white; width: 650px; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: Arial, sans-serif;">
-        <!-- Header -->
-        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Informations Cheque</h2>
-            <button type="button" onclick="closeChequeModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666; font-weight: bold;">&times;</button>
-        </div>
-        <!-- Top Inputs -->
-        <div style="padding: 15px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-            <label style="font-weight: normal;">Montant</label>
-            <input type="text" id="chequeGlobalMontant" style="width: 120px; padding: 4px; border: 1px solid #ccc; border-radius: 2px;">
-            
-            <label style="font-weight: normal; margin-left: 10px;">Nombre de cheque</label>
-            <input type="number" id="chequeNombre" value="1" min="1" style="width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 2px;">
-            
-            <button type="button" onclick="generateChequeRows()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 40px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </button>
-        </div>
-        <!-- Table -->
-        <div style="padding: 0 15px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #ddd; text-align: center;">
-                <thead style="background: #fff;">
-                    <tr>
-                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Montant</th>
-                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Propriétaire</th>
-                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Numéro</th>
-                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Banque</th>
-                        <th style="padding: 8px; border: 1px solid #ddd; font-weight: normal;">Échéance</th>
-                    </tr>
-                </thead>
-                <tbody id="chequeTbody">
-                    <!-- rows generated by JS -->
-                </tbody>
-            </table>
-        </div>
-        <!-- Footer -->
-        <div style="padding: 15px; display: flex; flex-direction: column; align-items: center; gap: 10px; position: relative;">
-            <div id="chequeError" style="color: #dc2626; font-size: 12px; position: absolute; left: 15px; bottom: 15px; display: none;">numéro chèque && Montant Obligatoire</div>
-            <div style="display: flex; gap: 10px;">
-                <button type="button" onclick="validerCheques()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </button>
-                <button type="button" onclick="closeChequeModal()" style="background: white; border: 1px solid #333; border-radius: 4px; width: 80px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- CHEQUE CADEAU MODAL -->
 <div id="chequeCadeauModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
@@ -2835,6 +2831,36 @@
 
     let mpTotalDu = 0;
 
+    function openCreditFlow() {
+        if (ticketLines.length === 0 && !complementMode) {
+            alert("Le ticket est vide.");
+            return;
+        }
+        let clientName = document.getElementById('clientName').innerText;
+        if (clientName === 'PASSAGER' || !currentClientId || currentClientId == 1) {
+            alert("Veuillez d'abord sélectionner un client pour effectuer une vente à crédit.");
+            openClientModal();
+        } else {
+            let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+            let payload = {
+                vendeurid: document.getElementById('vendeurName').dataset.id || null,
+                clientid: currentClientId,
+                lignes: ticketLines,
+                totalttc: total,
+                acompte: 0,
+                netapayer: total,
+                reglements: []
+            };
+
+            if (complementMode) {
+                alert("Impossible de passer un crédit total sur un complément d'acompte.");
+                return;
+            } else {
+                window.submitTicketToBackend(payload, false);
+            }
+        }
+    }
+
     function openMultiPaymentModal(defaultModeId = null) {
         if (ticketLines.length === 0 && !complementMode) {
             alert("Le ticket est vide.");
@@ -2946,6 +2972,9 @@
         
         let reste = mpTotalDu - paye;
         document.getElementById('mpResteAPayer').value = reste.toFixed(3);
+        let sumBonAchat = mpReglementsArray.filter(r => r.modeId === 4).reduce((sum, r) => sum + r.montant, 0);
+        let elBonAchat = document.getElementById('mpBonAchatVal');
+        if (elBonAchat) elBonAchat.value = sumBonAchat.toFixed(3);
     }
 
     function updateMpRow(index, field, val) {
@@ -2957,112 +2986,6 @@
         renderMpTable();
     }
 
-    // CHEQUE LOGIC
-    function openChequeModal() {
-        let total = parseFloat(document.getElementById('grandTotal').innerText);
-        document.getElementById('chequeGlobalMontant').value = total.toFixed(3);
-        document.getElementById('chequeNombre').value = 1;
-        document.getElementById('chequeError').style.display = 'none';
-        
-        generateChequeRows();
-        
-        document.getElementById('chequeModal').style.display = 'flex';
-    }
-
-    function closeChequeModal() {
-        document.getElementById('chequeModal').style.display = 'none';
-    }
-
-    function generateChequeRows() {
-        const montantGlobal = parseFloat(document.getElementById('chequeGlobalMontant').value) || 0;
-        const nbr = parseInt(document.getElementById('chequeNombre').value) || 1;
-        const tbody = document.getElementById('chequeTbody');
-        tbody.innerHTML = '';
-        
-        let montantParCheque = (montantGlobal / nbr).toFixed(3);
-        let nomClient = document.getElementById('clientName').innerText;
-        if(nomClient === "Aucun client" || nomClient === "PASSAGER") {
-            nomClient = "PASSAGER";
-        }
-
-        let today = new Date().toISOString().split('T')[0];
-
-        for(let i = 0; i < nbr; i++) {
-            let tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="padding: 4px; border: 1px solid #ddd;">
-                    <input type="number" step="0.001" class="chq-montant" value="${montantParCheque}" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; text-align: center; outline: none;">
-                </td>
-                <td style="padding: 4px; border: 1px solid #ddd;">
-                    <input type="text" class="chq-prop" value="${nomClient}" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
-                </td>
-                <td style="padding: 4px; border: 1px solid #ddd;">
-                    <input type="text" class="chq-num" placeholder="Numéro" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
-                </td>
-                <td style="padding: 4px; border: 1px solid #ddd;">
-                    <input type="text" class="chq-banque" placeholder="Banque" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
-                </td>
-                <td style="padding: 4px; border: 1px solid #ddd;">
-                    <input type="date" class="chq-date" value="${today}" style="width: 100%; border: none; padding: 4px; box-sizing: border-box; outline: none;">
-                </td>
-            `;
-            tbody.appendChild(tr);
-        }
-    }
-
-    function validerCheques() {
-        const rows = document.querySelectorAll('#chequeTbody tr');
-        let cheques = [];
-        let totalCheques = 0;
-        let hasError = false;
-
-        rows.forEach(row => {
-            let mnt = parseFloat(row.querySelector('.chq-montant').value) || 0;
-            let num = row.querySelector('.chq-num').value.trim();
-            let prop = row.querySelector('.chq-prop').value.trim();
-            let bq = row.querySelector('.chq-banque').value.trim();
-            let dt = row.querySelector('.chq-date').value;
-
-            if (mnt <= 0 || num === "") {
-                hasError = true;
-            }
-
-            totalCheques += mnt;
-            cheques.push({
-                montant: mnt,
-                numero: num,
-                proprietaire: prop,
-                banque: bq,
-                date: dt
-            });
-        });
-
-        if (hasError) {
-            document.getElementById('chequeError').style.display = 'block';
-            return;
-        }
-
-        document.getElementById('chequeError').style.display = 'none';
-        
-        let grandTotal = parseFloat(document.getElementById('grandTotal').innerText);
-        if (totalCheques < grandTotal) {
-            alert("Le total des chèques (" + totalCheques.toFixed(3) + ") est inférieur au total à payer (" + grandTotal.toFixed(3) + ")");
-            return;
-        }
-
-        // Format payload to submit
-        let data = {
-            clientid: currentClientId,
-            vendeurid: currentVendeurId,
-            lignes: ticketLines,
-            totalttc: grandTotal,
-            reglements: [{ modereglementid: 2, montant: totalCheques }],
-            cheques: cheques
-        };
-
-        closeChequeModal();
-        submitTicketToBackend(data);
-    }
 
     // CHEQUE CADEAU LOGIC
     function openChequeCadeauModal() {
@@ -3097,8 +3020,10 @@
     }
 
     function closePaymentModal() {
-        document.getElementById('paymentModal').style.display = 'none';
-        document.getElementById('scanInput').focus();
+        let m = document.getElementById('paymentModal');
+        if (m) m.style.display = 'none';
+        let s = document.getElementById('scanInput');
+        if (s) s.focus();
     }
 
     function calcRendu() {
@@ -3120,6 +3045,8 @@
 
     // BON D'ACHAT LOGIC
     let baLignes = [];
+    let baAdding = false;
+    let baDraft = { numero: '', montant: '', remise: '' };
 
     function openBonAchatModal() {
         document.getElementById('bonAchatModal').style.display = 'flex';
@@ -3128,6 +3055,7 @@
         document.getElementById('baNom').value = document.getElementById('clientName').innerText === 'PASSAGER' ? '' : document.getElementById('clientName').innerText;
         document.getElementById('baTelephone').value = '';
         baLignes = [];
+        baAdding = false;
         renderBaTable();
     }
 
@@ -3136,16 +3064,35 @@
     }
 
     function baAddLine() {
+        baAdding = true;
         let code = document.getElementById('baCodeInput').value.trim();
-        baLignes.push({ numero: code, montant: 0, remise: 0 });
+        baDraft = { numero: code, montant: '', remise: '' };
         document.getElementById('baCodeInput').value = '';
+        renderBaTable();
+    }
+
+    function baSaveDraft() {
+        let num = document.getElementById('baDraftNum').value.trim();
+        let mnt = parseFloat(document.getElementById('baDraftMnt').value);
+        let rem = parseFloat(document.getElementById('baDraftRem').value) || 0;
+        if (!num || isNaN(mnt) || mnt <= 0) {
+            alert("Veuillez saisir un numéro et un montant valide.");
+            return;
+        }
+        baLignes.push({ numero: num, montant: mnt, remise: rem });
+        baAdding = false;
+        renderBaTable();
+    }
+
+    function baCancelDraft() {
+        baAdding = false;
         renderBaTable();
     }
 
     function renderBaTable() {
         let tbody = document.getElementById('baTbody');
         tbody.innerHTML = '';
-        if (baLignes.length === 0) {
+        if (baLignes.length === 0 && !baAdding) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; font-weight: bold;">No data to display</td></tr>';
             return;
         }
@@ -3160,6 +3107,26 @@
             `;
             tbody.appendChild(tr);
         });
+
+        if (baAdding) {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 2px; border-right: 1px solid #ddd;">
+                    <input type="text" id="baDraftNum" value="${baDraft.numero}" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;">
+                </td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;">
+                    <input type="number" step="0.001" id="baDraftMnt" value="${baDraft.montant}" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;">
+                </td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;">
+                    <input type="number" step="0.01" id="baDraftRem" value="${baDraft.remise}" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;">
+                </td>
+                <td style="padding: 4px; text-align: center; white-space: nowrap;">
+                    <button onclick="baSaveDraft()" style="background: #673ab7; color: white; border: none; border-radius: 3px; padding: 5px 12px; cursor: pointer; font-size: 11px; font-weight: bold; margin-right: 4px;">Save</button>
+                    <button onclick="baCancelDraft()" style="background: white; color: #333; border: 1px solid #ccc; border-radius: 3px; padding: 4px 12px; cursor: pointer; font-size: 11px;">Cancel</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
     }
 
     function baUpdate(index, field, val) {
@@ -3682,6 +3649,341 @@
 
 </script>
 
+<!-- CHEQUE MODAL -->
+<div id="chequeModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1040; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 650px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Informations Cheque</h2>
+            <button type="button" onclick="closeChequeModal()" style="background: none; border: none; font-size: 16px; font-weight: bold; cursor: pointer; color: #666;">&times;</button>
+        </div>
+
+        <div style="padding: 15px;">
+            <!-- Top section -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-weight: bold; color: #333;">Montant</label>
+                    <input type="number" step="0.001" id="chqGlobalMontant" style="width: 120px; padding: 6px; border: 1px solid #ccc; border-radius: 2px; outline: none; font-size: 14px;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-weight: bold; color: #333;">Nombre de cheque</label>
+                    <input type="number" id="chqNombre" value="1" min="1" style="width: 60px; padding: 6px; border: 1px solid #ccc; border-radius: 2px; outline: none; font-size: 14px; text-align: center;">
+                    <button onclick="generateChequeLines()" style="padding: 4px 15px; border: 1px solid #1e293b; background: white; border-radius: 4px; cursor: pointer; height: 32px; display: flex; align-items: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table section -->
+            <div style="border: 1px solid #ddd;">
+                <table style="width: 100%; border-collapse: collapse; text-align: center;">
+                    <thead style="background: white; border-bottom: 1px solid #ddd;">
+                        <tr>
+                            <th style="padding: 8px; border-right: 1px solid #ddd; font-weight: normal; color: #333;">Montant</th>
+                            <th style="padding: 8px; border-right: 1px solid #ddd; font-weight: normal; color: #333;">Propriétaire</th>
+                            <th style="padding: 8px; border-right: 1px solid #ddd; font-weight: normal; color: #333;">Numéro</th>
+                            <th style="padding: 8px; border-right: 1px solid #ddd; font-weight: normal; color: #333;">Banque</th>
+                            <th style="padding: 8px; font-weight: normal; color: #333;">Échéance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="chqTbody">
+                        <!-- Lines generated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding: 10px 15px; border-top: 1px solid #ddd; display: flex; flex-direction: column; background: #f8f9fa;">
+            <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 5px;">
+                <button onclick="validerChequeModal()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button onclick="closeChequeModal()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: #333;">
+                    &times;
+                </button>
+            </div>
+            <div style="color: #dc2626; font-size: 13px;">numéro chèque && Montant Obligatoire</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let chqLines = [];
+
+    function openChequeModal() {
+        if (ticketLines.length === 0 && !complementMode) {
+            alert("Le ticket est vide.");
+            return;
+        }
+
+        let isMultiOpen = document.getElementById('multiPaymentModal').style.display === 'flex';
+        let total = 0;
+        
+        if (isMultiOpen) {
+            total = parseFloat(document.getElementById('mpResteAPayer').value) || 0;
+        } else {
+            total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+        }
+
+        document.getElementById('chqGlobalMontant').value = total.toFixed(3);
+        document.getElementById('chqNombre').value = 1;
+        document.getElementById('chequeModal').style.display = 'flex';
+        generateChequeLines(); // Auto-generate 1 line
+    }
+
+    function closeChequeModal() {
+        document.getElementById('chequeModal').style.display = 'none';
+    }
+
+    function generateChequeLines() {
+        let globalMontant = parseFloat(document.getElementById('chqGlobalMontant').value) || 0;
+        let nbr = parseInt(document.getElementById('chqNombre').value) || 1;
+        
+        if (nbr < 1) nbr = 1;
+
+        let amountPerCheque = (globalMontant / nbr).toFixed(3);
+        let propName = document.getElementById('clientName').innerText === 'PASSAGER' ? 'PASSAGER' : document.getElementById('clientName').innerText;
+
+        chqLines = [];
+        let today = new Date().toISOString().split('T')[0];
+
+        for (let i = 0; i < nbr; i++) {
+            chqLines.push({
+                montant: (i === nbr - 1) ? (globalMontant - (amountPerCheque * (nbr - 1))).toFixed(3) : amountPerCheque,
+                proprietaire: propName,
+                numero: '',
+                banque: '',
+                echeance: today
+            });
+        }
+        renderChequeLines();
+    }
+
+    function renderChequeLines() {
+        let tbody = document.getElementById('chqTbody');
+        tbody.innerHTML = '';
+        
+        chqLines.forEach((l, index) => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
+                    <input type="number" step="0.001" value="${l.montant}" onchange="updateChqLine(${index}, 'montant', this.value)" style="width: 80px; padding: 4px; border: 1px solid #ccc; outline: none; text-align: center; font-size: 12px;">
+                </td>
+                <td style="padding: 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
+                    <input type="text" value="${l.proprietaire}" onchange="updateChqLine(${index}, 'proprietaire', this.value)" style="width: 100px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
+                </td>
+                <td style="padding: 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
+                    <input type="text" placeholder="Numéro" value="${l.numero}" onchange="updateChqLine(${index}, 'numero', this.value)" style="width: 90px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
+                </td>
+                <td style="padding: 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
+                    <input type="text" placeholder="Banque" value="${l.banque}" onchange="updateChqLine(${index}, 'banque', this.value)" style="width: 90px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
+                </td>
+                <td style="padding: 4px; border-bottom: 1px solid #ddd;">
+                    <input type="date" value="${l.echeance}" onchange="updateChqLine(${index}, 'echeance', this.value)" style="width: 110px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateChqLine(index, field, value) {
+        chqLines[index][field] = value;
+    }
+
+    function validerChequeModal() {
+        for(let l of chqLines) {
+            let m = parseFloat(l.montant) || 0;
+            if (m <= 0 || !l.numero.trim()) {
+                alert("numéro chèque && Montant Obligatoire pour toutes les lignes.");
+                return;
+            }
+        }
+
+        let totalChq = chqLines.reduce((sum, l) => sum + (parseFloat(l.montant) || 0), 0);
+        let isMultiOpen = document.getElementById('multiPaymentModal').style.display === 'flex';
+
+        if (isMultiOpen) {
+            chqLines.forEach(l => {
+                mpReglementsArray.push({
+                    id: Date.now() + Math.random(),
+                    modeId: 2, // 2 for Cheque
+                    mode: 'Cheque',
+                    montant: parseFloat(l.montant),
+                    numero: l.numero,
+                    date: l.echeance,
+                    banque: l.banque,
+                    proprietaire: l.proprietaire
+                });
+            });
+            renderMpTable();
+            closeChequeModal();
+        } else {
+            let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+            
+            let regs = chqLines.map(l => ({
+                modereglementid: 2,
+                montant: parseFloat(l.montant),
+                numero: l.numero,
+                banque: l.banque,
+                date: l.echeance,
+                proprietaire: l.proprietaire
+            }));
+
+            let payload = {
+                vendeurid: document.getElementById('vendeurName').dataset.id || null,
+                clientid: currentClientId,
+                lignes: ticketLines,
+                totalttc: total,
+                acompte: totalChq,
+                netapayer: Math.max(0, total - totalChq),
+                reglements: regs
+            };
+
+            if (complementMode) {
+                fetch('/vente/caisse/store-complement-acompte', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify({ 
+                        cticketid: complementTicketId, 
+                        reglements: payload.reglements 
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Complément enregistré avec succès!');
+                        closeChequeModal();
+                        exitComplementMode();
+                        document.getElementById('complementAcompteModal').style.display = 'none';
+                    } else {
+                        alert('Erreur: ' + (data.message || ''));
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erreur réseau.");
+                });
+            } else {
+                closeChequeModal();
+                window.submitTicketToBackend(payload, false);
+            }
+        }
+    }
+</script>
+
+<!-- QUICK PAYMENT MODAL -->
+<div id="quickPaymentModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1030; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 350px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+            <div style="width: 100%; text-align: center;">
+                <h2 id="quickPaymentTitle" style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Réglement Espèce</h2>
+            </div>
+            <button type="button" onclick="closeQuickPaymentModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666; position: absolute; right: 15px;">&times;</button>
+        </div>
+        
+        <!-- Body -->
+        <div style="padding: 30px 20px; display: flex; align-items: center; justify-content: center; gap: 15px;">
+            <label style="font-size: 16px; color: #555;">Montant</label>
+            <input type="number" id="quickPaymentMontant" step="0.001" style="width: 180px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none; font-size: 14px;" onkeydown="if(event.key === 'Enter') validerQuickPayment()">
+        </div>
+        
+        <!-- Footer -->
+        <div style="padding: 10px 15px; border-top: 1px solid #ddd; display: flex; justify-content: center; align-items: center; gap: 10px; background: #f8f9fa;">
+            <button onclick="validerQuickPayment()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+            <button onclick="closeQuickPaymentModal()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: #333;">
+                &times;
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let quickPaymentModeId = 1;
+
+    function openQuickPaymentModal(modeId, title) {
+        if (ticketLines.length === 0 && !complementMode) {
+            alert("Le ticket est vide.");
+            return;
+        }
+        quickPaymentModeId = modeId;
+        document.getElementById('quickPaymentTitle').innerText = title;
+
+        let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+        document.getElementById('quickPaymentMontant').value = total.toFixed(3);
+        document.getElementById('quickPaymentModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('quickPaymentMontant').focus(), 100);
+    }
+
+    function closeQuickPaymentModal() {
+        document.getElementById('quickPaymentModal').style.display = 'none';
+    }
+
+    function validerQuickPayment() {
+        let mnt = parseFloat(document.getElementById('quickPaymentMontant').value);
+        if (isNaN(mnt) || mnt <= 0) {
+            alert("Montant invalide.");
+            return;
+        }
+
+        let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+
+        let payload = {
+            vendeurid: document.getElementById('vendeurName').dataset.id || null,
+            clientid: currentClientId,
+            lignes: ticketLines,
+            totalttc: total,
+            acompte: mnt,
+            netapayer: Math.max(0, total - mnt),
+            reglements: [{
+                modereglementid: quickPaymentModeId,
+                montant: mnt,
+                numero: '',
+                banque: '',
+                date: new Date().toISOString().split('T')[0]
+            }]
+        };
+
+        if (complementMode) {
+            fetch('/vente/caisse/store-complement-acompte', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ 
+                    cticketid: complementTicketId, 
+                    reglements: payload.reglements 
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Complément enregistré avec succès!');
+                    closeQuickPaymentModal();
+                    exitComplementMode();
+                    document.getElementById('complementAcompteModal').style.display = 'none';
+                } else {
+                    alert('Erreur: ' + (data.message || ''));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erreur réseau.");
+            });
+        } else {
+            closeQuickPaymentModal();
+            window.submitTicketToBackend(payload, false);
+        }
+    }
+</script>
+
 <!-- MULTI PAYMENT MODAL -->
 <div id="multiPaymentModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">
     <div class="modal-content" style="background: white; width: 800px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif; display: flex; flex-direction: column;">
@@ -3756,7 +4058,8 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span>Bon d'achat</span>
                     <div style="display: flex; gap: 5px;">
-                        <button onclick="openBonAchatModal()" style="padding: 4px 10px; border: 1px solid #ccc; background: white; cursor: pointer; font-weight: bold; width: 153px;">...</button>
+                        <input type="text" id="mpBonAchatVal" value="0.000" readonly style="width: 120px; padding: 4px; border: 1px solid #ccc; text-align: right; outline: none;">
+                        <button onclick="openBonAchatModal()" style="padding: 2px 10px; border: 1px solid #333; border-radius: 4px; background: white; cursor: pointer; font-weight: bold;">...</button>
                     </div>
                 </div>
             </div>
@@ -3766,8 +4069,8 @@
         <div style="padding: 10px 15px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
             <div style="display: flex; gap: 10px;">
                 <button onclick="openAvoirModal()" style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Avoir</button>
-                <button style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Chèque Cadeaux</button>
-                <button style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Coupon</button>
+                <button onclick="openChequeCadeauxModal()" style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Chèque Cadeaux</button>
+                <button onclick="openCouponModal()" style="padding: 6px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Coupon</button>
             </div>
         </div>
         <div style="padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: white;">
@@ -3799,7 +4102,7 @@
 
         <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
             <!-- Code Input -->
-            <input type="text" id="baCodeInput" style="width: 100%; padding: 8px; border: 1px solid #ccc;" onkeydown="if(event.key==='Enter') baAddLine()" placeholder="Scannez ou saisissez le code...">
+            <input type="text" id="baCodeInput" style="width: 50%; padding: 8px; border: 1px solid #ccc;" onkeydown="if(event.key==='Enter') baAddLine()">
 
             <!-- Table -->
             <div style="border: 1px solid #ddd; min-height: 100px;">
@@ -3809,7 +4112,7 @@
                             <th style="padding: 5px; border-right: 1px solid #ddd;">Numéro</th>
                             <th style="padding: 5px; border-right: 1px solid #ddd;">MONTANT</th>
                             <th style="padding: 5px; border-right: 1px solid #ddd;">REMISE %</th>
-                            <th style="padding: 5px; text-align: center;"><a href="#" onclick="baAddLine()" style="color: #0284c7; text-decoration: none;">New</a></th>
+                            <th style="padding: 5px; text-align: center;"><a href="#" onclick="baAddLine()" style="color: #0284c7; text-decoration: underline;">New</a></th>
                         </tr>
                     </thead>
                     <tbody id="baTbody">
@@ -3869,6 +4172,303 @@
         </div>
     </div>
 </div>
+
+<!-- CHEQUE CADEAUX MODAL -->
+<div id="chequeCadeauxModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1040; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 550px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif;">
+        <!-- Header -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Type Cheque Cadeau</h2>
+            <button type="button" onclick="closeChequeCadeauxModal()" style="background: none; border: none; font-size: 16px; font-weight: bold; cursor: pointer; color: #666;">&times;</button>
+        </div>
+
+        <div style="padding: 20px;">
+            <div style="border: 1px solid #ddd; border-radius: 4px;">
+                <div style="padding: 20px; display: flex; justify-content: center; border-bottom: 1px solid #ddd;">
+                    <div style="display: flex; align-items: center; justify-content: center; border: 1px solid #1e293b; border-radius: 4px; padding: 15px; width: 90%; gap: 30px;">
+                        <span style="font-size: 14px; color: #333;">Montant</span>
+                        <input type="number" step="0.001" id="ccMontant" style="width: 150px; padding: 8px; border: 1px solid #ccc; border-radius: 2px; text-align: center; outline: none; font-weight: bold; font-size: 14px;">
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; padding: 20px; gap: 10px;">
+                    <button onclick="addChequeCadeaux('PLUXEE')" style="flex: 1; padding: 15px 0; border: 1px solid #1e293b; background: white; border-radius: 4px; cursor: pointer; text-align: center; font-size: 13px; color: #333;">PLUXEE</button>
+                    <button onclick="addChequeCadeaux('JOKER')" style="flex: 1; padding: 15px 0; border: 1px solid #1e293b; background: white; border-radius: 4px; cursor: pointer; text-align: center; font-size: 13px; color: #333;">JOKER</button>
+                    <button onclick="addChequeCadeaux('SERVIMAX')" style="flex: 1; padding: 15px 0; border: 1px solid #1e293b; background: white; border-radius: 4px; cursor: pointer; text-align: center; font-size: 13px; color: #333;">SERVIMAX</button>
+                    <button onclick="addChequeCadeaux('TOPCHEQUE')" style="flex: 1; padding: 15px 0; border: 1px solid #1e293b; background: white; border-radius: 4px; cursor: pointer; text-align: center; font-size: 13px; color: #333;">TOPCHEQUE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- COUPON MODAL -->
+<div id="couponModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1040; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 600px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif;">
+        <!-- Header -->
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+            <h2 style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Coupon</h2>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-weight: bold;">Net à Payer <span id="cpNetAPayer">0.000</span></span>
+                <button type="button" onclick="closeCouponModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+        </div>
+
+        <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
+            <!-- Code Input -->
+            <input type="text" id="cpCodeInput" style="width: 50%; padding: 8px; border: 1px solid #ccc;" onkeydown="if(event.key==='Enter') cpAddLine()">
+
+            <!-- Table -->
+            <div style="border: 1px solid #ddd; min-height: 100px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
+                    <thead style="background: #f8f9fa; border-bottom: 1px solid #ddd;">
+                        <tr>
+                            <th style="padding: 5px; border-right: 1px solid #ddd;">Numéro</th>
+                            <th style="padding: 5px; border-right: 1px solid #ddd;">MONTANT</th>
+                            <th style="padding: 5px; text-align: center;"><a href="#" onclick="cpAddLine()" style="color: #0284c7; text-decoration: underline;">New</a></th>
+                        </tr>
+                    </thead>
+                    <tbody id="cpTbody">
+                        <tr><td colspan="3" style="text-align: center; padding: 20px; font-weight: bold;">No data to display</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Client Info -->
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label style="font-weight: bold; white-space: nowrap;">Nom Prenom</label>
+                <input type="text" id="cpNom" style="flex: 1; padding: 6px; border: 1px solid #ccc;">
+                <label style="font-weight: bold; white-space: nowrap;">Telephone</label>
+                <input type="text" id="cpTelephone" style="flex: 1; padding: 6px; border: 1px solid #ccc;">
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding: 10px 15px; border-top: 1px solid #ddd; display: flex; justify-content: center; align-items: center; gap: 10px;">
+            <button onclick="validerCoupon()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+            <button onclick="closeCouponModal()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold;">
+                &times;
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openChequeCadeauxModal() {
+        if (ticketLines.length === 0 && !complementMode) {
+            alert("Le ticket est vide.");
+            return;
+        }
+
+        let isMultiOpen = document.getElementById('multiPaymentModal').style.display === 'flex';
+        let total = 0;
+        
+        if (isMultiOpen) {
+            total = parseFloat(document.getElementById('mpResteAPayer').value) || 0;
+        } else {
+            total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+        }
+
+        document.getElementById('ccMontant').value = total.toFixed(3);
+        document.getElementById('chequeCadeauxModal').style.display = 'flex';
+    }
+
+    function closeChequeCadeauxModal() {
+        document.getElementById('chequeCadeauxModal').style.display = 'none';
+    }
+
+    function addChequeCadeaux(type) {
+        let val = parseFloat(document.getElementById('ccMontant').value) || 0;
+        if (val <= 0) {
+            alert("Montant invalide");
+            return;
+        }
+        
+        let today = new Date().toISOString().split('T')[0];
+        let isMultiOpen = document.getElementById('multiPaymentModal').style.display === 'flex';
+
+        if (isMultiOpen) {
+            mpReglementsArray.push({
+                id: Date.now(),
+                modeId: 7, // Assuming 7 for cheque cadeau
+                mode: 'Chèque Cadeau',
+                montant: val,
+                numero: '',
+                date: today,
+                banque: type
+            });
+
+            renderMpTable();
+            closeChequeCadeauxModal();
+        } else {
+            // Direct submission
+            let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+            let payload = {
+                vendeurid: document.getElementById('vendeurName').dataset.id || null,
+                clientid: currentClientId,
+                lignes: ticketLines,
+                totalttc: total,
+                acompte: val,
+                netapayer: Math.max(0, total - val),
+                reglements: [{
+                    modereglementid: 7,
+                    montant: val,
+                    numero: '',
+                    banque: type,
+                    date: today
+                }]
+            };
+
+            if (complementMode) {
+                fetch('/vente/caisse/store-complement-acompte', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify({ 
+                        cticketid: complementTicketId, 
+                        reglements: payload.reglements 
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Complément enregistré avec succès!');
+                        closeChequeCadeauxModal();
+                        exitComplementMode();
+                        document.getElementById('complementAcompteModal').style.display = 'none';
+                    } else {
+                        alert('Erreur: ' + (data.message || ''));
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erreur réseau.");
+                });
+            } else {
+                closeChequeCadeauxModal();
+                window.submitTicketToBackend(payload, false);
+            }
+        }
+    }
+
+    // COUPON LOGIC
+    let cpLignes = [];
+    let cpAdding = false;
+    let cpDraft = { numero: '', montant: '' };
+
+    function openCouponModal() {
+        document.getElementById('couponModal').style.display = 'flex';
+        let reste = document.getElementById('mpResteAPayer').value;
+        document.getElementById('cpNetAPayer').innerText = parseFloat(reste).toFixed(3);
+        document.getElementById('cpCodeInput').value = '';
+        document.getElementById('cpNom').value = document.getElementById('clientName').innerText === 'PASSAGER' ? '' : document.getElementById('clientName').innerText;
+        document.getElementById('cpTelephone').value = '';
+        cpLignes = [];
+        cpAdding = false;
+        renderCpTable();
+    }
+
+    function closeCouponModal() {
+        document.getElementById('couponModal').style.display = 'none';
+    }
+
+    function cpAddLine() {
+        cpAdding = true;
+        let code = document.getElementById('cpCodeInput').value.trim();
+        cpDraft = { numero: code, montant: '' };
+        document.getElementById('cpCodeInput').value = '';
+        renderCpTable();
+    }
+
+    function cpSaveDraft() {
+        let num = document.getElementById('cpDraftNum').value.trim();
+        let mnt = parseFloat(document.getElementById('cpDraftMnt').value);
+        if (!num || isNaN(mnt) || mnt <= 0) {
+            alert("Veuillez saisir un numéro et un montant valide.");
+            return;
+        }
+        cpLignes.push({ numero: num, montant: mnt });
+        cpAdding = false;
+        renderCpTable();
+    }
+
+    function cpCancelDraft() {
+        cpAdding = false;
+        renderCpTable();
+    }
+
+    function renderCpTable() {
+        let tbody = document.getElementById('cpTbody');
+        tbody.innerHTML = '';
+        if (cpLignes.length === 0 && !cpAdding) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; font-weight: bold;">No data to display</td></tr>';
+            return;
+        }
+
+        cpLignes.forEach((l, index) => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${l.numero}" onchange="cpUpdate(${index}, 'numero', this.value)" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;"></td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="number" step="0.001" value="${l.montant}" onchange="cpUpdate(${index}, 'montant', this.value)" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;"></td>
+                <td style="padding: 2px; text-align: center;"><button onclick="cpRemove(${index})" style="background: none; border: none; color: red; cursor: pointer; font-weight: bold;">X</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (cpAdding) {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 2px; border-right: 1px solid #ddd;">
+                    <input type="text" id="cpDraftNum" value="${cpDraft.numero}" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;">
+                </td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;">
+                    <input type="number" step="0.001" id="cpDraftMnt" value="${cpDraft.montant}" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;">
+                </td>
+                <td style="padding: 4px; text-align: center; white-space: nowrap;">
+                    <button onclick="cpSaveDraft()" style="background: #673ab7; color: white; border: none; border-radius: 3px; padding: 5px 12px; cursor: pointer; font-size: 11px; font-weight: bold; margin-right: 4px;">Save</button>
+                    <button onclick="cpCancelDraft()" style="background: white; color: #333; border: 1px solid #ccc; border-radius: 3px; padding: 4px 12px; cursor: pointer; font-size: 11px;">Cancel</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
+    function cpUpdate(index, field, val) {
+        if (field === 'numero') cpLignes[index].numero = val;
+        else cpLignes[index][field] = parseFloat(val) || 0;
+    }
+
+    function cpRemove(index) {
+        cpLignes.splice(index, 1);
+        renderCpTable();
+    }
+
+    function validerCoupon() {
+        let totalCP = cpLignes.reduce((sum, l) => sum + l.montant, 0);
+        if (totalCP > 0) {
+            cpLignes.forEach(l => {
+                if(l.montant > 0) {
+                    let today = new Date().toISOString().split('T')[0];
+                    mpReglementsArray.push({
+                        id: Date.now() + Math.random(),
+                        modeId: 6, // Assuming 6 for coupon
+                        mode: "Coupon",
+                        montant: l.montant,
+                        numero: l.numero,
+                        date: today,
+                        banque: ''
+                    });
+                }
+            });
+            renderMpTable();
+        }
+        closeCouponModal();
+    }
+</script>
 
 <!-- REPRISE MODAL -->
 <div id="repriseModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1020; justify-content: center; align-items: center;">

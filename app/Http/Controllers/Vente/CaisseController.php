@@ -26,7 +26,10 @@ class CaisseController extends Controller
             $user = auth()->user();
             $siteid = $user->siteid ?? 102;
             $caissierid = $user->userid;
-            $employeeid = $request->input('vendeurid', $user->employeeid ?? 1);
+            $employeeid = $request->input('vendeurid');
+            if (!$employeeid) {
+                $employeeid = $user->employeeid ?? 1;
+            }
 
             $journal = DB::table('journalcaisses')
                 ->where('userid', $caissierid)
@@ -224,44 +227,64 @@ class CaisseController extends Controller
             }
 
             // Loyalty Logic
+            $isFirstSale = false;
+            $clientTel = null;
+            $clientNom = null;
             if (!$enAttente && $clientid != 1) { // 1 = PASSAGER
                 $clientInfo = DB::table('clients')->where('clientid', $clientid)->first();
-                if ($clientInfo && $clientInfo->fidelite == 1) {
-                    $ventes = (int) $clientInfo->total_ventes_fidelite;
-                    $ventes++;
+                if ($clientInfo) {
+                    $clientTel = $clientInfo->tel;
+                    $clientNom = $clientInfo->nom;
                     
-                    $updateData = ['total_ventes_fidelite' => $ventes];
-                    if ($ventes == 1 || empty($clientInfo->date_premiere_vente)) {
-                        $updateData['date_premiere_vente'] = $now;
+                    // Count completed tickets for this client to determine if it is the first sale
+                    $salesCount = DB::table('ctickets')
+                        ->where('clientid', $clientid)
+                        ->where('enattente', 0)
+                        ->count();
+                    if ($salesCount <= 1) {
+                        $isFirstSale = true;
                     }
-                    
-                    if ($ventes >= 4) {
-                        $paires = 0;
-                        foreach ($lignes as $ligne) {
-                            $prodId = DB::table('produit2s')->where('produit2id', $ligne['produit2id'])->value('produitid');
-                            $prod = DB::table('produits')->where('produitid', $prodId)->first();
-                            if ($prod && $prod->familleid == 1) {
-                                $paires += floatval($ligne['qte']);
+
+                    if ($clientInfo->fidelite == 1) {
+                        $ventes = (int) $clientInfo->total_ventes_fidelite;
+                        $ventes++;
+                        
+                        $updateData = ['total_ventes_fidelite' => $ventes];
+                        if ($ventes == 1 || empty($clientInfo->date_premiere_vente)) {
+                            $updateData['date_premiere_vente'] = $now;
+                        }
+                        
+                        if ($ventes >= 4) {
+                            $paires = 0;
+                            foreach ($lignes as $ligne) {
+                                $prodId = DB::table('produit2s')->where('produit2id', $ligne['produit2id'])->value('produitid');
+                                $prod = DB::table('produits')->where('produitid', $prodId)->first();
+                                if ($prod) {
+                                    $sousfamille = DB::table('sousfamilles')->where('sousfamilleid', $prod->sousfamilleid)->first();
+                                    if ($sousfamille && $sousfamille->is_loyalty_enabled) {
+                                        $paires += floatval($ligne['qte']);
+                                    }
+                                }
+                            }
+                            
+                            if ($paires > 0) {
+                                $montantBon = $paires * 10;
+                                DB::table('bons_achat')->insert([
+                                    'clientid' => $clientid,
+                                    'montant' => $montantBon,
+                                    'date_emission' => $now,
+                                    'date_expiration' => now()->addMonths(3),
+                                    'utilise' => false,
+                                    'ticketid_source' => $cticketid,
+                                    'created_at' => $now,
+                                    'updated_at' => $now
+                                ]);
+                                $updateData['soldefidelite'] = floatval($clientInfo->soldefidelite) + $montantBon;
                             }
                         }
                         
-                        if ($paires > 0) {
-                            $montantBon = $paires * 10;
-                            DB::table('bons_achat')->insert([
-                                'clientid' => $clientid,
-                                'montant' => $montantBon,
-                                'date_emission' => $now,
-                                'date_expiration' => now()->addMonths(3),
-                                'utilise' => false,
-                                'ticketid_source' => $cticketid,
-                                'created_at' => $now,
-                                'updated_at' => $now
-                            ]);
-                            $updateData['soldefidelite'] = floatval($clientInfo->soldefidelite) + $montantBon;
-                        }
+                        DB::table('clients')->where('clientid', $clientid)->update($updateData);
                     }
-                    
-                    DB::table('clients')->where('clientid', $clientid)->update($updateData);
                 }
             }
 
@@ -270,7 +293,12 @@ class CaisseController extends Controller
                 'success' => true, 
                 'message' => $enAttente ? 'Ticket mis en attente.' : 'Ticket validé avec succès.',
                 'cticketid' => $cticketid,
-                'cticketnumero' => $nextNumero
+                'cticketnumero' => $nextNumero,
+                'client_tel' => $clientTel,
+                'client_nom' => $clientNom,
+                'totalttc' => $totalttc,
+                'is_first_sale' => $isFirstSale,
+                'print_url' => $enAttente ? null : route('vente.tickets.show', $cticketid)
             ]);
 
         } catch (\Exception $e) {

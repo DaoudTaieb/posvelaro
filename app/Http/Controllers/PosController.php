@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class PosController extends Controller
 {
@@ -70,53 +71,60 @@ class PosController extends Controller
         return view('caisse.pos', compact('client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 'defaultVendeur', 'draftId', 'typeChequeCadeaus', 'siteName'));
     }
 
-    /**
-     * Recherche de produits pour le modal POS (identique à la recherche transfert)
-     */
     public function searchProducts(Request $request)
     {
         $siteid = auth()->user()->siteid ?? 102;
 
-        $query = DB::table('vproduit2stocks')
-            ->where('siteid', $siteid)
+        $query = DB::table('produit2s')
+            ->join('produits', 'produits.produitid', '=', 'produit2s.produitid')
+            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
+            ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+            ->leftJoin('familles', 'produits.familleid', '=', 'familles.familleid')
+            ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
+            ->leftJoin('fournisseurs', 'produits.fournisseurid', '=', 'fournisseurs.fournisseurid')
+            ->leftJoin('vproduit2stocks', function($join) use ($siteid) {
+                $join->on('vproduit2stocks.produit2id', '=', 'produit2s.produit2id')
+                     ->where('vproduit2stocks.siteid', '=', $siteid);
+            })
             ->select(
-                'produitid',
-                'produit2id',
-                'produitcode',
-                'reference',
-                'barcode2',
-                'produitlibelle',
-                'taillelibelle',
-                'couleurlibelle',
-                'famillelibelle',
-                'sousfamillelibelle',
-                'ttc_vente',
-                'fournisseur',
-                'qtestock as total_stock'
+                'produits.produitid',
+                'produit2s.produit2id',
+                'produits.produitcode',
+                'produits.reference',
+                DB::raw("COALESCE(produit2s.barcode2, produits.barcode2) as barcode2"),
+                'produits.produitlibelle',
+                'tailles.taillelibelle',
+                'couleurs.couleurlibelle',
+                'familles.famillelibelle',
+                'sousfamilles.sousfamillelibelle',
+                'produits.ttc_vente',
+                'fournisseurs.nom as fournisseur',
+                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock')
             );
 
         if ($request->filled('sousfamilleid')) {
-            $query->where('sousfamilleid', $request->sousfamilleid);
+            $query->where('produits.sousfamilleid', $request->sousfamilleid);
         }
         if ($request->filled('familleid')) {
-            $query->where('familleid', $request->familleid);
+            $query->where('produits.familleid', $request->familleid);
         }
         if ($request->filled('saisonid')) {
-            $query->where('category4id', $request->saisonid);
+            $query->where('produits.category4id', $request->saisonid);
         }
         if ($request->filled('categoryid')) {
-            $query->where('categoryid', $request->categoryid);
+            $query->where('produits.categoryid', $request->categoryid);
         }
         if ($request->filled('marqueid')) {
-            $query->where('category2id', $request->marqueid);
+            $query->where('produits.category2id', $request->marqueid);
         }
         if ($request->filled('search')) {
             $searchTerm = '%' . strtolower($request->search) . '%';
             $query->where(function($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(produitcode) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(reference) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(barcode2) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(produitlibelle) LIKE ?', [$searchTerm]);
+                $q->whereRaw('LOWER(produits.produitcode) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produits.reference) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produits.barcode2) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produit2s.barcode2) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produits.produitlibelle) LIKE ?', [$searchTerm]);
             });
         }
 
@@ -178,23 +186,29 @@ class PosController extends Controller
             return response()->json([]);
         }
 
-        $variants = DB::table('vproduit2stocks')
-            ->where('siteid', $siteid)
-            ->where('produitid', $produitid)
+        $variants = DB::table('produit2s')
+            ->join('produits', 'produits.produitid', '=', 'produit2s.produitid')
+            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
+            ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+            ->leftJoin('vproduit2stocks', function($join) use ($siteid) {
+                $join->on('vproduit2stocks.produit2id', '=', 'produit2s.produit2id')
+                     ->where('vproduit2stocks.siteid', '=', $siteid);
+            })
+            ->where('produit2s.produitid', $produitid)
             ->select(
-                'produitid',
-                'produit2id',
-                'produitcode',
-                'reference',
-                'barcode2',
-                'produitlibelle',
-                'taillelibelle',
-                'couleurlibelle',
-                'ttc_vente',
-                'qtestock as total_stock'
+                'produits.produitid',
+                'produit2s.produit2id',
+                'produits.produitcode',
+                'produits.reference',
+                DB::raw("COALESCE(produit2s.barcode2, produits.barcode2) as barcode2"),
+                'produits.produitlibelle',
+                'tailles.taillelibelle',
+                'couleurs.couleurlibelle',
+                'produits.ttc_vente',
+                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock')
             )
-            ->orderBy('taillelibelle')
-            ->orderBy('couleurlibelle')
+            ->orderBy('tailles.taillelibelle')
+            ->orderBy('couleurs.couleurlibelle')
             ->get();
 
         return response()->json($variants);
@@ -383,12 +397,12 @@ class PosController extends Controller
 
         // Bip SMS Integration (Mocked or Real HTTP call)
         // Usually: GET https://bipsms.net/api/sendsms.php?user=USER&pass=PASS&sender=SENDER&phone=PHONE&msg=MSG
-        $sender = env('BIPSMS_SENDER', 'VELARO');
-        $user = env('BIPSMS_USER', 'demo');
-        $pass = env('BIPSMS_PASS', 'demo');
+        // Fetch Bip SMS credentials from database settings (managed via Configuration Général UI)
+        $user = DB::table('retailconfigs')->where('libelle', 'bipsms_user')->value('value') ?? 'demo';
+        $pass = DB::table('retailconfigs')->where('libelle', 'bipsms_pass')->value('value') ?? 'demo';
+        $sender = DB::table('retailconfigs')->where('libelle', 'bipsms_sender')->value('value') ?? 'VELARO';
 
         try {
-            /* 
             $response = Http::get('https://bipsms.net/api/sendsms.php', [
                 'user' => $user,
                 'pass' => $pass,
@@ -396,10 +410,9 @@ class PosController extends Controller
                 'phone' => $tel,
                 'msg' => $msg
             ]);
-            */
-            // Simulate success
-            $success = true;
-            \Log::info("SMS Envoyé à $tel : $msg");
+            
+            $success = $response->successful();
+            \Log::info("SMS Envoyé à $tel : $msg - Status: " . $response->status());
 
             if ($success) {
                 return response()->json(['success' => true, 'message' => 'SMS envoyé avec succès!']);

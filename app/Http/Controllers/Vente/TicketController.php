@@ -397,9 +397,38 @@ class TicketController extends Controller
             )
             ->get();
 
-        return view('vente.tickets.show', compact(
+        if (request()->ajax() || request()->headers->get('X-Requested-With') === 'XMLHttpRequest') {
+            return view('vente.tickets.show', compact(
+                'ticket', 'societe', 'caisse', 'caissier_nom', 'vendeur_nom',
+                'client_nom', 'lignes', 'total_articles', 'reglements', 'remise_montant'
+            ));
+        }
+
+        // For direct window.open() print
+        $receiptHtml = view('vente.tickets.show', compact(
             'ticket', 'societe', 'caisse', 'caissier_nom', 'vendeur_nom',
             'client_nom', 'lignes', 'total_articles', 'reglements', 'remise_montant'
-        ));
+        ))->render();
+
+        return "<html>
+        <head>
+            <title>Ticket N° {$ticket->cticketnumero}</title>
+            <style>
+                body { margin: 0; padding: 0; display: flex; justify-content: center; background: white; }
+                @media print {
+                    body { margin: 0; padding: 0; }
+                }
+            </style>
+        </head>
+        <body>
+            {$receiptHtml}
+            <script>
+                window.onload = function() {
+                    window.print();
+                    setTimeout(function() { window.close(); }, 1000);
+                }
+            </script>
+        </body>
+        </html>";
     }
 }
