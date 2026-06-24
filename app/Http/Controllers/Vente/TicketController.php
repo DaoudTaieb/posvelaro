@@ -382,9 +382,9 @@ class TicketController extends Controller
         $total_articles = $lignes->count();
 
         // Compute remise amount (remise field is a PERCENTAGE, not an amount)
-        $remise_montant = (float)($ticket->totalbrutht ?? 0) - (float)($ticket->totalttc ?? 0);
+        // Remise = Total TTC avant remise - Total TTC payé
+        $remise_montant = (float)($ticket->totalavremise ?? 0) - (float)($ticket->totalttc ?? 0);
 
-        // Get payment details
         $reglements = \Illuminate\Support\Facades\DB::table('creglementdets')
             ->leftJoin('creglements', 'creglementdets.creglementid', '=', 'creglements.creglementid')
             ->leftJoin('modereglements', 'creglements.modereglementid', '=', 'modereglements.modereglementid')
@@ -396,18 +396,23 @@ class TicketController extends Controller
                 'modereglements.libelle as mode_libelle'
             )
             ->get();
+            
+        // Fetch Bons d'Achat generated from this ticket
+        $bons_achat = \Illuminate\Support\Facades\DB::table('bons_achat')
+            ->where('ticketid_source', $id)
+            ->get();
 
         if (request()->ajax() || request()->headers->get('X-Requested-With') === 'XMLHttpRequest') {
             return view('vente.tickets.show', compact(
                 'ticket', 'societe', 'caisse', 'caissier_nom', 'vendeur_nom',
-                'client_nom', 'lignes', 'total_articles', 'reglements', 'remise_montant'
+                'client_nom', 'lignes', 'total_articles', 'reglements', 'remise_montant', 'bons_achat'
             ));
         }
 
         // For direct window.open() print
         $receiptHtml = view('vente.tickets.show', compact(
             'ticket', 'societe', 'caisse', 'caissier_nom', 'vendeur_nom',
-            'client_nom', 'lignes', 'total_articles', 'reglements', 'remise_montant'
+            'client_nom', 'lignes', 'total_articles', 'reglements', 'remise_montant', 'bons_achat'
         ))->render();
 
         return "<html>

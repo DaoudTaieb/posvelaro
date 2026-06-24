@@ -55,8 +55,8 @@
         @php
             $remisePct = (float)($ligne->remise ?? 0);
             $lineTotal = (float)($ligne->totalttcnet ?? $ligne->totalttc ?? 0);
-            $unitPriceNet = (float)($ligne->puttcnet ?? $lineTotal);
             $qte = (float)($ligne->qte ?? 1);
+            $unitPriceNet = (float)(!empty($ligne->puttcnet) ? $ligne->puttcnet : ($lineTotal / ($qte ?: 1)));
             // Couleur + Taille for variant display
             $variant = trim(($ligne->couleur_libelle ?? '') . ' ' . ($ligne->taille_libelle ?? ''));
         @endphp
@@ -74,7 +74,7 @@
             @endif
             {{-- Prix unitaire + Remise % --}}
             <div style="display: flex; justify-content: center; gap: 30px; margin-top: 2px;">
-                <span>{{ number_format((float)($ligne->ht ?? 0), 3, '.', '') }}</span>
+                <span>{{ number_format((float)($ligne->ttc ?? 0), 3, '.', '') }}</span>
                 @if($remisePct > 0)
                 <span style="color: green;">{{ number_format($remisePct, 0) }} %</span>
                 @endif
@@ -98,8 +98,8 @@
             <span>TOTAL TTC</span>
         </div>
         <div style="display: flex; justify-content: space-between; font-weight: 700;">
-            <span>{{ number_format($ticket->totalbrutht ?? 0, 3, '.', '') }}</span>
-            <span>{{ number_format($remise_montant, 3, '.', '') }}</span>
+            <span>{{ number_format($ticket->totalavremise ?? 0, 3, '.', '') }}</span>
+            <span>-{{ number_format($remise_montant, 3, '.', '') }}</span>
             <span>{{ number_format($ticket->totalttc ?? 0, 3, '.', '') }}</span>
         </div>
     </div>
@@ -119,6 +119,22 @@
         </div>
         @endforeach
     </div>
+
+    {{-- Bons d'Achat --}}
+    @if(isset($bons_achat) && count($bons_achat) > 0)
+    <div style="text-align: center; margin: 8px 0 4px; border-bottom: 1px dashed #000; padding-bottom: 6px;">
+        <div style="font-weight: 900; text-decoration: underline; margin-bottom: 6px; font-size: 13px;">Félicitations !</div>
+        @foreach($bons_achat as $bon)
+        <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px;">
+            Vous avez gagné un Bon d'Achat de :<br>
+            <span style="font-size: 14px;">{{ number_format($bon->montant ?? 0, 3, '.', '') }} DT</span>
+        </div>
+        <div style="font-size: 10px;">
+            Valable jusqu'au {{ \Carbon\Carbon::parse($bon->date_expiration)->format('d/m/Y') }}
+        </div>
+        @endforeach
+    </div>
+    @endif
 
     {{-- Footer --}}
     <div style="text-align: center; margin-top: 8px; font-size: 11px; font-weight: 700;">

@@ -10,7 +10,9 @@ class PosController extends Controller
 {
     private function getLoyaltyTier($client)
     {
-        if (!$client || !$client->fidelite) return 0;
+        if (!$client || empty($client->fidelite) || $client->clientid == 1 || strtoupper($client->nom) === 'PASSAGER') {
+            return 0;
+        }
         
         $ventes = (int) $client->total_ventes_fidelite;
         
@@ -39,6 +41,36 @@ class PosController extends Controller
 
     public function index()
     {
+        $user = auth()->user();
+
+        // Vérifier s'il y a une session de caisse ouverte pour cet utilisateur
+        $journalCaisse = DB::table('journalcaisses')
+            ->where(function ($q) {
+                $q->where('isclosed', false)
+                  ->orWhereNull('isclosed');
+            })
+            ->where('userid', $user->userid)
+            ->orderBy('journalcaisseid', 'desc')
+            ->first();
+
+        // Sinon, vérifier par site
+        if (!$journalCaisse) {
+            $journalCaisse = DB::table('journalcaisses')
+                ->where(function ($q) {
+                    $q->where('isclosed', false)
+                      ->orWhereNull('isclosed');
+                })
+                ->where('siteid', $user->siteid)
+                ->orderBy('journalcaisseid', 'desc')
+                ->first();
+        }
+
+        // Si aucune session n'est ouverte, rediriger vers la page d'ouverture
+        if (!$journalCaisse) {
+            return redirect()->route('vente.journee.ouverture')
+                ->with('error', 'Veuillez ouvrir une journée de caisse avant de commencer les ventes.');
+        }
+
         $client = DB::table('clients')->where('nom', 'PASSAGER')->first();
 
         // Données pour le modal de sélection produit
@@ -99,7 +131,8 @@ class PosController extends Controller
                 'sousfamilles.sousfamillelibelle',
                 'produits.ttc_vente',
                 'fournisseurs.nom as fournisseur',
-                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock')
+                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock'),
+                'sousfamilles.is_loyalty_enabled'
             );
 
         if ($request->filled('sousfamilleid')) {
@@ -150,6 +183,7 @@ class PosController extends Controller
             ->join('produits', 'produits.produitid', '=', 'produit2s.produitid')
             ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
             ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+            ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
             ->leftJoin('vproduit2stocks', function($join) use ($siteid) {
                 $join->on('vproduit2stocks.produit2id', '=', 'produit2s.produit2id')
                      ->where('vproduit2stocks.siteid', '=', $siteid);
@@ -171,7 +205,8 @@ class PosController extends Controller
                 'couleurs.couleurlibelle as couleur',
                 'tailles.taillelibelle as taille',
                 'produits.ttc_vente',
-                'vproduit2stocks.qtestock as total_stock'
+                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock'),
+                'sousfamilles.is_loyalty_enabled'
             )
             ->first();
 
@@ -190,6 +225,7 @@ class PosController extends Controller
             ->join('produits', 'produits.produitid', '=', 'produit2s.produitid')
             ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
             ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+            ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
             ->leftJoin('vproduit2stocks', function($join) use ($siteid) {
                 $join->on('vproduit2stocks.produit2id', '=', 'produit2s.produit2id')
                      ->where('vproduit2stocks.siteid', '=', $siteid);
@@ -205,7 +241,8 @@ class PosController extends Controller
                 'tailles.taillelibelle',
                 'couleurs.couleurlibelle',
                 'produits.ttc_vente',
-                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock')
+                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock'),
+                'sousfamilles.is_loyalty_enabled'
             )
             ->orderBy('tailles.taillelibelle')
             ->orderBy('couleurs.couleurlibelle')
@@ -588,9 +625,17 @@ class PosController extends Controller
             ->orderBy('nom')
             ->paginate(15);
             
-        // Map over the items to calculate loyalty_tier
+        // Map over the items to calculate loyalty_tier and override soldefidelite
         $clients->getCollection()->transform(function ($client) {
             $client->loyalty_tier = $this->getLoyaltyTier($client);
+            
+            // Override soldefidelite using our bons_achat table to bypass DB triggers
+            $bonsAchatTotal = DB::table('bons_achat')
+                ->where('clientid', $client->clientid)
+                ->where('utilise', false)
+                ->sum('montant');
+            $client->soldefidelite = $bonsAchatTotal;
+            
             return $client;
         });
 

@@ -36,8 +36,21 @@ class CaisseController extends Controller
                 ->where('isclosed', 0) // 0 = ouvert
                 ->orderBy('journalcaisseid', 'desc')
                 ->first();
-            $journalcaisseid = $journal ? $journal->journalcaisseid : 1;
-            $agencebid = $journal ? $journal->agencebid : 2;
+
+            if (!$journal) {
+                $journal = DB::table('journalcaisses')
+                    ->where('siteid', $siteid)
+                    ->where('isclosed', 0)
+                    ->orderBy('journalcaisseid', 'desc')
+                    ->first();
+            }
+
+            if (!$journal) {
+                return response()->json(['success' => false, 'message' => 'Aucune journée ouverte. Veuillez ouvrir une journée avant de valider le ticket.']);
+            }
+
+            $journalcaisseid = $journal->journalcaisseid;
+            $agencebid = $journal->agencebid;
 
             // Générer le numéro de ticket
             $lastTicket = DB::table('ctickets')->orderBy('cticketid', 'desc')->first();
@@ -64,6 +77,7 @@ class CaisseController extends Controller
             $totaltva = 0;
             $remise_totale = 0;
 
+            $totalbrutht = 0;
             foreach ($lignes as $ligne) {
                 $totalqte += floatval($ligne['qte']);
                 $totalttc += floatval($ligne['total']);
@@ -71,9 +85,12 @@ class CaisseController extends Controller
                 // Calcul approximatif HT (supposons TVA 19%)
                 $tva_rate = 19;
                 $ht = floatval($ligne['total']) / (1 + ($tva_rate / 100));
+                $base_ttc = floatval($ligne['prix']) * floatval($ligne['qte']);
+                
                 $totalht += $ht;
                 $totaltva += (floatval($ligne['total']) - $ht);
-                $remise_totale += (floatval($ligne['prix']) * floatval($ligne['qte'])) - floatval($ligne['total']);
+                $remise_totale += $base_ttc - floatval($ligne['total']);
+                $totalbrutht += $base_ttc / (1 + ($tva_rate / 100));
             }
 
             $now = now();
@@ -88,7 +105,7 @@ class CaisseController extends Controller
                 'transfere' => 0,
                 'datecreation' => $now,
                 'cticketdate' => $now,
-                'totalbrutht' => $totalht + $remise_totale,
+                'totalbrutht' => $totalbrutht,
                 'remise' => $remise_totale > 0 ? 1 : 0,
                 'vremise' => $remise_totale,
                 'totalnetht' => $totalht,
@@ -157,16 +174,17 @@ class CaisseController extends Controller
                 $l_remise = floatval($ligne['remise'] ?? 0);
 
                 $ht = $l_total / (1 + ($tva_rate / 100));
+                $ht_base = (floatval($ligne['prix'] ?? 0) * $l_qte) / (1 + ($tva_rate / 100));
                 
                 DB::table('detctickets')->insert([
                     'cticketid' => $cticketid,
                     'produitid' => $produitid,
                     'produit2id' => $produit2id,
                     'taxefamilleid' => 1,
-                    'ht' => $ht / $l_qte,
-                    'ttc' => $l_prixNet,
+                    'ht' => $ht_base / $l_qte,
+                    'ttc' => floatval($ligne['prix'] ?? 0),
                     'qte' => $l_qte,
-                    'totalht' => $ht,
+                    'totalht' => $ht_base,
                     'remise' => $l_remise,
                     'remise2' => 0,
                     'totalhtnet' => $ht,
@@ -176,8 +194,9 @@ class CaisseController extends Controller
                     'taxe4' => 0, 'vtaxe4' => 0,
                     'tva' => $tva_rate,
                     'vtva' => $l_total - $ht,
-                    'totalttc' => $l_total,
+                    'totalttc' => floatval($ligne['prix'] ?? 0) * $l_qte,
                     'totalttcnet' => $l_total,
+                    'puttcnet' => $l_prixNet,
                     'qtetrans' => 0,
                     'siteid' => $siteid,
                     'date' => $now,
@@ -572,6 +591,21 @@ class CaisseController extends Controller
                 ];
             }
 
+            $ticket = DB::table('ctickets')->where('cticketid', $cticketid)->first();
+            if (!$ticket) {
+                return response()->json(['success' => false, 'message' => 'Ticket introuvable.']);
+            }
+
+            $now = now();
+
+            $journal = DB::table('journalcaisses')
+                ->where('userid', $caissierid)
+                ->where('isclosed', 0)
+                ->orderBy('journalcaisseid', 'desc')
+                ->first();
+            $journalcaisseid = $journal ? $journal->journalcaisseid : 1;
+            $agencebid = $journal ? $journal->agencebid : 2;
+
             $totalAdded = 0;
             foreach ($reglements as $reg) {
                 $montant = floatval($reg['montant'] ?? 0);
@@ -601,8 +635,6 @@ class CaisseController extends Controller
                     'ismultiple' => 0,
                     'retenuevalide' => 0,
                     'employeeid' => $employeeid,
-                'userid' => $caissierid,
-                'agencebid' => $agencebid,
                     'userid' => $caissierid,
                     'agencebid' => $agencebid,
                     'cours' => 1,
@@ -638,7 +670,7 @@ class CaisseController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Complément acompte enregistré avec succès.',
-                'nouveau_reste' => $ticket->netapayer - $montant
+                'nouveau_reste' => $ticket->netapayer // Already updated in the loop above
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

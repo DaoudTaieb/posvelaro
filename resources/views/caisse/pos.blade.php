@@ -557,6 +557,10 @@
             <button class="grid-btn" onclick="openConsultationModal()">Consultation Tickets</button>
             <button class="grid-btn" onclick="openArticleHistoryModal()">Consultation Articles</button>
             <button class="grid-btn" onclick="openSmsModal()">Envoyer SMS</button>
+            <div class="split-col">
+                <button class="grid-btn" onclick="window.location.href='{{ route('vente.journee.etat') }}'" style="background: #e0f2fe; border-color: #0ea5e9; font-weight: bold; color: #0369a1;">Etat Caisse</button>
+                <button class="grid-btn" onclick="window.location.href='{{ route('vente.journee.cloture') }}'" style="background: #fee2e2; border-color: #ef4444; font-weight: bold; color: #991b1b;">Clôture</button>
+            </div>
         </div>
 
         <!-- COL 4: Règlements -->
@@ -1163,7 +1167,10 @@
 
     function addProductToTicket(productData) {
         let prix = parseFloat(productData.ttc_vente) || 0;
-        let remise = currentClientLoyaltyTier || 0;
+        let remise = 0;
+        if (productData.is_loyalty_enabled == 1) {
+            remise = currentClientLoyaltyTier || 0;
+        }
         let prixNet = prix - (prix * (remise / 100));
         let qteVal = isRetourMode ? -1 : 1;
         let product = {
@@ -1180,7 +1187,8 @@
             remise: remise,
             prixNet: prixNet,
             total: qteVal * prixNet,
-            stock: parseFloat(productData.total_stock) || 0
+            stock: parseFloat(productData.total_stock) || 0,
+            is_loyalty_enabled: productData.is_loyalty_enabled || 0
         };
         
         // Check if product already exists to increment Qty
@@ -1666,20 +1674,23 @@
             let soldeFid = parseFloat(client.soldefidelite || 0).toFixed(3);
             let pFid = parseFloat(client.pointfidelite || 0).toFixed(1);
             soldeInfoDiv.innerText = `Solde : ${solde} DT | Solde.Fid : ${soldeFid} DT | P.Fid: ${pFid}`;
-            
-            // Loyalty update
-            currentClientLoyaltyTier = client.loyalty_tier || 0;
-            if (currentClientLoyaltyTier > 0) {
-                ticketLines.forEach(line => {
-                    line.remise = currentClientLoyaltyTier;
-                    line.prixNet = line.prix - (line.prix * (line.remise / 100));
-                    line.total = line.qte * line.prixNet;
-                });
-                renderTable();
-                
-                // Show notification to user
-                let msg = document.createElement('div');
-                msg.style.position = 'fixed';
+        }
+        
+        // Loyalty update for ALL clients (even PASSAGER to reset to 0)
+        currentClientLoyaltyTier = client.loyalty_tier || 0;
+        ticketLines.forEach(line => {
+            if (line.is_loyalty_enabled == 1) {
+                line.remise = currentClientLoyaltyTier;
+                line.prixNet = line.prix - (line.prix * (line.remise / 100));
+                line.total = line.qte * line.prixNet;
+            }
+        });
+        renderTable();
+        
+        if (currentClientLoyaltyTier > 0) {
+            // Show notification to user
+            let msg = document.createElement('div');
+            msg.style.position = 'fixed';
                 msg.style.bottom = '20px';
                 msg.style.right = '20px';
                 msg.style.backgroundColor = '#10b981';
@@ -1691,7 +1702,6 @@
                 document.body.appendChild(msg);
                 setTimeout(() => msg.remove(), 4000);
             }
-        }
         
         if (typeof pendingPaymentMode !== 'undefined' && pendingPaymentMode && currentClientId && currentClientId != 1) {
             let mode = pendingPaymentMode;
