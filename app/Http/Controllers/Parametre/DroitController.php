@@ -36,8 +36,6 @@ class DroitController extends Controller
         \Illuminate\Support\Facades\DB::table('userdroits')->insert([
             'userdroitid' => $nextId,
             'libelle' => $request->libelle,
-            'isadmin' => false,
-            'cangrant' => false,
         ]);
 
         return redirect()->route('parametre.droit.index', ['id' => $nextId])->with('success', 'Rôle ajouté avec succès.');

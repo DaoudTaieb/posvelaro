@@ -252,7 +252,7 @@ class TransfertEnvoyeController extends Controller
                 $totalht += ($ht * $qteenvoi);
 
                 // Need detbontransfertid sequence
-                $detid = DB::selectOne("SELECT nextval('detbontransfert_detbontransfertid_seq') as id")->id;
+                $detid = DB::selectOne("SELECT nextval('detbontransferts_detbontransfertid_seq') as id")->id;
 
                 DB::table('detbontransferts')->insert([
                     'detbontransfertid' => $detid,

@@ -33,13 +33,15 @@ class UtilisateurController extends Controller
 
         $nextId = (\Illuminate\Support\Facades\DB::table('users')->max('userid') ?? 0) + 1;
         $siteid = auth()->user()->siteid ?? 102;
+        $societeid = auth()->user()->societeid ?? 1;
 
         \Illuminate\Support\Facades\DB::table('users')->insert([
             'userid' => $nextId,
             'login' => $request->login,
             'password' => $request->password,
             'userdroitid' => $request->userdroitid,
-            'siteid' => $siteid
+            'siteid' => $siteid,
+            'societeid' => $societeid
         ]);
 
         return redirect()->route('parametre.utilisateur.index')->with('success', 'Utilisateur ajouté avec succès.');

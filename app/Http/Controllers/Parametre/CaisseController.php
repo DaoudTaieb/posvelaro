@@ -43,8 +43,8 @@ class CaisseController extends Controller
             'clientid' => 'nullable|integer',
             'machineid' => 'nullable|integer',
         ]);
-
         $nextId = (\Illuminate\Support\Facades\DB::table('caisses')->max('caisseid') ?? 0) + 1;
+        $agencebid = $request->agencebid ?? auth()->user()->agencebid ?? \Illuminate\Support\Facades\DB::table('agencebs')->value('agencebid') ?? 1;
 
         \Illuminate\Support\Facades\DB::table('caisses')->insert([
             'caisseid' => $nextId,
@@ -52,10 +52,11 @@ class CaisseController extends Controller
             'compteur' => $request->compteur,
             'numero' => $request->numero,
             'siteid' => $request->siteid,
-            'agencebid' => $request->agencebid,
+            'agencebid' => $agencebid,
             'clientid' => $request->clientid,
             'machineid' => $request->machineid,
-            'bloque' => $request->has('bloque')
+            'bloque' => $request->has('bloque'),
+            'facturation' => true
         ]);
 
         return redirect()->route('parametre.caisse.index')->with('success', 'Caisse ajoutée avec succès.');
@@ -73,6 +74,8 @@ class CaisseController extends Controller
             'machineid' => 'nullable|integer',
         ]);
 
+        $agencebid = $request->agencebid ?? auth()->user()->agencebid ?? \Illuminate\Support\Facades\DB::table('agencebs')->value('agencebid') ?? 1;
+
         \Illuminate\Support\Facades\DB::table('caisses')
             ->where('caisseid', $id)
             ->update([
@@ -80,10 +83,11 @@ class CaisseController extends Controller
                 'compteur' => $request->compteur,
                 'numero' => $request->numero,
                 'siteid' => $request->siteid,
-                'agencebid' => $request->agencebid,
+                'agencebid' => $agencebid,
                 'clientid' => $request->clientid,
                 'machineid' => $request->machineid,
-                'bloque' => $request->has('bloque')
+                'bloque' => $request->has('bloque'),
+                'facturation' => true
             ]);
 
         return redirect()->route('parametre.caisse.index')->with('success', 'Caisse modifiée avec succès.');

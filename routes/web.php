@@ -130,7 +130,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/journee/cloture', [JourneeController::class, 'cloture'])->name('journee.cloture');
         Route::post('/journee/cloture', [JourneeController::class, 'storeCloture'])->name('journee.cloture.store');
         
-        // Clients
-        Route::resource('clients', ClientController::class);
+        Route::resource('clients', ClientController::class)->except(['create', 'edit']);
     });
 });
