@@ -23,6 +23,7 @@ class VendeurController extends Controller
     {
         $request->validate([
             'nom' => 'required|string|max:255',
+            'tauxcommission' => 'nullable|numeric|min:0|max:100',
         ]);
 
         $siteid = auth()->user()->siteid ?? 102; // Site de l'utilisateur connecté
@@ -35,6 +36,7 @@ class VendeurController extends Controller
             'employeeid' => $nextId,
             'code' => $code,
             'nom' => $request->nom,
+            'tauxcommission' => $request->tauxcommission ?? 0,
             'bloque' => $request->has('bloque') ? true : false,
             'isvendeur' => true,
             'siteid' => $siteid
@@ -47,12 +49,14 @@ class VendeurController extends Controller
     {
         $request->validate([
             'nom' => 'required|string|max:255',
+            'tauxcommission' => 'nullable|numeric|min:0|max:100',
         ]);
 
         \Illuminate\Support\Facades\DB::table('employees')
             ->where('employeeid', $id)
             ->update([
                 'nom' => $request->nom,
+                'tauxcommission' => $request->tauxcommission ?? 0,
                 'bloque' => $request->has('bloque') ? true : false,
             ]);
 

@@ -2820,7 +2820,7 @@
                 <td style="padding: 6px 8px; border-right: 1px solid #eee;">${cainom}</td>
                 <td style="padding: 6px 8px;">${vnom}</td>
             `;
-            
+            tr.onclick = () => { loadTicketIntoPos(t); };
             tr.ondblclick = () => { window.open(`/vente/tickets/${t.cticketid}`, '_blank', 'width=800,height=600'); };
             tbody.appendChild(tr);
         }
@@ -2834,6 +2834,69 @@
     document.querySelectorAll('.consult-filter').forEach(inp => {
         inp.addEventListener('input', () => { renderConsultationTickets(); });
     });
+
+    function loadTicketIntoPos(ticket) {
+        if (ticketLines.length > 0 && !confirm("Un ticket est en cours. Voulez-vous le remplacer par ce ticket ?")) {
+            return;
+        }
+        fetch(`{{ url('/vente/caisse/ticket-details') }}/${ticket.cticketnumero}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Set Client
+                    if (data.ticket.clientid) {
+                        currentClientId = data.ticket.clientid;
+                        document.getElementById('clientName').innerText = ticket.client_nom || 'PASSAGER';
+                        let clientBadge = document.getElementById('clientBadge');
+                        if(clientBadge) clientBadge.style.display = 'inline-block';
+                    }
+                    
+                    // Set Vendeur
+                    if (data.ticket.employeeid) {
+                        let vendeurInput = document.getElementById('vendeurName');
+                        if(vendeurInput) {
+                            vendeurInput.dataset.id = data.ticket.employeeid;
+                            vendeurInput.value = ticket.vendeur_nom || '';
+                        }
+                    }
+
+                    // Map lines
+                    ticketLines = data.lines.map(l => {
+                        let remise = parseFloat(l.remise || 0);
+                        let prixNet = parseFloat(l.prix); // In backend, 'prix' alias is detctickets.ttc
+                        let basePrix = prixNet;
+                        if(remise > 0 && remise < 100) {
+                            basePrix = prixNet / (1 - (remise / 100));
+                        } else if (remise == 100) {
+                            basePrix = prixNet; // Prevent division by zero, though if 100% off, net is 0.
+                        }
+                        
+                        return {
+                            code: l.article_ref,
+                            ref: l.article_ref,
+                            designation: l.article_designation,
+                            couleur: l.couleur || '',
+                            taille: l.taille || '',
+                            qte: parseFloat(l.qte),
+                            prix: basePrix,
+                            remise: remise,
+                            prixNet: prixNet,
+                            total: parseFloat(l.totalttc),
+                            produit2id: l.produit2id
+                        };
+                    });
+                    
+                    renderTable();
+                    closeConsultationModal();
+                } else {
+                    alert(data.message || "Erreur lors du chargement du ticket.");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erreur de connexion.");
+            });
+    }
 
     function validerTicket() {
         openMultiPaymentModal(1); // Default pre-fill Espèce

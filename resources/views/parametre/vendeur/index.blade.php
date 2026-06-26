@@ -33,7 +33,8 @@
                 <thead>
                     <tr>
                         <th style="width: 15%; text-align: center;">Code</th>
-                        <th style="width: 55%;">Nom de l'employé</th>
+                        <th style="width: 40%;">Nom de l'employé</th>
+                        <th style="width: 15%; text-align: center;">Commission (%)</th>
                         <th style="width: 15%; text-align: center;">Statut</th>
                         <th style="width: 15%; text-align: center;">Actions</th>
                     </tr>
@@ -41,12 +42,15 @@
                 <tbody id="tableBody">
                     <!-- Ligne d'ajout (cachée par défaut) -->
                     <tr id="addRow" style="display: none; background: #f8fafc;">
-                        <td colspan="4" style="padding: 10px;">
+                        <td colspan="5" style="padding: 10px;">
                             <form action="{{ route('parametre.vendeur.store') }}" method="POST" style="margin: 0; display: flex; align-items: center; gap: 15px;">
                                 @csrf
                                 <div style="flex: 1; display: flex; gap: 15px; align-items: center;">
-                                    <div style="flex: 1;">
+                                    <div style="flex: 2;">
                                         <input type="text" name="nom" class="form-control" placeholder="Nom du vendeur" required>
+                                    </div>
+                                    <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" step="0.01" min="0" max="100" name="tauxcommission" class="form-control" placeholder="Taux (%)">
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px; margin-right: 20px;">
                                         <label style="margin: 0; font-size: 13px; font-weight: 500;">Bloqué</label>
@@ -74,6 +78,9 @@
                         <td class="font-medium" style="color: var(--primary);">
                             {{ $vendeur->nom }}
                         </td>
+                        <td style="text-align: center; font-weight: 600;">
+                            {{ number_format($vendeur->tauxcommission ?? 0, 2) }} %
+                        </td>
                         <td style="text-align: center;">
                             @if($vendeur->bloque)
                                 <span class="status-badge status-draft" style="background: #fee2e2; color: #991b1b;">Bloqué</span>
@@ -93,13 +100,16 @@
 
                     <!-- Ligne d'édition (cachée par défaut) -->
                     <tr id="editRow-{{ $vendeur->employeeid }}" style="display: none; background: #f8fafc;">
-                        <td colspan="4" style="padding: 10px;">
+                        <td colspan="5" style="padding: 10px;">
                             <form action="{{ route('parametre.vendeur.update', $vendeur->employeeid) }}" method="POST" style="margin: 0; display: flex; align-items: center; gap: 15px;">
                                 @csrf
                                 @method('PUT')
                                 <div style="flex: 1; display: flex; gap: 15px; align-items: center;">
-                                    <div style="flex: 1;">
+                                    <div style="flex: 2;">
                                         <input type="text" name="nom" class="form-control" value="{{ $vendeur->nom }}" required>
+                                    </div>
+                                    <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" step="0.01" min="0" max="100" name="tauxcommission" class="form-control" value="{{ $vendeur->tauxcommission }}" placeholder="Taux (%)">
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px; margin-right: 20px;">
                                         <label style="margin: 0; font-size: 13px; font-weight: 500;">Bloqué</label>
@@ -119,7 +129,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="4" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                        <td colspan="5" style="padding: 40px; text-align: center; color: var(--text-muted);">
                             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; opacity: 0.5;">
                                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                 <circle cx="9" cy="7" r="4"></circle>
