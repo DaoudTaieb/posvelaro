@@ -1021,7 +1021,7 @@
 
 <!-- JAVASCRIPT FOR LOGIC -->
 <script>
-    console.log("=== VELARO POS SCRIPT START ===");
+    console.log("=== GOLDEN POS POS SCRIPT START ===");
     
     // Global functions definition at the very top
     function sendSmsDirectly(tel, msg) {
@@ -1071,9 +1071,9 @@
                 if (res.client_tel) {
                     let message = "";
                     if (res.is_first_sale) {
-                        message = `Bienvenue chez Velaro, ${res.client_nom}! Nous vous remercions pour votre premier achat. Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
+                        message = `Bienvenue chez Golden Pos, ${res.client_nom}! Nous vous remercions pour votre premier achat. Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
                     } else {
-                        message = `Merci pour votre fidélité chez Velaro, ${res.client_nom}! Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
+                        message = `Merci pour votre fidélité chez Golden Pos, ${res.client_nom}! Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
                     }
                     
                     if (confirm(`Voulez-vous envoyer un SMS de confirmation au client (${res.client_tel}) ?`)) {

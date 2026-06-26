@@ -17,7 +17,7 @@ class TransfertRecuController extends Controller
         $etats = DB::table('etatbontranferts')->get();
         $sites = DB::table('sites')->get();
         $siteRecepteur = DB::table('sites')->where('siteid', $siteid)->first();
-        $siteLibelle = $siteRecepteur ? $siteRecepteur->libelle : 'Velaro';
+        $siteLibelle = $siteRecepteur ? $siteRecepteur->libelle : 'Golden Pos';
 
         $query = DB::table('bontransferts as b')
             ->join('sites as rec', 'rec.siteid', '=', 'b.siterecepteurid')

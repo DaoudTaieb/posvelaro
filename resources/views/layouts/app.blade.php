@@ -40,7 +40,7 @@
             --shadow-premium: 0 10px 30px -5px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
             --glass-blur: blur(12px);
 
-            /* Reusable Posvelaro Theme Variables */
+            /* Reusable Posgolden pos Theme Variables */
             --primary-hover: #4338ca;
             --surface: #ffffff;
             --background: #f8fafc;
@@ -359,7 +359,7 @@
         
         .main-content-inner.full-width {
             max-width: 100%;
-        }        /* Global Posvelaro UI Framework Classes */
+        }        /* Global Posgolden pos UI Framework Classes */
         
         /* Layout */
         .pos-container {

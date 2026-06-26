@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Saisie Demande de transfert Velaro')
+@section('title', 'Saisie Demande de transfert Golden Pos')
 
 @section('styles')
 <style>
@@ -167,7 +167,7 @@
                 
                 <div class="form-group" style="flex: 1; min-width: 200px; margin: 0;">
                     <label class="form-label">Expéditeur</label>
-                    <input type="text" class="form-control" value="{{ $site ? $site->libelle : 'Velaro' }}" disabled>
+                    <input type="text" class="form-control" value="{{ $site ? $site->libelle : 'Golden Pos' }}" disabled>
                     <input type="hidden" name="siteid" value="{{ $site ? $site->siteid : '' }}">
                 </div>
 
@@ -303,23 +303,8 @@
     </form>
 
     <!-- Modal Sélection des Produits -->
-    <div id="productModal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Recherche de Produits</h2>
-                <button type="button" class="btn btn-outline" style="padding: 6px 10px;" onclick="document.getElementById('productModal').style.display='none'">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-            
-            <!-- We assume the partial handles its own filters and table body -->
-            @include('transfert.demande_envoye.partials.product_modal')
-            
-        </div>
-    </div>
+    @include('transfert.demande_envoye.partials.product_modal')
+
 </div>
 
 @endsection
@@ -384,20 +369,26 @@
                 data.forEach(p => {
                     const tr = document.createElement('tr');
                     tr.style.cursor = 'pointer';
-                    tr.classList.add('hover-row');
+                    tr.style.borderBottom = '1px solid #f1f5f9';
+                    tr.style.transition = 'background 0.15s';
+                    tr.onmouseenter = () => tr.style.background = '#f0f4ff';
+                    tr.onmouseleave = () => tr.style.background = '';
                     tr.onclick = () => selectProduct(p);
 
-                    // Reusing Velaro data-table styles for the rows if modal uses them
+                    const cellStyle = 'padding: 10px 12px; font-size: 12px; color: #334155; white-space: nowrap;';
+                    const stock = p.total_stock ? parseInt(p.total_stock) : 0;
+                    const stockColor = stock > 0 ? '#16a34a' : '#dc2626';
+
                     tr.innerHTML = `
-                        <td>${p.produitcode || ''}</td>
-                        <td>${p.reference || ''}</td>
-                        <td>${p.barcode2 || ''}</td>
-                        <td>${p.produitlibelle || ''}</td>
-                        <td>${p.famillelibelle || ''}</td>
-                        <td>${p.sousfamillelibelle || ''}</td>
-                        <td style="text-align: right;">${p.ttc_vente ? parseFloat(p.ttc_vente).toFixed(2) + ' MAD' : ''}</td>
-                        <td style="text-align: center; font-weight: 600;">${p.total_stock || 0}</td>
-                        <td>${p.fournisseur || ''}</td>
+                        <td style="${cellStyle} font-weight: 600;">${p.produitcode || ''}</td>
+                        <td style="${cellStyle}">${p.reference || ''}</td>
+                        <td style="${cellStyle} font-size: 11px; color: #64748b;">${p.barcode2 || ''}</td>
+                        <td style="${cellStyle} white-space: normal; max-width: 220px;">${p.produitlibelle || ''}</td>
+                        <td style="${cellStyle}">${p.famillelibelle || ''}</td>
+                        <td style="${cellStyle}">${p.sousfamillelibelle || ''}</td>
+                        <td style="${cellStyle} text-align: right; font-weight: 600;">${p.ttc_vente ? parseFloat(p.ttc_vente).toFixed(2) + ' DT' : ''}</td>
+                        <td style="${cellStyle} text-align: center; font-weight: 700; color: ${stockColor};">${stock}</td>
+                        <td style="${cellStyle}">${p.fournisseur || ''}</td>
                     `;
                     tbody.appendChild(tr);
                 });

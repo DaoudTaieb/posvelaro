@@ -117,7 +117,7 @@
         
         <!-- En-tête uniquement pour l'impression -->
         <div class="print-only" style="display: none; text-align: center; border-bottom: 3px double var(--border); padding-bottom: 16px; margin-bottom: 24px;">
-            <h1 style="font-size: 26px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px;">VELARO POS</h1>
+            <h1 style="font-size: 26px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px;">GOLDEN POS POS</h1>
             <p style="font-size: 12px; color: #475569; margin: 4px 0 0 0; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Rapport de Clôture Caisse (État Journalier)</p>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Imprimé le {{ now()->format('d/m/Y H:i') }} par {{ Auth::user()->login }}</div>
         </div>

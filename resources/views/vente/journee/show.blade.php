@@ -53,7 +53,7 @@
     
     <div class="mt-2" style="margin-top: 30px;">
         <div class="font-bold">CLÔTURE N° : {{ $journee->journalcaissenumero }}</div>
-        <div class="font-bold">Velaro</div>
+        <div class="font-bold">Golden Pos</div>
         <div class="font-bold">CAISSE : {{ $journee->caisse_numero ?? $journee->caisseid }}</div>
         <div class="font-bold">OUVERTE LE : {{ $journee->dateouverture ? \Carbon\Carbon::parse($journee->dateouverture)->format('d/m/Y H:i') : '' }}</div>
         <div class="font-bold">CLOTURÉE LE : {{ $journee->datecloture ? \Carbon\Carbon::parse($journee->datecloture)->format('d/m/Y H:i') : 'Non clôturée' }}</div>

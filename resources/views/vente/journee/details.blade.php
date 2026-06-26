@@ -86,7 +86,7 @@
         <div>Du {{ $journee->dateouverture ? \Carbon\Carbon::parse($journee->dateouverture)->format('d/m/Y H:i') : '' }} Au {{ $journee->datecloture ? \Carbon\Carbon::parse($journee->datecloture)->format('d/m/Y H:i') : 'En cours' }}</div>
         
         <div>Site:</div>
-        <div>{{ $journee->agence_nom ?? 'Velaro' }}</div>
+        <div>{{ $journee->agence_nom ?? 'Golden Pos' }}</div>
         
         <div>Caisse:</div>
         <div>{{ $journee->siteid }} - {{ $journee->caisse_nom ?? 'CaisseM1' }}</div>

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Vendeurs / Employés - Velaro')
+@section('title', 'Vendeurs / Employés - Golden Pos')
 
 @section('content')
 <div class="pos-container">

@@ -228,12 +228,12 @@ class JourneeController extends Controller
             'userid' => $user->userid,
             'employeeid' => $user->employeeid ?? 0,
             'caissierclotureid' => 0,
-            'siteid' => $user->siteid ?? ($caisse->siteid ?? 0),
+            'siteid' => $caisse->siteid ?? ($user->siteid ?? 0),
             'isclosed' => false,
             'montantcloture' => 0,
             'montanttheorique' => 0,
             'envoyee' => false,
-            'agencebid' => $user->agencebid ?? ($caisse->agencebid ?? 0),
+            'agencebid' => $caisse->agencebid ?? ($user->agencebid ?? 0),
         ]);
 
         return back()->with('success', 'La journée a été ouverte avec succès pour cette caisse !');
@@ -277,7 +277,7 @@ class JourneeController extends Controller
 
         if (!$journalCaisse) {
             return redirect()->route('vente.journee.ouverture')
-                ->with('error', 'Aucune journée ouverte trouvée. Veuillez d\'abord ouvrir une journée.');
+                ->with('warning', 'Aucune journée ouverte trouvée. Veuillez d\'abord ouvrir une journée.');
         }
 
         $caisse = DB::table('caisses')->where('caisseid', $journalCaisse->caisseid)->first();
@@ -466,7 +466,7 @@ class JourneeController extends Controller
 
         if (!$journalCaisse) {
             return redirect()->route('vente.journee.ouverture')
-                ->with('error', 'Aucune journée ouverte trouvée. Veuillez d\'abord ouvrir une journée.');
+                ->with('warning', 'Aucune journée ouverte trouvée. Veuillez d\'abord ouvrir une journée.');
         }
 
         // Récupérer le libellé de la caisse

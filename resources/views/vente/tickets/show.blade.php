@@ -11,8 +11,8 @@
 ">
     {{-- Header --}}
     <div style="text-align: center; margin-bottom: 8px;">
-        <div style="font-size: 26px; font-weight: 900; letter-spacing: 3px;">{{ $societe->raison ?? 'VELARO' }}</div>
-        <div style="font-size: 11px; margin-top: 2px;">Velaro</div>
+        <div style="font-size: 26px; font-weight: 900; letter-spacing: 3px;">{{ $societe->raison ?? 'GOLDEN POS' }}</div>
+        <div style="font-size: 11px; margin-top: 2px;">Golden Pos</div>
         <div style="font-size: 11px; margin-top: 6px; font-weight: 700;">BIENVENUE DANS VOTRE MAGASIN</div>
     </div>
 

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Consultation Bons de Transferts Envoyés Velaro')
+@section('title', 'Consultation Bons de Transferts Envoyés Golden Pos')
 
 @section('content')
 <div class="pos-container">
@@ -189,7 +189,7 @@
 </div>
 
 <style>
-    /* Quick styles for inline dropdowns if needed, though usually handled by JS or a class in Velaro */
+    /* Quick styles for inline dropdowns if needed, though usually handled by JS or a class in Golden Pos */
     .dropdown-menu.show { display: block !important; }
 </style>
 @endsection

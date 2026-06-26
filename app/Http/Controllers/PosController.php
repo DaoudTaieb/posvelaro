@@ -68,7 +68,7 @@ class PosController extends Controller
         // Si aucune session n'est ouverte, rediriger vers la page d'ouverture
         if (!$journalCaisse) {
             return redirect()->route('vente.journee.ouverture')
-                ->with('error', 'Veuillez ouvrir une journée de caisse avant de commencer les ventes.');
+                ->with('warning', 'Veuillez ouvrir une journée de caisse avant de commencer les ventes.');
         }
 
         $client = DB::table('clients')->where('nom', 'PASSAGER')->first();

@@ -166,7 +166,7 @@
                 <div class="filter-group">
                     <label>Expéditeur</label>
                     <select class="filter-select" disabled>
-                        <option>{{ $siteExpediteur->libelle ?? 'Velaro' }}</option>
+                        <option>{{ $siteExpediteur->libelle ?? 'Golden Pos' }}</option>
                     </select>
                 </div>
                 <div class="filter-group">

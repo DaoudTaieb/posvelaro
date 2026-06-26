@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Saisie Bon de Transfert Envoyé Velaro')
+@section('title', 'Saisie Bon de Transfert Envoyé Golden Pos')
 
 @section('content')
 <div class="pos-container">
@@ -44,7 +44,7 @@
         <form method="POST" action="{{ route('transfert.envoye.store') }}" id="headerForm">
             @csrf
             
-            <!-- Onglets (Custom Velaro) -->
+            <!-- Onglets (Custom Golden Pos) -->
             <div style="display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 20px; padding: 0 24px;">
                 <div class="tab-link active" onclick="switchTab('general')" style="padding: 12px 4px; font-size: 14px; font-weight: 600; color: var(--primary); border-bottom: 2px solid var(--primary); cursor: pointer;">
                     Général
@@ -60,7 +60,7 @@
                     <div style="display: flex; gap: 20px; margin-bottom: 15px;">
                         <div style="flex: 1;">
                             <label class="form-label">Expéditeur</label>
-                            <input type="text" class="form-control" value="{{ $site ? $site->libelle : 'Velaro' }}" disabled style="background: #f8fafc;">
+                            <input type="text" class="form-control" value="{{ $site ? $site->libelle : 'Golden Pos' }}" disabled style="background: #f8fafc;">
                             <input type="hidden" name="siteid" value="{{ $site ? $site->siteid : '' }}">
                         </div>
                         <div style="flex: 1;">

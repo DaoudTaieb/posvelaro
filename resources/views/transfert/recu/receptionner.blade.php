@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Réception du Bon de Transfert - Velaro')
+@section('title', 'Réception du Bon de Transfert - Golden Pos')
 
 @section('content')
 <div class="pos-container">

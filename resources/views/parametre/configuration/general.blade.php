@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Configuration Générale - Velaro')
+@section('title', 'Configuration Générale - Golden Pos')
 
 @section('content')
 <div class="pos-container">
@@ -9,7 +9,7 @@
     <div class="page-header">
         <div>
             <h1 class="page-title">Configuration Générale</h1>
-            <p class="page-subtitle">Paramétrage global et préférences du système Velaro.</p>
+            <p class="page-subtitle">Paramétrage global et préférences du système Golden Pos.</p>
         </div>
         <div class="header-actions">
             <button class="btn btn-outline" onclick="window.history.back()">
@@ -115,7 +115,7 @@
         }
     }
 
-    /* Toggle switch CSS - Velaro Style */
+    /* Toggle switch CSS - Golden Pos Style */
     .switch {
         position: relative;
         display: inline-block;

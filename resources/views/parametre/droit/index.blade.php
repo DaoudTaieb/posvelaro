@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Gestion des droits - Velaro')
+@section('title', 'Gestion des droits - Golden Pos')
 
 @section('content')
 <div class="pos-container">
