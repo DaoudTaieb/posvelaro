@@ -211,7 +211,10 @@ class JourneeController extends Controller
         // Vérifier si une journée est déjà ouverte pour cette caisse
         $isAlreadyOpen = DB::table('journalcaisses')
             ->where('caisseid', $request->caisseid)
-            ->where('isclosed', false)
+            ->where(function ($q) {
+                $q->where('isclosed', false)
+                  ->orWhereNull('isclosed');
+            })
             ->exists();
 
         if ($isAlreadyOpen) {
@@ -258,12 +261,12 @@ class JourneeController extends Controller
                     $q->where('isclosed', false)
                       ->orWhereNull('isclosed');
                 })
-                ->where('userid', $user->userid)
+                ->where('userid', $user->userid ?? $user->id)
                 ->orderBy('journalcaisseid', 'desc')
                 ->first();
 
             // Si aucune session ouverte trouvée, chercher par site
-            if (!$journalCaisse) {
+            if (!$journalCaisse && !empty($user->siteid)) {
                 $journalCaisse = DB::table('journalcaisses')
                     ->where(function ($q) {
                         $q->where('isclosed', false)
@@ -272,6 +275,21 @@ class JourneeController extends Controller
                     ->where('siteid', $user->siteid)
                     ->orderBy('journalcaisseid', 'desc')
                     ->first();
+                    
+                // Si toujours pas trouvé, chercher dans les caisses du site de l'utilisateur
+                if (!$journalCaisse) {
+                    $caissesSite = DB::table('caisses')->where('siteid', $user->siteid)->pluck('caisseid');
+                    if ($caissesSite->isNotEmpty()) {
+                        $journalCaisse = DB::table('journalcaisses')
+                            ->whereIn('caisseid', $caissesSite)
+                            ->where(function ($q) {
+                                $q->where('isclosed', false)
+                                  ->orWhereNull('isclosed');
+                            })
+                            ->orderBy('journalcaisseid', 'desc')
+                            ->first();
+                    }
+                }
             }
         }
 
@@ -448,12 +466,12 @@ class JourneeController extends Controller
                 $q->where('isclosed', false)
                   ->orWhereNull('isclosed');
             })
-            ->where('userid', $user->userid)
+            ->where('userid', $user->userid ?? $user->id)
             ->orderBy('journalcaisseid', 'desc')
             ->first();
 
         // Si aucune session ouverte trouvée, chercher par site
-        if (!$journalCaisse) {
+        if (!$journalCaisse && !empty($user->siteid)) {
             $journalCaisse = DB::table('journalcaisses')
                 ->where(function ($q) {
                     $q->where('isclosed', false)
@@ -462,6 +480,21 @@ class JourneeController extends Controller
                 ->where('siteid', $user->siteid)
                 ->orderBy('journalcaisseid', 'desc')
                 ->first();
+                
+            // Si toujours pas trouvé, chercher dans les caisses du site de l'utilisateur
+            if (!$journalCaisse) {
+                $caissesSite = DB::table('caisses')->where('siteid', $user->siteid)->pluck('caisseid');
+                if ($caissesSite->isNotEmpty()) {
+                    $journalCaisse = DB::table('journalcaisses')
+                        ->whereIn('caisseid', $caissesSite)
+                        ->where(function ($q) {
+                            $q->where('isclosed', false)
+                              ->orWhereNull('isclosed');
+                        })
+                        ->orderBy('journalcaisseid', 'desc')
+                        ->first();
+                }
+            }
         }
 
         if (!$journalCaisse) {
