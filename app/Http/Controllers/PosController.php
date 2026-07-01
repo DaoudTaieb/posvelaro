@@ -107,31 +107,38 @@ class PosController extends Controller
     {
         $siteid = auth()->user()->siteid ?? 102;
 
-        $query = DB::table('produit2s')
-            ->join('produits', 'produits.produitid', '=', 'produit2s.produitid')
-            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
-            ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
+        $query = DB::table('produits')
             ->leftJoin('familles', 'produits.familleid', '=', 'familles.familleid')
             ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
             ->leftJoin('fournisseurs', 'produits.fournisseurid', '=', 'fournisseurs.fournisseurid')
+            ->leftJoin('produit2s', 'produit2s.produitid', '=', 'produits.produitid')
             ->leftJoin('vproduit2stocks', function($join) use ($siteid) {
                 $join->on('vproduit2stocks.produit2id', '=', 'produit2s.produit2id')
                      ->where('vproduit2stocks.siteid', '=', $siteid);
             })
             ->select(
                 'produits.produitid',
-                'produit2s.produit2id',
                 'produits.produitcode',
                 'produits.reference',
-                DB::raw("COALESCE(produit2s.barcode2, produits.barcode2) as barcode2"),
+                DB::raw("MAX(COALESCE(produits.barcode2, vproduit2stocks.barcode2, produit2s.barcode2, produit2s.produit2code)) as barcode2"),
                 'produits.produitlibelle',
-                'tailles.taillelibelle',
-                'couleurs.couleurlibelle',
                 'familles.famillelibelle',
                 'sousfamilles.sousfamillelibelle',
                 'produits.ttc_vente',
                 'fournisseurs.nom as fournisseur',
-                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock'),
+                'produits.qtestock as total_stock',
+                'sousfamilles.is_loyalty_enabled'
+            )
+            ->groupBy(
+                'produits.produitid',
+                'produits.produitcode',
+                'produits.reference',
+                'produits.produitlibelle',
+                'familles.famillelibelle',
+                'sousfamilles.sousfamillelibelle',
+                'produits.ttc_vente',
+                'fournisseurs.nom',
+                'produits.qtestock',
                 'sousfamilles.is_loyalty_enabled'
             );
 
@@ -151,17 +158,24 @@ class PosController extends Controller
             $query->where('produits.category2id', $request->marqueid);
         }
         if ($request->filled('search')) {
-            $searchTerm = '%' . strtolower($request->search) . '%';
-            $query->where(function($q) use ($searchTerm) {
+            $exactSearch = strtolower($request->search);
+            $searchTerm = '%' . $exactSearch . '%';
+            $query->where(function($q) use ($searchTerm, $exactSearch) {
                 $q->whereRaw('LOWER(produits.produitcode) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(produits.reference) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(produits.barcode2) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(produit2s.barcode2) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(produits.produitlibelle) LIKE ?', [$searchTerm]);
+                  ->orWhereRaw('LOWER(vproduit2stocks.barcode2) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produit2s.produit2code) = ?', [$exactSearch])
+                  ->orWhereRaw('LOWER(produits.produitlibelle) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(familles.famillelibelle) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(sousfamilles.sousfamillelibelle) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(fournisseurs.nom) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('CAST(produits.ttc_vente AS CHAR) LIKE ?', [$searchTerm]);
             });
         }
 
-        $products = $query->limit(50)->get();
+        $products = $query->paginate(20);
 
         return response()->json($products);
     }

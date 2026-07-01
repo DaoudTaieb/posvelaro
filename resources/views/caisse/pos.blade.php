@@ -512,7 +512,7 @@
 
         <!-- RIGHT AREA -->
         <div class="pos-right">
-            <div class="grand-total" id="grandTotal">0.000</div>
+            <div class="grand-total" id="grandTotal" onclick="openGlobalDiscountModal()" style="cursor: pointer;" title="Cliquez pour appliquer une remise globale sur le ticket">0.000</div>
             
             <button class="btn-validate" onclick="validerTicket()" title="Valider Ticket">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -1278,7 +1278,9 @@
                     <input type="number" value="${remise}" class="editable-cell" onchange="updateRemise(${index}, this.value)" min="0" max="100" onfocus="this.select(); selectLine(${index});">
                 </td>
                 <td class="align-right">${prixNet.toFixed(3)}</td>
-                <td class="align-right">${total.toFixed(3)}</td>
+                <td class="align-right">
+                    <input type="number" value="${total.toFixed(3)}" class="editable-cell" onchange="updateLineTotal(${index}, this.value)" min="0" onfocus="this.select(); selectLine(${index});">
+                </td>
                 <td style="text-align: center;">
                     <button onclick="removeLine(${index}); event.stopPropagation();" style="background: none; border: none; cursor: pointer; color: red;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -1344,6 +1346,27 @@
         renderTable();
     }
 
+    function updateLineTotal(index, newTotal) {
+        let targetTotal = parseFloat(newTotal);
+        if (isNaN(targetTotal) || targetTotal < 0) return;
+        
+        let line = ticketLines[index];
+        let grossTotal = (parseFloat(line.qte) || 0) * (parseFloat(line.prix) || 0);
+        
+        if (grossTotal > 0) {
+            let discountRatio = (grossTotal - targetTotal) / grossTotal;
+            let remise = discountRatio * 100;
+            
+            if (remise < 0) remise = 0;
+            if (remise > 100) remise = 100;
+            
+            line.remise = remise;
+            line.prixNet = line.prix * (1 - (remise / 100));
+            line.total = line.qte * line.prixNet;
+        }
+        renderTable();
+    }
+
     function removeLine(index) {
         ticketLines.splice(index, 1);
         renderTable();
@@ -1386,7 +1409,7 @@
         searchProducts(); // Load initially
     }
 
-    function searchProducts() {
+    function searchProducts(page = 1) {
         const tbody = document.getElementById('modal-tbody');
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Chargement...</td></tr>';
         
@@ -1396,15 +1419,18 @@
             saisonid: document.getElementById('filter-s').value,
             categoryid: document.getElementById('filter-c').value,
             marqueid: document.getElementById('filter-m').value,
-            search: document.getElementById('filter-search').value
+            search: document.getElementById('filter-search').value,
+            page: page
         });
 
         fetch(`{{ route('vente.caisse.pos.search_products') }}?${params.toString()}`)
             .then(res => res.json())
-            .then(data => {
+            .then(response => {
+                const data = response.data || [];
                 tbody.innerHTML = '';
                 if(data.length === 0) {
                     tbody.innerHTML = '<tr id="no-data-row"><td colspan="9" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">No data to display</td></tr>';
+                    renderPagination(null);
                     return;
                 }
 
@@ -1421,24 +1447,50 @@
                     };
 
                     let stk = parseFloat(p.total_stock) || 0;
+                    const cellStyle = 'padding: 10px 12px; font-size: 12px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #e2e8f0;';
                     tr.innerHTML = `
-                        <td>${p.produitcode || ''}</td>
-                        <td>${p.reference || ''}</td>
-                        <td>${p.barcode2 || ''}</td>
-                        <td>${p.produitlibelle || ''} ${p.taillelibelle ? ' - '+p.taillelibelle : ''} ${p.couleurlibelle ? ' - '+p.couleurlibelle : ''}</td>
-                        <td>${p.famillelibelle || ''}</td>
-                        <td>${p.sousfamillelibelle || ''}</td>
-                        <td style="font-weight: bold; color: #059669;">${price.toFixed(3)}</td>
-                        <td>${Number.isInteger(stk) ? stk : stk.toFixed(2)}</td>
-                        <td>${p.fournisseur || ''}</td>
+                        <td style="${cellStyle}">${p.produitcode || ''}</td>
+                        <td style="${cellStyle}">${p.reference || ''}</td>
+                        <td style="${cellStyle}">${p.barcode2 || ''}</td>
+                        <td style="${cellStyle} white-space: normal;">${p.produitlibelle || ''} ${p.taillelibelle ? ' - '+p.taillelibelle : ''} ${p.couleurlibelle ? ' - '+p.couleurlibelle : ''}</td>
+                        <td style="${cellStyle}">${p.famillelibelle || ''}</td>
+                        <td style="${cellStyle}">${p.sousfamillelibelle || ''}</td>
+                        <td style="${cellStyle} font-weight: bold; color: #059669; text-align: right;">${price.toFixed(3)}</td>
+                        <td style="${cellStyle} text-align: center;">${Number.isInteger(stk) ? stk : stk.toFixed(2)}</td>
+                        <td style="${cellStyle}">${p.fournisseur || ''}</td>
                     `;
                     tbody.appendChild(tr);
                 });
+                renderPagination(response);
             })
             .catch(err => {
                 console.error(err);
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: red; padding: 20px;">Erreur de chargement</td></tr>';
             });
+    }
+
+    function renderPagination(response) {
+        const container = document.getElementById('pagination-container');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!response || response.last_page <= 1) return;
+
+        for (let i = 1; i <= response.last_page; i++) {
+            const btn = document.createElement('button');
+            btn.innerText = i;
+            btn.style.padding = '5px 10px';
+            btn.style.border = '1px solid #cbd5e1';
+            btn.style.background = (i === response.current_page) ? '#0f172a' : '#fff';
+            btn.style.color = (i === response.current_page) ? '#fff' : '#334155';
+            btn.style.borderRadius = '4px';
+            btn.style.cursor = 'pointer';
+            if (i !== response.current_page) {
+                btn.onmouseover = () => btn.style.background = '#f1f5f9';
+                btn.onmouseout = () => btn.style.background = '#fff';
+            }
+            btn.onclick = () => searchProducts(i);
+            container.appendChild(btn);
+        }
     }
 
     // ========== LOGIQUE MODAL VARIANTES ==========
@@ -3948,36 +4000,141 @@
     }
 </script>
 
-<!-- QUICK PAYMENT MODAL -->
-<div id="quickPaymentModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1030; justify-content: center; align-items: center;">
-    <div class="modal-content" style="background: white; width: 350px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; font-family: Arial, sans-serif;">
+<!-- GLOBAL DISCOUNT MODAL -->
+<div id="globalDiscountModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1030; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 350px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); font-family: Arial, sans-serif; overflow: hidden;">
         <!-- Header -->
-        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
-            <div style="width: 100%; text-align: center;">
-                <h2 id="quickPaymentTitle" style="margin: 0; font-size: 14px; font-weight: bold; color: #333;">Réglement Espèce</h2>
-            </div>
-            <button type="button" onclick="closeQuickPaymentModal()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666; position: absolute; right: 15px;">&times;</button>
+        <div style="padding: 15px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+            <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: #1e293b;">Remise sur Ticket</h2>
+            <button type="button" onclick="closeGlobalDiscountModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
         </div>
         
         <!-- Body -->
-        <div style="padding: 30px 20px; display: flex; align-items: center; justify-content: center; gap: 15px;">
-            <label style="font-size: 16px; color: #555;">Montant</label>
-            <input type="number" id="quickPaymentMontant" step="0.001" style="width: 180px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none; font-size: 14px;" onkeydown="if(event.key === 'Enter') validerQuickPayment()">
+        <div style="padding: 20px; display: flex; flex-direction: column; gap: 15px; align-items: center;">
+            <label style="font-size: 14px; color: #475569; font-weight: 600;">Nouveau Total TTC</label>
+            <input type="number" id="globalDiscountInput" step="0.001" style="width: 200px; padding: 10px; border: 2px solid #3b82f6; border-radius: 6px; outline: none; font-size: 20px; font-weight: bold; text-align: center; color: #1d4ed8;" onkeydown="if(event.key === 'Enter') validerGlobalDiscount()">
         </div>
         
         <!-- Footer -->
-        <div style="padding: 10px 15px; border-top: 1px solid #ddd; display: flex; justify-content: center; align-items: center; gap: 10px; background: #f8f9fa;">
-            <button onclick="validerQuickPayment()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <div style="padding: 15px 20px; border-top: 1px solid #e5e7eb; display: flex; justify-content: center; gap: 10px; background: #f8fafc;">
+            <button onclick="validerGlobalDiscount()" style="padding: 10px 30px; border: none; background: #10b981; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px;">
+                Valider
             </button>
-            <button onclick="closeQuickPaymentModal()" style="width: 80px; height: 35px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: #333;">
-                &times;
+            <button onclick="closeGlobalDiscountModal()" style="padding: 10px 30px; border: 1px solid #cbd5e1; background: white; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; color: #475569;">
+                Annuler
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- QUICK PAYMENT MODAL -->
+<div id="quickPaymentModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1030; justify-content: center; align-items: center;">
+    <div class="modal-content" style="background: white; width: 450px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); font-family: Arial, sans-serif; overflow: hidden;">
+        <!-- Header -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+            <h2 id="quickPaymentTitle" style="margin: 0; font-size: 18px; font-weight: 700; color: #1e293b;">Réglement Espèce</h2>
+            <button type="button" onclick="closeQuickPaymentModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+        
+        <!-- Body -->
+        <div style="padding: 20px;">
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                
+                <!-- Total à payer -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #f1f5f9; border-radius: 6px;">
+                    <span style="font-size: 16px; font-weight: 600; color: #475569;">Total à payer</span>
+                    <input type="text" id="quickPaymentMontant" readonly style="width: 150px; padding: 8px; border: none; background: transparent; text-align: right; font-size: 20px; font-weight: bold; color: #0f172a; outline: none;">
+                </div>
+
+                <!-- Montant Reçu -->
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 16px; font-weight: 600; color: #334155;">Montant reçu</span>
+                    <div style="position: relative;">
+                        <input type="number" id="quickPaymentRecu" step="0.001" style="width: 150px; padding: 10px; border: 2px solid #3b82f6; border-radius: 6px; outline: none; font-size: 20px; font-weight: bold; text-align: right; color: #1d4ed8;" oninput="calculerRendu()" onkeydown="if(event.key === 'Enter') validerQuickPayment()">
+                    </div>
+                </div>
+
+                <!-- Monnaie à rendre -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #ecfdf5; border-radius: 6px; border: 1px solid #d1fae5;">
+                    <span style="font-size: 16px; font-weight: 600; color: #065f46;">À rendre</span>
+                    <input type="text" id="quickPaymentRendu" readonly style="width: 150px; padding: 8px; border: none; background: transparent; text-align: right; font-size: 24px; font-weight: bold; color: #047857; outline: none;" value="0.000">
+                </div>
+
+                <!-- Raccourcis -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px;">
+                    <button type="button" onclick="setQuickPaymentRecu('exact')" style="grid-column: span 3; padding: 10px; border: 1px solid #cbd5e1; background: white; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; color: #334155;">Le compte est bon</button>
+                    <button type="button" onclick="setQuickPaymentRecu(10)" style="padding: 10px; border: 1px solid #cbd5e1; background: white; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; color: #1e293b;">10 DT</button>
+                    <button type="button" onclick="setQuickPaymentRecu(20)" style="padding: 10px; border: 1px solid #cbd5e1; background: white; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; color: #1e293b;">20 DT</button>
+                    <button type="button" onclick="setQuickPaymentRecu(50)" style="padding: 10px; border: 1px solid #cbd5e1; background: white; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; color: #1e293b;">50 DT</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="padding: 15px 20px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc;">
+            <button onclick="closeQuickPaymentModal()" style="padding: 10px 20px; border: 1px solid #cbd5e1; background: white; border-radius: 6px; cursor: pointer; font-weight: bold; color: #475569;">Annuler</button>
+            <button onclick="validerQuickPayment()" style="padding: 10px 20px; border: none; background: #10b981; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Valider
             </button>
         </div>
     </div>
 </div>
 
 <script>
+    // GLOBAL DISCOUNT LOGIC
+    function openGlobalDiscountModal() {
+        if (ticketLines.length === 0) return;
+        let currentTotal = parseFloat(document.getElementById('grandTotal').innerText);
+        document.getElementById('globalDiscountInput').value = currentTotal.toFixed(3);
+        document.getElementById('globalDiscountModal').style.display = 'flex';
+        setTimeout(() => {
+            let input = document.getElementById('globalDiscountInput');
+            input.focus();
+            input.select();
+        }, 100);
+    }
+
+    function closeGlobalDiscountModal() {
+        document.getElementById('globalDiscountModal').style.display = 'none';
+    }
+
+    function validerGlobalDiscount() {
+        let targetTotal = parseFloat(document.getElementById('globalDiscountInput').value);
+        if (isNaN(targetTotal) || targetTotal < 0) {
+            alert("Montant invalide");
+            return;
+        }
+
+        let grossTotal = 0;
+        ticketLines.forEach(l => {
+            let qte = parseFloat(l.qte) || 0;
+            let prix = parseFloat(l.prix) || 0;
+            grossTotal += (qte * prix);
+        });
+
+        if (grossTotal === 0) {
+            alert("Total brut du ticket est 0");
+            return;
+        }
+
+        let discountRatio = (grossTotal - targetTotal) / grossTotal;
+        let remiseGlobale = discountRatio * 100;
+
+        if (remiseGlobale < 0) remiseGlobale = 0;
+        if (remiseGlobale > 100) remiseGlobale = 100;
+
+        ticketLines.forEach(l => {
+            l.remise = remiseGlobale;
+            let prix = parseFloat(l.prix) || 0;
+            l.prixNet = prix * (1 - (remiseGlobale / 100));
+            l.total = (parseFloat(l.qte) || 0) * l.prixNet;
+        });
+
+        closeGlobalDiscountModal();
+        renderTable();
+    }
+
     let quickPaymentModeId = 1;
 
     function openQuickPaymentModal(modeId, title) {
@@ -3990,8 +4147,42 @@
 
         let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
         document.getElementById('quickPaymentMontant').value = total.toFixed(3);
+        
+        // Reset recu and rendu
+        document.getElementById('quickPaymentRecu').value = '';
+        document.getElementById('quickPaymentRendu').value = '0.000';
+        document.getElementById('quickPaymentRendu').style.color = '#047857';
+
         document.getElementById('quickPaymentModal').style.display = 'flex';
-        setTimeout(() => document.getElementById('quickPaymentMontant').focus(), 100);
+        setTimeout(() => document.getElementById('quickPaymentRecu').focus(), 100);
+    }
+
+    function setQuickPaymentRecu(amount) {
+        let total = parseFloat(document.getElementById('quickPaymentMontant').value) || 0;
+        let recuInput = document.getElementById('quickPaymentRecu');
+        
+        if (amount === 'exact') {
+            recuInput.value = total.toFixed(3);
+        } else {
+            recuInput.value = parseFloat(amount).toFixed(3);
+        }
+        calculerRendu();
+        recuInput.focus();
+    }
+
+    function calculerRendu() {
+        let total = parseFloat(document.getElementById('quickPaymentMontant').value) || 0;
+        let recu = parseFloat(document.getElementById('quickPaymentRecu').value) || 0;
+        let rendu = recu - total;
+        
+        let renduInput = document.getElementById('quickPaymentRendu');
+        renduInput.value = rendu.toFixed(3);
+        
+        if (rendu < 0) {
+            renduInput.style.color = '#dc2626'; // Red
+        } else {
+            renduInput.style.color = '#047857'; // Green
+        }
     }
 
     function closeQuickPaymentModal() {
@@ -3999,13 +4190,20 @@
     }
 
     function validerQuickPayment() {
-        let mnt = parseFloat(document.getElementById('quickPaymentMontant').value);
-        if (isNaN(mnt) || mnt <= 0) {
-            alert("Montant invalide.");
+        let total = parseFloat(document.getElementById('quickPaymentMontant').value);
+        let recu = parseFloat(document.getElementById('quickPaymentRecu').value);
+        
+        if (isNaN(recu) || recu <= 0) {
+            // S'il n'a rien saisi et qu'il tape Entrée, on suppose que le compte est bon.
+            recu = total;
+        }
+
+        if (recu < total) {
+            alert("Le montant reçu est inférieur au total à payer.");
             return;
         }
 
-        let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
+        let mnt = total; // On valide toujours le montant exact à payer pour la caisse
 
         let payload = {
             vendeurid: document.getElementById('vendeurName').dataset.id || null,

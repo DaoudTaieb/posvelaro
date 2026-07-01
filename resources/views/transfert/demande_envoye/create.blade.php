@@ -375,7 +375,7 @@
                     tr.onmouseleave = () => tr.style.background = '';
                     tr.onclick = () => selectProduct(p);
 
-                    const cellStyle = 'padding: 10px 12px; font-size: 12px; color: #334155; white-space: nowrap;';
+                    const cellStyle = 'padding: 10px 12px; font-size: 12px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
                     const stock = p.total_stock ? parseInt(p.total_stock) : 0;
                     const stockColor = stock > 0 ? '#16a34a' : '#dc2626';
 
@@ -383,10 +383,10 @@
                         <td style="${cellStyle} font-weight: 600;">${p.produitcode || ''}</td>
                         <td style="${cellStyle}">${p.reference || ''}</td>
                         <td style="${cellStyle} font-size: 11px; color: #64748b;">${p.barcode2 || ''}</td>
-                        <td style="${cellStyle} white-space: normal; max-width: 220px;">${p.produitlibelle || ''}</td>
+                        <td style="${cellStyle} white-space: normal;">${p.produitlibelle || ''}</td>
                         <td style="${cellStyle}">${p.famillelibelle || ''}</td>
                         <td style="${cellStyle}">${p.sousfamillelibelle || ''}</td>
-                        <td style="${cellStyle} text-align: right; font-weight: 600;">${p.ttc_vente ? parseFloat(p.ttc_vente).toFixed(2) + ' DT' : ''}</td>
+                        <td style="${cellStyle} text-align: right; font-weight: 600; color: #16a34a;">${p.ttc_vente ? parseFloat(p.ttc_vente).toFixed(3) : ''}</td>
                         <td style="${cellStyle} text-align: center; font-weight: 700; color: ${stockColor};">${stock}</td>
                         <td style="${cellStyle}">${p.fournisseur || ''}</td>
                     `;
