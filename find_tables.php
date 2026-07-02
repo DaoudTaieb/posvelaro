@@ -1,7 +1,14 @@
 <?php
-$tables = DB::select("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%demandetransfert%'");
-$res = [];
-foreach($tables as $t) {
-    $res[] = $t->table_name;
+require __DIR__.'/vendor/autoload.php';
+$app = require_once __DIR__.'/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$tables = ['demandetransferts', 'bontransferts'];
+foreach ($tables as $table) {
+    echo "=== $table ===\n";
+    $columns = DB::select("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ?", [$table]);
+    foreach ($columns as $column) {
+        echo $column->column_name . " (" . $column->data_type . ")\n";
+    }
 }
-echo json_encode($res);

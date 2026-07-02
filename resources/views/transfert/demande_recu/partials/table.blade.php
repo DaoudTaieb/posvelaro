@@ -12,7 +12,7 @@
     <td>{{ $dem->reference }}</td>
     <td>{{ $dem->couleur }}</td>
     <td>{{ $dem->taille }}</td>
-    <td style="text-align: center; font-weight: 600;">{{ $dem->qte_demandee }}</td>
+    <td style="text-align: center; font-weight: 600;">{{ (int) $dem->qte_demandee }}</td>
     <td style="text-align: center; color: var(--text-muted);">{{ $dem->stock }}</td>
     <td>
         @if(strtolower($dem->etat) === 'brouillon')

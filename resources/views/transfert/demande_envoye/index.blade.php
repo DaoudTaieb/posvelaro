@@ -187,6 +187,55 @@
 
 @section('styles')
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    /* Fix Select2 styling to look like standard form-control */
+    .select2-container--default .select2-selection--single {
+        height: 38px; 
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+        display: flex;
+        align-items: center;
+        position: relative;
+    }
+    
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 36px;
+        padding-left: 12px;
+        padding-right: 40px; /* Room for clear button and arrow */
+        width: 100%;
+        color: #334155;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px;
+        position: absolute;
+        top: 1px;
+        right: 1px;
+        width: 20px;
+    }
+
+    /* Position the clear (x) button just before the arrow */
+    .select2-container--default .select2-selection--single .select2-selection__clear {
+        position: absolute;
+        right: 25px;
+        top: 0;
+        font-size: 1.25rem;
+        font-weight: normal;
+        color: #94a3b8;
+        cursor: pointer;
+        line-height: 36px;
+        margin: 0;
+    }
+    
+    .select2-container--default .select2-selection--single .select2-selection__clear:hover {
+        color: #ef4444;
+    }
+    
+    .select2-container--default.select2-container--focus .select2-selection--single {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 0.2rem rgba(79, 70, 229, 0.25);
+    }
+</style>
 @endsection
 
 @section('scripts')
@@ -268,7 +317,7 @@
             }
         });
         
-        btnFilter.addEventListener('click', fetchFilteredData);
+        btnFilter.addEventListener('click', () => fetchFilteredData());
 
         // Clear Filters logic
         const btnClear = document.getElementById('btnClear');

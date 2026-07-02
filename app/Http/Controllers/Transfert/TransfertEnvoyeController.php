@@ -29,6 +29,7 @@ class TransfertEnvoyeController extends Controller
         $envoyes = (clone $query)->where('b.etatbontransfertid', 2)->count();
 
         $query->select(
+            'b.bontransfertid',
             'emet.libelle as emetteur',
             'rec.libelle as recepteur',
             'b.bontransfertnumero as numero',
@@ -307,5 +308,200 @@ class TransfertEnvoyeController extends Controller
         }
 
         return redirect()->route('transfert.envoye.index')->with('success', 'Bon de transfert enregistré avec succès !');
+    }
+    public function edit($id)
+    {
+        $siteid = auth()->user()->siteid ?? 102;
+        
+        $bon = DB::table('bontransferts')->where('bontransfertid', $id)->first();
+        if (!$bon) {
+            return redirect()->route('transfert.envoye.index')->with('error', 'Bon de transfert introuvable.');
+        }
+
+        $lignes = DB::table('detbontransferts as d')
+            ->leftJoin('vproduit2stocks as p', function($join) use ($bon) {
+                $join->on('p.produit2id', '=', 'd.produit2id')
+                     ->where('p.siteid', $bon->siteid);
+            })
+            ->where('d.bontransfertid', $id)
+            ->select(
+                'd.*',
+                'p.produitcode',
+                'p.produitlibelle as designation',
+                'p.taillelibelle as taille',
+                'p.couleurlibelle as couleur'
+            )
+            ->orderBy('d.ordre')
+            ->get();
+
+        $sites = DB::table('sites')->get();
+        $site = DB::table('sites')->where('siteid', $bon->siteid)->first();
+        
+        $employees = DB::table('employees')->orderBy('nom')->get();
+        $vehicules = DB::table('vehicules')->orderBy('libelle')->get();
+
+        // Pour la modal
+        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
+        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
+        $categories = DB::table('categories')->orderBy('categorylibelle')->get();
+        $marques = DB::table('categories2')->orderBy('category2libelle')->get(); // Marque
+        $saisons = DB::table('categories4')->orderBy('category4libelle')->get(); // Saison
+
+        $demandes_validees = DB::table('demandetransferts')
+            ->where('siterecepteurid', $siteid)
+            ->where('etatdemandetransfertid', 3)
+            ->get();
+
+        return view('transfert.envoye.edit', compact('bon', 'lignes', 'sites', 'site', 'employees', 'vehicules', 'familles', 'sousFamilles', 'categories', 'marques', 'saisons', 'demandes_validees'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $bon = DB::table('bontransferts')->where('bontransfertid', $id)->first();
+        if (!$bon) {
+            return redirect()->route('transfert.envoye.index')->with('error', 'Bon de transfert introuvable.');
+        }
+
+        $description = $request->description;
+        $trajet = $request->trajet;
+        $vehiculeid = $request->vehiculeid;
+        $chauffeurid = $request->chauffeurid;
+
+        DB::table('bontransferts')->where('bontransfertid', $id)->update([
+            'description' => $description,
+            'trajet' => $trajet,
+            'vehiculeid' => $vehiculeid ? (int)$vehiculeid : null,
+            'chauffeurid' => $chauffeurid ? (int)$chauffeurid : null,
+        ]);
+
+        // Supprimer les anciennes lignes
+        DB::table('detbontransferts')->where('bontransfertid', $id)->delete();
+
+        $totalqte = 0;
+        $totalht = 0;
+        $totalttc = 0;
+
+        if ($request->has('lignes')) {
+            $ordre = 1;
+            foreach ($request->lignes as $ligne) {
+                if (empty($ligne['produitid'])) continue;
+                
+                $qte = (int) $ligne['qte'];
+                $qteenvoi = (int) ($ligne['qteenvoi'] ?? $qte);
+                $prix = (float) ($ligne['prix'] ?? 0);
+                $ht = $prix / 1.19;
+                
+                $totalqte += $qteenvoi;
+                $totalttc += ($prix * $qteenvoi);
+                $totalht += ($ht * $qteenvoi);
+
+                $detid = DB::selectOne("SELECT nextval('detbontransferts_detbontransfertid_seq') as id")->id;
+
+                DB::table('detbontransferts')->insert([
+                    'detbontransfertid' => $detid,
+                    'bontransfertid' => $id,
+                    'siteid' => $bon->siteid,
+                    'siterecepteurid' => $bon->siterecepteurid,
+                    'produitid' => $ligne['produitid'],
+                    'produit2id' => $ligne['produit2id'] ?? $ligne['produitid'],
+                    'taxefamilleid' => 1,
+                    'ht' => $ht,
+                    'ttc' => $prix,
+                    'qte' => $qte,
+                    'qteenvoi' => $qteenvoi,
+                    'qterecu' => 0,
+                    'qteecart' => 0,
+                    'etatbontransfertid' => $bon->etatbontransfertid,
+                    'totalht' => $ht * $qteenvoi,
+                    'remise' => 0,
+                    'remise2' => 0,
+                    'totalhtnet' => $ht * $qteenvoi,
+                    'taxe1' => 0, 'vtaxe1' => 0,
+                    'taxe2' => 0, 'vtaxe2' => 0,
+                    'taxe3' => 0, 'vtaxe3' => 0,
+                    'taxe4' => 0, 'vtaxe4' => 0,
+                    'tva' => 19,
+                    'vtva' => 0,
+                    'totalttc' => $prix * $qteenvoi,
+                    'totalttcnet' => $prix * $qteenvoi,
+                    'date' => Carbon::now(),
+                    'largeur' => 0, 'longueur' => 0, 'surface' => 0,
+                    'pointer' => false,
+                    'ordre' => $ordre++,
+                    'prodid' => $ligne['produitid'],
+                    'modestock' => 1,
+                    'grammagegr' => 0,
+                    'largeurmm' => 0,
+                    'longueurm' => 0,
+                    'modereceptionid' => 1,
+                    'poids' => 0,
+                    'stockorigineid' => 1
+                ]);
+            }
+
+            DB::table('bontransferts')->where('bontransfertid', $id)->update([
+                'totalqte' => $totalqte,
+                'totalbrutht' => $totalht,
+                'totalnetht' => $totalht,
+                'totalttc' => $totalttc,
+                'netapayer' => $totalttc
+            ]);
+        } else {
+            DB::table('bontransferts')->where('bontransfertid', $id)->update([
+                'totalqte' => 0,
+                'totalbrutht' => 0,
+                'totalnetht' => 0,
+                'totalttc' => 0,
+                'netapayer' => 0
+            ]);
+        }
+
+        return redirect()->route('transfert.envoye.index')->with('success', 'Bon de transfert mis à jour avec succès !');
+    }
+
+    public function destroy($id)
+    {
+        try {
+            // Delete lines first (foreign key constraint might require this)
+            DB::table('detbontransferts')->where('bontransfertid', $id)->delete();
+            
+            // Delete the main bon
+            DB::table('bontransferts')->where('bontransfertid', $id)->delete();
+            
+            return redirect()->route('transfert.envoye.index')->with('success', 'Le bon de transfert a été supprimé avec succès.');
+        } catch (\Exception $e) {
+            return redirect()->route('transfert.envoye.index')->with('error', 'Erreur lors de la suppression : ' . $e->getMessage());
+        }
+    }
+
+    public function getDemandeLignes($id)
+    {
+        $siteid = auth()->user()->siteid ?? 102;
+        
+        $demande = DB::table('demandetransferts')->where('demandetransfertid', $id)->first();
+        if (!$demande) {
+            return response()->json(['error' => 'Demande introuvable'], 404);
+        }
+
+        $lignes = DB::table('detdemandetransferts as det')
+            ->join('vproduit2stocks as p', function($join) use ($demande) {
+                $join->on('p.produit2id', '=', 'det.produit2id')
+                     ->where('p.siteid', $demande->siteid);
+            })
+            ->where('det.demandetransfertid', $id)
+            ->select(
+                'det.produitid',
+                'det.produit2id',
+                'det.qte as qte_demandee',
+                'p.produitcode',
+                'p.produitlibelle as designation',
+                'p.taillelibelle as taille',
+                'p.couleurlibelle as couleur',
+                'p.ttc_vente as prix'
+            )
+            ->orderBy('det.ordre')
+            ->get();
+
+        return response()->json($lignes);
     }
 }

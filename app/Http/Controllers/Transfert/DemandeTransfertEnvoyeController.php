@@ -225,8 +225,7 @@ class DemandeTransfertEnvoyeController extends Controller
                 'pointer' => false,
                 'ordre' => $index + 1,
                 'prodid' => 0, // prodid is integer, produitid is bigint, using 0 to bypass constraint
-                'modestock' => 1,
-                'etatdemandetransfertid' => 1
+                'modestock' => 1
             ]);
         }
 

@@ -41,8 +41,9 @@
 
     <!-- Container Formulaire & Tableau -->
     <div class="content-card">
-        <form method="POST" action="{{ route('transfert.envoye.store') }}" id="headerForm">
+        <form method="POST" action="{{ route('transfert.envoye.update', $bon->bontransfertid) }}" id="headerForm">
             @csrf
+            @method('PUT')
             
             <!-- Onglets (Custom Golden Pos) -->
             <div style="display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 20px; padding: 0 24px;">
@@ -171,7 +172,7 @@
                     </thead>
                     <tbody id="linesTableBody">
                         <!-- Ligne de saisie -->
-                        <tr id="inputRow" class="input-row" style="background: var(--primary-light); {{ isset($bon) ? 'display:none;' : '' }}">
+                        <tr id="inputRow" class="input-row" style="background: var(--primary-light);">
                             <td style="display: flex; gap: 5px;">
                                 <input type="text" id="searchInput" class="form-control" style="height: 28px; padding: 4px 8px;" placeholder="Réf..." autocomplete="off">
                                 <button type="button" class="btn btn-outline" style="width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center;" onclick="openProductModal()">
@@ -216,7 +217,7 @@
                                     <td>{{ $ligne->taille }}</td>
                                     <td>{{ $ligne->couleur }}</td>
                                     <td style="text-align: center;">
-                                        <input type="number" name="lignes[{{ $index }}][qte]" value="{{ (int)$ligne->qte }}" class="form-control" style="width: 70px; height: 28px; padding: 4px; display: inline-block; text-align: center;" min="1" {{ isset($bon) ? 'readonly' : '' }}>
+                                        <input type="number" name="lignes[{{ $index }}][qte]" value="{{ (int)$ligne->qte }}" class="form-control" style="width: 70px; height: 28px; padding: 4px; display: inline-block; text-align: center;" min="1">
                                     </td>
                                     <td style="text-align: center;">
                                         <input type="number" name="lignes[{{ $index }}][qteenvoi]" value="{{ (int)($ligne->qteenvoi ?? $ligne->qte) }}" class="form-control" style="width: 70px; height: 28px; padding: 4px; display: inline-block; text-align: center;" min="1" onchange="updateTotals()">
@@ -226,14 +227,12 @@
                                         <input type="hidden" name="lignes[{{ $index }}][prix]" value="{{ $ligne->ttc }}">
                                     </td>
                                     <td style="text-align: center;">
-                                        @if(!isset($bon))
-                                        <button type="button" class="btn" style="color: var(--danger); padding: 4px; background: transparent;" onclick="this.closest('tr').remove(); updateTotals();">
+                                        <button type="button" class="btn" style="color: var(--danger); padding: 4px; background: transparent;" onclick="this.closest('tr').remove(); updateTotals(); filterTable();">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <polyline points="3 6 5 6 21 6"></polyline>
                                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                                             </svg>
                                         </button>
-                                        @endif
                                     </td>
                                 </tr>
                             @endforeach

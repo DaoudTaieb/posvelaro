@@ -7,7 +7,7 @@
     </td>
     <td>{{ \Carbon\Carbon::parse($bon->date)->format('d/m/Y') }}</td>
     <td>{{ $bon->recepteur }}</td>
-    <td style="text-align: center; font-weight: 600;">{{ $bon->qte }}</td>
+    <td style="text-align: center; font-weight: 600;">{{ (int) $bon->qte }}</td>
     <td>{{ $bon->trajet }}</td>
     <td>{{ $bon->description }}</td>
     <td>
@@ -31,8 +31,13 @@
                 </svg>
             </button>
             <div class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10; min-width: 120px;">
-                <a href="#" style="display: block; padding: 8px 12px; text-decoration: none; color: var(--text-main); font-size: 13px; text-align: left;">Modifier</a>
-                <a href="#" style="display: block; padding: 8px 12px; text-decoration: none; color: var(--danger); font-size: 13px; text-align: left;">Supprimer</a>
+                <a href="{{ route('transfert.envoye.edit', $bon->bontransfertid) }}" style="display: block; padding: 8px 12px; text-decoration: none; color: var(--text-main); font-size: 13px; text-align: left;">Modifier</a>
+                
+                <form action="{{ route('transfert.envoye.destroy', $bon->bontransfertid) }}" method="POST" style="display: block; margin: 0; padding: 0;" onsubmit="return confirm('Voulez-vous vraiment supprimer ce bon de transfert ?');">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" style="width: 100%; display: block; padding: 8px 12px; background: none; border: none; text-decoration: none; color: var(--danger); font-size: 13px; text-align: left; cursor: pointer;">Supprimer</button>
+                </form>
             </div>
         </div>
     </td>

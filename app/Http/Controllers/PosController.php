@@ -100,7 +100,29 @@ class PosController extends Controller
 
         $typeChequeCadeaus = DB::table('typechequecadeaus')->orderBy('priorite')->get();
 
-        return view('caisse.pos', compact('client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 'defaultVendeur', 'draftId', 'typeChequeCadeaus', 'siteName'));
+        // Récupérer le nombre de demandes et bons de transfert actifs pour ce site
+        $siteId = $user->siteid ?? 102;
+        $demandeTransfCount = DB::table('demandetransferts')
+            ->where(function ($q) use ($siteId) {
+                $q->where('siterecepteurid', $siteId)
+                  ->orWhere('siteid', $siteId);
+            })
+            ->whereIn('etatdemandetransfertid', [1, 2, 5]) // En cours, Envoyé, En attente
+            ->count();
+
+        $bonTransfCount = DB::table('bontransferts')
+            ->where(function ($q) use ($siteId) {
+                $q->where('siterecepteurid', $siteId)
+                  ->orWhere('siteid', $siteId);
+            })
+            ->where('confirmer', false)
+            ->count();
+
+        return view('caisse.pos', compact(
+            'client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 
+            'defaultVendeur', 'draftId', 'typeChequeCadeaus', 'siteName', 
+            'demandeTransfCount', 'bonTransfCount'
+        ));
     }
 
     public function searchProducts(Request $request)

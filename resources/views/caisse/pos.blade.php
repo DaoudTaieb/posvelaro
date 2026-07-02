@@ -459,8 +459,8 @@
             </div>
 
             <div class="header-stats" style="font-weight: bold;">
-                <span style="margin-right: 15px;">Demande Transf: 0</span>
-                <span>Bon Transf: 0</span>
+                <span style="margin-right: 15px; color: {{ ($demandeTransfCount ?? 0) > 0 ? '#dc3545' : 'inherit' }};">Demande Transf: {{ $demandeTransfCount ?? 0 }}</span>
+                <span style="color: {{ ($bonTransfCount ?? 0) > 0 ? '#dc3545' : 'inherit' }};">Bon Transf: {{ $bonTransfCount ?? 0 }}</span>
             </div>
         </div>
     </div>

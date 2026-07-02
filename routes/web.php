@@ -44,9 +44,13 @@ Route::middleware(['auth'])->group(function () {
         
         // Transfert Envoyé
         Route::get('/envoye', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'index'])->name('transfert.envoye.index');
+        Route::get('/envoye/api/demande-lignes/{id}', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'getDemandeLignes'])->name('transfert.envoye.get_demande_lignes');
         Route::get('/envoye/create', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'create'])->name('transfert.envoye.create');
         Route::get('/envoye/impression-multiple', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'impressionMultiple'])->name('transfert.envoye.impression_multiple');
+        Route::get('/envoye/{id}/edit', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'edit'])->name('transfert.envoye.edit');
+        Route::put('/envoye/{id}', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'update'])->name('transfert.envoye.update');
         Route::post('/envoye', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'store'])->name('transfert.envoye.store');
+        Route::delete('/envoye/{id}', [\App\Http\Controllers\Transfert\TransfertEnvoyeController::class, 'destroy'])->name('transfert.envoye.destroy');
         
         // Transfert Reçu
         Route::get('/recu', [\App\Http\Controllers\Transfert\TransfertRecuController::class, 'index'])->name('transfert.recu.index');
