@@ -189,6 +189,13 @@ class TransfertEnvoyeController extends Controller
 
         $siteid = $request->siteid ?? auth()->user()->siteid ?? 102;
         $siterecepteurid = $request->siterecepteurid;
+
+        if ($siteid == $siterecepteurid) {
+            return back()
+                ->with('error', "Le site expéditeur et le site récepteur ne peuvent pas être identiques.")
+                ->withInput();
+        }
+
         $description = $request->description;
         $trajet = $request->trajet;
         $vehiculeid = $request->vehiculeid;

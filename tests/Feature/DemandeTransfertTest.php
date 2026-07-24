@@ -108,6 +108,24 @@ class DemandeTransfertTest extends TestCase
             $this->markTestSkipped('Pas de produit pour tester.');
         }
 
+        // Set up sufficient stock on the receiver site to satisfy the request
+        DB::table('stock2s')->updateOrInsert(
+            ['produit2id' => $produit->produit2id, 'siteid' => $this->siteRecepteur->siteid],
+            [
+                'stockid' => 1,
+                'produitid' => $produit->produitid,
+                'qtestock' => 100,
+                'stockvirtuel' => 100,
+                'stockreserve' => 0,
+                'datedepart' => '0001-01-01 00:00:00',
+                'qtedepart' => 0,
+                'qteentree' => 0,
+                'qtesortie' => 0,
+                'entreeencour' => 0,
+                'sorieencour' => 0
+            ]
+        );
+
         $payload = [
             'siteid' => $this->siteExpediteur->siteid,
             'siterecepteurid' => $this->siteRecepteur->siteid,

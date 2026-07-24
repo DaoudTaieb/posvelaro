@@ -21,7 +21,39 @@ class PosVenteTest extends TestCase
         if ($userRecord) {
             $user = User::find($userRecord->userid) ?? new User((array) $userRecord);
             $user->userid = $userRecord->userid;
+            $user->siteid = $userRecord->siteid ?? 102;
+            $user->employeeid = $userRecord->employeeid ?? 1;
+            $user->agencebid = $userRecord->agencebid ?? 1;
             $this->actingAs($user);
+
+            // Trouver une caisse
+            $caisse = DB::table('caisses')->first();
+            $caisseid = $caisse ? $caisse->caisseid : 1;
+
+            // S'assurer qu'un journal de caisse ouvert existe pour ce caissier
+            $journalExists = DB::table('journalcaisses')
+                ->where('userid', $user->userid)
+                ->where('isclosed', 0)
+                ->exists();
+
+            if (!$journalExists) {
+                $nextJournalId = DB::table('journalcaisses')->max('journalcaisseid') + 1;
+                DB::table('journalcaisses')->insert([
+                    'journalcaisseid' => $nextJournalId,
+                    'caisseid' => $caisseid,
+                    'fondcaisse' => 100,
+                    'dateouverture' => now(),
+                    'userid' => $user->userid,
+                    'employeeid' => $user->employeeid ?? 1,
+                    'caissierclotureid' => 0,
+                    'siteid' => $user->siteid,
+                    'isclosed' => 0, // 0 = ouvert
+                    'montantcloture' => 0,
+                    'montanttheorique' => 0,
+                    'envoyee' => false,
+                    'agencebid' => $user->agencebid ?? 1,
+                ]);
+            }
         }
 
         // Resync sequence for creglements to avoid PK errors due to DB dump imports

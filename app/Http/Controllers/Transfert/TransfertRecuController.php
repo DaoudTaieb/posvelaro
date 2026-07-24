@@ -126,6 +126,9 @@ class TransfertRecuController extends Controller
             ->where('b.bontransfertid', $id)
             ->select(
                 'b.*',
+                'b.bontransfertnumero as numero',
+                'b.bontransfertdate as date',
+                'b.totalqte as qte',
                 'emet.libelle as emetteur',
                 'rec.libelle as recepteur',
                 'v.libelle as vehicule',
@@ -150,9 +153,9 @@ class TransfertRecuController extends Controller
             ->select(
                 'det.*',
                 'p.reference',
-                'p.libelle',
-                'c.libelle as couleur',
-                't.libelle as taille'
+                'p.produitlibelle as libelle',
+                'c.couleurlibelle as couleur',
+                't.taillelibelle as taille'
             )
             ->get();
 

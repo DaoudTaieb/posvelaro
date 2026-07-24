@@ -125,10 +125,53 @@ class DemandeTransfertEnvoyeController extends Controller
     {
         $siteid = $request->siteid ?? auth()->user()->siteid ?? 102;
         $siterecepteurid = $request->siterecepteurid;
+        
+        if ($siteid == $siterecepteurid) {
+            return back()
+                ->with('error', "Le site expéditeur et le site récepteur ne peuvent pas être identiques.")
+                ->withInput();
+        }
+
         $description = $request->description;
         $action_type = $request->input('action_type', 'save');
         
         $nouvel_etat = ($action_type === 'envoyer') ? 2 : 1; // 1 = Brouillon, 2 = Envoyé
+
+        // Validate stock availability on the receptor site (the site supplying the stock) before any DB inserts/updates
+        if ($nouvel_etat === 2) {
+            $lignes = $request->input('lignes', []);
+            $checkRecepteurId = $siterecepteurid;
+            if (!$checkRecepteurId && $request->filled('demandetransfertid')) {
+                $checkRecepteurId = DB::table('demandetransferts')
+                    ->where('demandetransfertid', $request->demandetransfertid)
+                    ->value('siterecepteurid');
+            }
+
+            foreach ($lignes as $ligne) {
+                if (empty($ligne['produitid'])) continue;
+
+                $qte = (int) $ligne['qte'];
+                $produit2id = $ligne['produit2id'] ?? $ligne['produitid'];
+
+                $stock = DB::table('vproduit2stocks')
+                    ->where('produit2id', $produit2id)
+                    ->where('siteid', $checkRecepteurId)
+                    ->value('qtestock');
+
+                $stockAvailable = $stock ? (float)$stock : 0.0;
+
+                if ($qte > $stockAvailable) {
+                    $reference = DB::table('produits as p')
+                        ->join('produit2s as p2', 'p2.produitid', '=', 'p.produitid')
+                        ->where('p2.produit2id', $produit2id)
+                        ->value('p.reference') ?? 'Produit';
+
+                    return back()
+                        ->with('error', "Stock insuffisant pour le produit {$reference} sur le site destinataire. Demandé: {$qte}, Disponible: {$stockAvailable}")
+                        ->withInput();
+                }
+            }
+        }
 
         if ($request->filled('demandetransfertid')) {
             $id = $request->demandetransfertid;
