@@ -338,50 +338,69 @@ class DemandeTransfertEnvoyeController extends Controller
     {
         $siteid = auth()->user()->siteid ?? 102;
 
-        $query = DB::table('vproduit2stocks')
-            ->where('siteid', $siteid)
+        $query = DB::table('produits')
+            ->leftJoin('familles', 'produits.familleid', '=', 'familles.familleid')
+            ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
+            ->leftJoin('fournisseurs', 'produits.fournisseurid', '=', 'fournisseurs.fournisseurid')
+            ->leftJoin('produit2s', 'produit2s.produitid', '=', 'produits.produitid')
+            ->leftJoin('vproduit2stocks', function($join) use ($siteid) {
+                $join->on('vproduit2stocks.produit2id', '=', 'produit2s.produit2id')
+                     ->where('vproduit2stocks.siteid', '=', $siteid);
+            })
             ->select(
-                'produitid',
-                'produit2id',
-                'produitcode',
-                'reference',
-                'barcode2',
-                'produitlibelle',
-                'taillelibelle',
-                'couleurlibelle',
-                'famillelibelle',
-                'sousfamillelibelle',
-                'ttc_vente',
-                'fournisseur',
-                'qtestock as total_stock'
+                'produits.produitid',
+                'produits.produitcode',
+                'produits.reference',
+                DB::raw("MAX(COALESCE(produits.barcode2, vproduit2stocks.barcode2, produit2s.barcode2, produit2s.produit2code)) as barcode2"),
+                'produits.produitlibelle',
+                'familles.famillelibelle',
+                'sousfamilles.sousfamillelibelle',
+                'produits.ttc_vente',
+                'fournisseurs.nom as fournisseur',
+                'produits.qtestock as total_stock'
+            )
+            ->groupBy(
+                'produits.produitid',
+                'produits.produitcode',
+                'produits.reference',
+                'produits.produitlibelle',
+                'familles.famillelibelle',
+                'sousfamilles.sousfamillelibelle',
+                'produits.ttc_vente',
+                'fournisseurs.nom',
+                'produits.qtestock'
             );
 
         if ($request->filled('sousfamilleid')) {
-            $query->where('sousfamilleid', $request->sousfamilleid);
+            $query->where('produits.sousfamilleid', $request->sousfamilleid);
         }
         if ($request->filled('familleid')) {
-            $query->where('familleid', $request->familleid);
+            $query->where('produits.familleid', $request->familleid);
         }
         if ($request->filled('saisonid')) {
-            $query->where('category4id', $request->saisonid);
+            $query->where('produits.category4id', $request->saisonid);
         }
         if ($request->filled('categoryid')) {
-            $query->where('categoryid', $request->categoryid);
+            $query->where('produits.categoryid', $request->categoryid);
         }
         if ($request->filled('marqueid')) {
-            $query->where('category2id', $request->marqueid);
+            $query->where('produits.category2id', $request->marqueid);
         }
         if ($request->filled('search')) {
-            $searchTerm = '%' . strtolower($request->search) . '%';
-            $query->where(function($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(produitcode) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(reference) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(barcode2) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(produitlibelle) LIKE ?', [$searchTerm]);
+            $exactSearch = strtolower($request->search);
+            $searchTerm = '%' . $exactSearch . '%';
+            $query->where(function($q) use ($searchTerm, $exactSearch) {
+                $q->whereRaw('LOWER(produits.produitcode) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produits.reference) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produits.barcode2) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produit2s.barcode2) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(vproduit2stocks.barcode2) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(produit2s.produit2code) = ?', [$exactSearch])
+                  ->orWhereRaw('LOWER(produits.produitlibelle) LIKE ?', [$searchTerm]);
             });
         }
 
-        $products = $query->limit(50)->get();
+        $products = $query->paginate(20);
 
         return response()->json($products);
     }

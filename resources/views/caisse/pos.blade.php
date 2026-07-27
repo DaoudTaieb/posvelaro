@@ -1411,7 +1411,7 @@
 
     function searchProducts(page = 1) {
         const tbody = document.getElementById('modal-tbody');
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Chargement...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px;">Chargement...</td></tr>';
         
         const params = new URLSearchParams({
             sousfamilleid: document.getElementById('filter-sf').value,
@@ -1429,7 +1429,7 @@
                 const data = response.data || [];
                 tbody.innerHTML = '';
                 if(data.length === 0) {
-                    tbody.innerHTML = '<tr id="no-data-row"><td colspan="9" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">No data to display</td></tr>';
+                    tbody.innerHTML = '<tr id="no-data-row"><td colspan="11" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">No data to display</td></tr>';
                     renderPagination(null);
                     return;
                 }
@@ -1452,7 +1452,9 @@
                         <td style="${cellStyle}">${p.produitcode || ''}</td>
                         <td style="${cellStyle}">${p.reference || ''}</td>
                         <td style="${cellStyle}">${p.barcode2 || ''}</td>
-                        <td style="${cellStyle} white-space: normal;">${p.produitlibelle || ''} ${p.taillelibelle ? ' - '+p.taillelibelle : ''} ${p.couleurlibelle ? ' - '+p.couleurlibelle : ''}</td>
+                        <td style="${cellStyle} white-space: normal;">${p.produitlibelle || ''}</td>
+                        <td style="${cellStyle}">${p.taillelibelle || ''}</td>
+                        <td style="${cellStyle}">${p.couleurlibelle || ''}</td>
                         <td style="${cellStyle}">${p.famillelibelle || ''}</td>
                         <td style="${cellStyle}">${p.sousfamillelibelle || ''}</td>
                         <td style="${cellStyle} font-weight: bold; color: #059669; text-align: right;">${price.toFixed(3)}</td>
@@ -1465,7 +1467,7 @@
             })
             .catch(err => {
                 console.error(err);
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: red; padding: 20px;">Erreur de chargement</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: red; padding: 20px;">Erreur de chargement</td></tr>';
             });
     }
 

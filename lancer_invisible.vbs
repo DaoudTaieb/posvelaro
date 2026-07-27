@@ -8,7 +8,7 @@ WshShell.Run "cmd.exe /c taskkill /F /IM php.exe /T", 0, True
 WshShell.Run "cmd.exe /c taskkill /F /IM node.exe /T", 0, True
 
 ' Lance le serveur Laravel en arriere-plan (0 = invisible)
-WshShell.Run "cmd.exe /c cd /d """ & currentDir & """ && php artisan serve", 0, False
+WshShell.Run "cmd.exe /c cd /d """ & currentDir & """ && php artisan serve --port=8001", 0, False
 
 ' Lance le serveur Vite en arriere-plan
 WshShell.Run "cmd.exe /c cd /d """ & currentDir & """ && npm run dev", 0, False
@@ -17,4 +17,4 @@ WshShell.Run "cmd.exe /c cd /d """ & currentDir & """ && npm run dev", 0, False
 WScript.Sleep 3000
 
 ' Ouvre le navigateur web
-WshShell.Run "http://127.0.0.1:8000"
+WshShell.Run "http://127.0.0.1:8001"

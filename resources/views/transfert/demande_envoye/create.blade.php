@@ -304,6 +304,7 @@
 
     <!-- Modal Sélection des Produits -->
     @include('transfert.demande_envoye.partials.product_modal')
+@include('transfert.demande_envoye.partials.variants_modal')
 
 </div>
 
@@ -329,7 +330,7 @@
         searchProducts(); // Load initially
     }
 
-    function searchProducts() {
+    function searchProducts(page = 1) {
         // Ensure elements exist before reading values (in case partial changes)
         const sf = document.getElementById('filter-sf');
         const f = document.getElementById('filter-f');
@@ -352,17 +353,20 @@
         if(categorie) url.searchParams.append('categoryid', categorie);
         if(marque) url.searchParams.append('marqueid', marque);
         if(search) url.searchParams.append('search', search);
+        url.searchParams.append('page', page);
 
         fetch(url)
             .then(res => res.json())
-            .then(data => {
+            .then(response => {
+                const data = response.data || [];
                 const tbody = document.getElementById('modal-tbody');
                 if (!tbody) return;
                 
                 tbody.innerHTML = '';
                 
                 if(data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="9" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">Aucun produit trouvé</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="11" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">Aucun produit trouvé</td></tr>`;
+                    renderPagination(null);
                     return;
                 }
 
@@ -373,7 +377,7 @@
                     tr.style.transition = 'background 0.15s';
                     tr.onmouseenter = () => tr.style.background = '#f0f4ff';
                     tr.onmouseleave = () => tr.style.background = '';
-                    tr.onclick = () => selectProduct(p);
+                    tr.onclick = () => openVariantsModal(p);
 
                     const cellStyle = 'padding: 10px 12px; font-size: 12px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
                     const stock = p.total_stock ? parseInt(p.total_stock) : 0;
@@ -392,7 +396,32 @@
                     `;
                     tbody.appendChild(tr);
                 });
+                renderPagination(response);
             });
+    }
+
+    function renderPagination(response) {
+        const container = document.getElementById('pagination-container');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!response || response.last_page <= 1) return;
+
+        for (let i = 1; i <= response.last_page; i++) {
+            const btn = document.createElement('button');
+            btn.innerText = i;
+            btn.style.padding = '5px 10px';
+            btn.style.border = '1px solid #cbd5e1';
+            btn.style.background = (i === response.current_page) ? '#0f172a' : '#fff';
+            btn.style.color = (i === response.current_page) ? '#fff' : '#334155';
+            btn.style.borderRadius = '4px';
+            btn.style.cursor = 'pointer';
+            if (i !== response.current_page) {
+                btn.onmouseover = () => btn.style.background = '#f1f5f9';
+                btn.onmouseout = () => btn.style.background = '#fff';
+            }
+            btn.onclick = () => searchProducts(i);
+            container.appendChild(btn);
+        }
     }
 
     function selectProduct(product) {

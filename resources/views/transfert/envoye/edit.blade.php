@@ -270,6 +270,7 @@
 
 <!-- Modal Produit (Réutilisé) -->
 @include('transfert.demande_envoye.partials.product_modal')
+@include('transfert.demande_envoye.partials.variants_modal')
 
 @endsection
 
@@ -466,7 +467,7 @@
         document.getElementById('totalQteEnvoi').textContent = tQteEnvoi;
     }
 
-    function searchProducts() {
+    function searchProducts(page = 1) {
         const sousFamille = document.getElementById('filter-sf')?.value;
         const famille = document.getElementById('filter-f')?.value;
         const saison = document.getElementById('filter-s')?.value;
@@ -474,22 +475,25 @@
         const marque = document.getElementById('filter-m')?.value;
         const search = document.getElementById('filter-search')?.value;
 
-        const url = new URL('{{ route("transfert.demande_envoye.search_products") }}');
+        const url = new URL('{{ route("transfert.demande_envoye.search_products") }}', window.location.origin);
         if(sousFamille) url.searchParams.append('sousfamilleid', sousFamille);
         if(famille) url.searchParams.append('familleid', famille);
         if(saison) url.searchParams.append('saisonid', saison);
         if(categorie) url.searchParams.append('categoryid', categorie);
         if(marque) url.searchParams.append('marqueid', marque);
         if(search) url.searchParams.append('search', search);
+        url.searchParams.append('page', page);
 
         fetch(url)
             .then(res => res.json())
-            .then(data => {
+            .then(response => {
+                const data = response.data || [];
                 const tbody = document.getElementById('modal-tbody');
                 tbody.innerHTML = '';
                 
                 if(data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="9" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">Aucun produit trouvé</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="11" style="padding: 40px; text-align: center; color: var(--text-muted); font-weight: 600;">Aucun produit trouvé</td></tr>`;
+                    renderPagination(null);
                     return;
                 }
 
@@ -498,15 +502,13 @@
                     tr.style.cursor = 'pointer';
                     tr.onmouseover = () => tr.style.background = '#f1f5f9';
                     tr.onmouseout = () => tr.style.background = 'white';
-                    tr.onclick = () => selectProduct(p);
+                    tr.onclick = () => openVariantsModal(p);
 
                     tr.innerHTML = `
                         <td class="font-medium" style="color: var(--primary);">${p.produitcode || ''}</td>
                         <td>${p.reference || ''}</td>
                         <td>${p.barcode2 || ''}</td>
                         <td>${p.produitlibelle || ''}</td>
-                        <td>${p.taillelibelle || ''}</td>
-                        <td>${p.couleurlibelle || ''}</td>
                         <td>${p.famillelibelle || ''}</td>
                         <td>${p.sousfamillelibelle || ''}</td>
                         <td style="text-align: right;">${parseFloat(p.ttc_vente || p.ttc || 0).toFixed(3)}</td>
@@ -515,7 +517,32 @@
                     `;
                     tbody.appendChild(tr);
                 });
+                renderPagination(response);
             });
+    }
+
+    function renderPagination(response) {
+        const container = document.getElementById('pagination-container');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!response || response.last_page <= 1) return;
+
+        for (let i = 1; i <= response.last_page; i++) {
+            const btn = document.createElement('button');
+            btn.innerText = i;
+            btn.style.padding = '5px 10px';
+            btn.style.border = '1px solid #cbd5e1';
+            btn.style.background = (i === response.current_page) ? '#0f172a' : '#fff';
+            btn.style.color = (i === response.current_page) ? '#fff' : '#334155';
+            btn.style.borderRadius = '4px';
+            btn.style.cursor = 'pointer';
+            if (i !== response.current_page) {
+                btn.onmouseover = () => btn.style.background = '#f1f5f9';
+                btn.onmouseout = () => btn.style.background = '#fff';
+            }
+            btn.onclick = () => searchProducts(i);
+            container.appendChild(btn);
+        }
     }
 
     document.getElementById('searchInput')?.addEventListener('keypress', function(e) {
