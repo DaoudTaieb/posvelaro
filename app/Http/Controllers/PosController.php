@@ -477,27 +477,30 @@ class PosController extends Controller
             'message' => 'required|string'
         ]);
 
-        $tel = $request->telephone;
+        // Clean phone number: remove '+' and spaces (API expects international format without +)
+        $tel = str_replace(['+', ' '], '', $request->telephone);
         $msg = $request->message;
 
-        // Bip SMS Integration (Mocked or Real HTTP call)
-        // Usually: GET https://bipsms.net/api/sendsms.php?user=USER&pass=PASS&sender=SENDER&phone=PHONE&msg=MSG
-        // Fetch Bip SMS credentials from database settings (managed via Configuration Général UI)
-        $user = DB::table('retailconfigs')->where('libelle', 'bipsms_user')->value('value') ?? 'demo';
-        $pass = DB::table('retailconfigs')->where('libelle', 'bipsms_pass')->value('value') ?? 'demo';
+        // Nouvelle intégration Bip SMS (bulksms.bipsms.tn)
+        // Endpoint: http://bulksms.bipsms.tn/Api/Api.aspx?fct=sms&key=KEY&mobile=PHONE&sms=MSG&sender=SENDER
+        $key = DB::table('retailconfigs')->where('libelle', 'bipsms_key')->value('value') ?? 'MpO6X7VWWi1z7wTK/-/h0WMFPBUGfvvmzfY8w7qO/-/Z7a0s4X8V0fs0PbMk3EPzyw82fRuKnu3nJbHAsJN/-/q2kxKsyGWBRuhIeoeHQWUAb01V4=';
         $sender = DB::table('retailconfigs')->where('libelle', 'bipsms_sender')->value('value') ?? 'VELARO';
+        $apiUrl = DB::table('retailconfigs')->where('libelle', 'bipsms_url')->value('value') ?? 'http://bulksms.bipsms.tn/Api/Api.aspx';
 
         try {
-            $response = Http::get('https://bipsms.net/api/sendsms.php', [
-                'user' => $user,
-                'pass' => $pass,
+            $response = Http::get($apiUrl, [
+                'fct' => 'sms',
+                'key' => $key,
                 'sender' => $sender,
-                'phone' => $tel,
-                'msg' => $msg
+                'mobile' => $tel,
+                'sms' => $msg,
+                'date' => date('d/m/Y'),
+                'heure' => date('H:i:s')
             ]);
             
-            $success = $response->successful();
-            \Log::info("SMS Envoyé à $tel : $msg - Status: " . $response->status());
+            // L'API renvoie un XML avec un <status_code>200</status_code> en cas de succès
+            $success = $response->successful() && str_contains($response->body(), '200');
+            \Log::info("SMS Envoyé à $tel : $msg - Reponse: " . $response->body());
 
             if ($success) {
                 return response()->json(['success' => true, 'message' => 'SMS envoyé avec succès!']);
