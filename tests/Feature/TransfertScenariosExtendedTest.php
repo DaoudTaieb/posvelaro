@@ -20,7 +20,7 @@ class TransfertScenariosExtendedTest extends TestCase
     {
         parent::setUp();
 
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->user = new User();
             $this->user->userid = $dbUser->userid;
@@ -251,6 +251,12 @@ class TransfertScenariosExtendedTest extends TestCase
             $this->markTestSkipped('Pas de produit avec stock pour tester.');
         }
 
+        // L'envoi vérifie désormais le stock disponible du site expéditeur
+        DB::table('stock2s')
+            ->where('produit2id', $produit->produit2id)
+            ->where('siteid', $this->siteExpediteur->siteid)
+            ->update(['qtestock' => 100]);
+
         $payload = [
             'siterecepteurid' => $this->siteRecepteur->siteid,
             'description' => 'Test envoi bon complet',
@@ -471,8 +477,8 @@ class TransfertScenariosExtendedTest extends TestCase
 
         DB::table('demandetransferts')->insert([
             'demandetransfertid' => $demandeId,
-            'siteid' => $this->siteExpediteur->siteid,
-            'siterecepteurid' => $this->siteRecepteur->siteid,
+            'siteid' => $this->siteRecepteur->siteid, // demande émise par l'autre site
+            'siterecepteurid' => $this->siteExpediteur->siteid, // adressée à notre site (fournisseur)
             'etatdemandetransfertid' => 2, // Envoyé
             'demandetransfertnumero' => $numero,
             'numerointerne' => 'DTE-API',
@@ -491,16 +497,16 @@ class TransfertScenariosExtendedTest extends TestCase
         DB::table('detdemandetransferts')->insert([
             'detdemandetransfertid' => $detId,
             'demandetransfertid' => $demandeId,
-            'siteid' => $this->siteExpediteur->siteid,
-            'siterecepteurid' => $this->siteRecepteur->siteid,
+            'siteid' => $this->siteRecepteur->siteid, // demande émise par l'autre site
+            'siterecepteurid' => $this->siteExpediteur->siteid, // adressée à notre site (fournisseur)
             'produitid' => $produit->produitid,
             'produit2id' => $produit->produit2id,
             'taxefamilleid' => 1,
             'ht' => 50,
             'ttc' => 59.5,
             'qte' => 5,
-            'qteenvoi' => 0, 'qterecu' => 0, 'qteecart' => 0,
-            'etatdemandetransfertid' => 2,
+            'qteenvoi' => 5, 'qterecu' => 0, 'qteecart' => 0, // Ligne pointée : 5 validées
+            'etatdemandetransfertid' => 3,
             'totalht' => 250, 'remise' => 0, 'remise2' => 0, 'totalhtnet' => 250,
             'taxe1' => 0, 'vtaxe1' => 0,
             'taxe2' => 0, 'vtaxe2' => 0,
@@ -521,6 +527,8 @@ class TransfertScenariosExtendedTest extends TestCase
         $this->assertCount(1, $json);
         $this->assertEquals($produit->produit2id, $json[0]['produit2id']);
         $this->assertEquals(5, $json[0]['qte_demandee']);
+        $this->assertEquals(5, $json[0]['qte_validee']);
+        $this->assertEquals($detId, $json[0]['detdemandetransfertid']);
     }
 
     /**

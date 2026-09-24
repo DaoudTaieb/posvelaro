@@ -193,19 +193,19 @@
                             <tr style="background: var(--background);">
                                 <td colspan="6" class="totals-label" style="padding: 8px 12px; font-weight: 700;">Ventes</td>
                                 <td class="text-center font-bold" style="padding: 8px 12px;">{{ $totalVentesQte }}</td>
-                                <td class="amount-cell text-muted" style="padding: 8px 12px;">0.000</td>
+                                <td class="amount-cell text-danger" style="padding: 8px 12px;">{{ number_format($totalVentesRemise, 3, '.', '') }}</td>
                                 <td class="amount-cell font-bold" style="padding: 8px 12px; color: var(--primary);">{{ number_format($totalVentesMontant, 3, '.', '') }}</td>
                             </tr>
                             <tr style="background: var(--background);">
                                 <td colspan="6" class="totals-label" style="padding: 8px 12px; font-weight: 700; color: var(--danger);">Retour</td>
                                 <td class="text-center font-bold text-danger" style="padding: 8px 12px;">{{ $totalRetourQte }}</td>
-                                <td class="amount-cell text-muted" style="padding: 8px 12px;">0.000</td>
+                                <td class="amount-cell text-danger" style="padding: 8px 12px;">{{ number_format($totalRetourRemise, 3, '.', '') }}</td>
                                 <td class="amount-cell font-bold text-danger" style="padding: 8px 12px;">{{ number_format($totalRetourMontant, 3, '.', '') }}</td>
                             </tr>
                             <tr class="table-totals" style="background: var(--primary-light);">
                                 <td colspan="6" class="totals-label" style="padding: 10px 12px; font-weight: 800; color: var(--primary-dark);">Total Général</td>
                                 <td class="text-center font-bold" style="padding: 10px 12px; color: var(--primary-dark);">{{ $totalVentesQte + $totalRetourQte }}</td>
-                                <td class="amount-cell text-muted" style="padding: 10px 12px;">0.000</td>
+                                <td class="amount-cell text-danger" style="padding: 10px 12px;">{{ number_format($totalVentesRemise + $totalRetourRemise, 3, '.', '') }}</td>
                                 <td class="amount-cell font-bold" style="padding: 10px 12px; color: var(--primary-dark); font-size: 14px;">{{ number_format($totalVentesMontant + $totalRetourMontant, 3, '.', '') }}</td>
                             </tr>
                         </tfoot>
@@ -255,20 +255,20 @@
                         <tfoot>
                             <tr style="background: var(--background);">
                                 <td colspan="3" class="totals-label" style="padding: 8px 12px; font-weight: 700;">Ventes</td>
-                                <td class="text-center font-bold" style="padding: 8px 12px;">{{ $caSousFamilles->sum('qtes') }}</td>
-                                <td class="amount-cell text-muted" style="padding: 8px 12px;">0.000</td>
-                                <td class="amount-cell font-bold" style="padding: 8px 12px; color: var(--primary);">{{ number_format($caSousFamilles->sum('montant'), 3, '.', '') }}</td>
+                                <td class="text-center font-bold" style="padding: 8px 12px;">{{ round($caSousFamilles->sum('qte_vente')) }}</td>
+                                <td class="amount-cell text-danger" style="padding: 8px 12px;">{{ number_format($caSousFamilles->sum('remise_vente'), 3, '.', '') }}</td>
+                                <td class="amount-cell font-bold" style="padding: 8px 12px; color: var(--primary);">{{ number_format($caSousFamilles->sum('montant_vente'), 3, '.', '') }}</td>
                             </tr>
                             <tr style="background: var(--background);">
                                 <td colspan="3" class="totals-label" style="padding: 8px 12px; font-weight: 700; color: var(--danger);">Retour</td>
-                                <td class="text-center font-bold text-danger" style="padding: 8px 12px;">0</td>
-                                <td class="amount-cell text-muted" style="padding: 8px 12px;">0.000</td>
-                                <td class="amount-cell font-bold text-danger" style="padding: 8px 12px;">0.000</td>
+                                <td class="text-center font-bold text-danger" style="padding: 8px 12px;">{{ round($caSousFamilles->sum('qte_retour')) }}</td>
+                                <td class="amount-cell text-danger" style="padding: 8px 12px;">{{ number_format($caSousFamilles->sum('remise_retour'), 3, '.', '') }}</td>
+                                <td class="amount-cell font-bold text-danger" style="padding: 8px 12px;">{{ number_format($caSousFamilles->sum('montant_retour'), 3, '.', '') }}</td>
                             </tr>
                             <tr class="table-totals" style="background: var(--primary-light);">
                                 <td colspan="3" class="totals-label" style="padding: 10px 12px; font-weight: 800; color: var(--primary-dark);">Total Familles</td>
                                 <td class="text-center font-bold" style="padding: 10px 12px; color: var(--primary-dark);">{{ $caSousFamilles->sum('qtes') }}</td>
-                                <td class="amount-cell text-muted" style="padding: 10px 12px;">0.000</td>
+                                <td class="amount-cell text-danger" style="padding: 10px 12px;">{{ number_format($caSousFamilles->sum('remise'), 3, '.', '') }}</td>
                                 <td class="amount-cell font-bold" style="padding: 10px 12px; color: var(--primary-dark); font-size: 14px;">{{ number_format($caSousFamilles->sum('montant'), 3, '.', '') }}</td>
                             </tr>
                         </tfoot>
@@ -358,14 +358,22 @@
                             <td style="padding: 6px 12px; font-weight: 500;">Carte Crédit</td>
                             <td class="amount-cell" style="padding: 6px 12px;">{{ number_format($recettes['carte_credit'], 3, '.', '') }}</td>
                         </tr>
+                        @foreach([
+                            'traite' => 'Traite',
+                            'cheque_cadeau' => 'Chèque Cadeau',
+                            'ticket_resto' => 'Ticket Resto',
+                            'offre' => 'Offre',
+                            'bon_convention' => 'Bon de Convention',
+                            'avoir' => 'Avoir',
+                            'bon_achats' => 'Bon D\'Achats',
+                            'virement' => 'Virement',
+                            'coupon' => 'Coupon',
+                        ] as $key => $label)
                         <tr>
-                            <td style="padding: 6px 12px; font-weight: 500;">Bon D'Achats</td>
-                            <td class="amount-cell" style="padding: 6px 12px;">{{ number_format($recettes['bon_achats'], 3, '.', '') }}</td>
+                            <td style="padding: 6px 12px; font-weight: 500;">{{ $label }}</td>
+                            <td class="amount-cell" style="padding: 6px 12px;">{{ number_format($recettes[$key], 3, '.', '') }}</td>
                         </tr>
-                        <tr>
-                            <td style="padding: 6px 12px; font-weight: 500;">Chèque Cadeau</td>
-                            <td class="amount-cell" style="padding: 6px 12px;">{{ number_format($recettes['cheque_cadeau'], 3, '.', '') }}</td>
-                        </tr>
+                        @endforeach
                         <tr>
                             <td style="padding: 6px 12px; font-weight: 500;">Autres</td>
                             <td class="amount-cell" style="padding: 6px 12px;">{{ number_format($recettes['autres'], 3, '.', '') }}</td>

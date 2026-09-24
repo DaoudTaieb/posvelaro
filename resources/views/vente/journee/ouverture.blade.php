@@ -39,6 +39,17 @@
     </div>
     @endif
 
+    @if($errors->any())
+    <div class="modern-badge badge-danger" style="width: 100%; padding: 14px 18px; border-radius: var(--radius-md); font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; line-height: 1.5; box-shadow: var(--shadow-sm);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span style="font-weight: 600;">{{ $errors->first() }}</span>
+    </div>
+    @endif
+
     @if(session('warning'))
     <div class="modern-badge badge-warning" style="width: 100%; padding: 14px 18px; border-radius: var(--radius-md); font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; line-height: 1.5; box-shadow: var(--shadow-sm); background-color: #fffbeb; color: #b45309; border: 1px solid #fcd34d;">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

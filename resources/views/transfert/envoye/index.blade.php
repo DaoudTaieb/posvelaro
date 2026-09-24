@@ -124,7 +124,7 @@
                     <select class="form-control filter-dropdown" name="etatid" id="filter_etat">
                         <option value="tous">Tous les états</option>
                         @foreach($etats as $etat)
-                            <option value="{{ $etat->etatdemandetransfertid }}" {{ request('etatid') == $etat->etatdemandetransfertid ? 'selected' : '' }}>
+                            <option value="{{ $etat->etatbontransfertid }}" {{ request('etatid') == $etat->etatbontransfertid ? 'selected' : '' }}>
                                 {{ $etat->libelle }}
                             </option>
                         @endforeach

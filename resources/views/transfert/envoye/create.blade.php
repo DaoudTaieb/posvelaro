@@ -86,11 +86,12 @@
                         </div>
                         <div style="flex: 1;">
                             <label class="form-label">Importer Demande</label>
+                            <input type="hidden" name="demandetransfertid" id="demandetransfertidInput" value="{{ $bon->demandetransfertid ?? '' }}">
                             <select id="importDemandeSelect" class="form-control" onchange="importDemandeLignes(this.value)">
                                 <option value="">-- Aucune --</option>
                                 @if(isset($demandes_validees))
                                     @foreach($demandes_validees as $d)
-                                        <option value="{{ $d->demandetransfertid }}">Demande N° {{ $d->demandetransfertnumero }}</option>
+                                        <option value="{{ $d->demandetransfertid }}" data-site="{{ $d->siteid }}">Demande N° {{ $d->demandetransfertnumero }}</option>
                                     @endforeach
                                 @endif
                             </select>
@@ -211,6 +212,7 @@
                                         {{ $ligne->produitcode }}
                                         <input type="hidden" name="lignes[{{ $index }}][produitid]" value="{{ $ligne->produitid }}">
                                         <input type="hidden" name="lignes[{{ $index }}][produit2id]" value="{{ $ligne->produit2id }}">
+                                        <input type="hidden" name="lignes[{{ $index }}][detdemandetransfertid]" value="{{ $ligne->detdemandetransfertid }}">
                                     </td>
                                     <td>{{ $ligne->designation }}</td>
                                     <td>{{ $ligne->taille }}</td>
@@ -277,6 +279,16 @@
 
 @section('scripts')
 <script>
+    // Échappe les valeurs insérées dans innerHTML (texte et attributs)
+    function escHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function submitForm(actionType) {
         let form = document.getElementById('headerForm');
         let input = document.createElement('input');
@@ -287,25 +299,37 @@
         form.submit();
     }
 
-    function importDemandeLignes(demandeId) {
+    async function importDemandeLignes(demandeId) {
         if (!demandeId) return;
-        
-        if (!confirm('Voulez-vous importer les articles de cette demande ? (Les articles seront ajoutés à la suite)')) {
+
+        if (!(await confirmer('Voulez-vous importer les articles de cette demande ? (Les articles seront ajoutés à la suite)', { titre: 'Importer la demande', okLabel: 'Importer' }))) {
             document.getElementById('importDemandeSelect').value = '';
             return;
+        }
+
+        // Le bon est destiné au site qui a fait la demande : récepteur pré-rempli
+        const optionDemande = document.querySelector(`#importDemandeSelect option[value="${demandeId}"]`);
+        const recepteur = document.querySelector('select[name="siterecepteurid"]');
+        if (optionDemande && optionDemande.dataset.site && recepteur && !recepteur.disabled) {
+            recepteur.value = optionDemande.dataset.site;
         }
 
         fetch(`{{ url('/transfert/envoye/api/demande-lignes') }}/${demandeId}`)
             .then(res => res.json())
             .then(data => {
                 if(data.error) {
-                    alert(data.error);
+                    notifier(data.error);
                     return;
                 }
                 
                 let added = 0;
                 data.forEach(p => {
+                    // Ne pas importer deux fois la même ligne de demande
+                    if (document.querySelector(`input[name$="[detdemandetransfertid]"][value="${parseInt(p.detdemandetransfertid)}"]`)) {
+                        return;
+                    }
                     currentSelectedProduct = {
+                        detdemandetransfertid: p.detdemandetransfertid,
                         produitid: p.produitid,
                         produit2id: p.produit2id,
                         produitcode: p.produitcode,
@@ -314,19 +338,23 @@
                         couleur: p.couleur,
                         ttc: p.prix
                     };
-                    document.getElementById('qteInput').value = p.qte_demandee;
-                    document.getElementById('qteEnvoiInput').value = p.qte_demandee;
+                    document.getElementById('qteInput').value = parseInt(p.qte_demandee) || 0;
+                    document.getElementById('qteEnvoiInput').value = parseInt(p.qte_validee) || 0;
                     document.getElementById('prixInput').value = p.prix || 0;
                     addLine();
                     added++;
                 });
                 
-                alert(`${added} article(s) importé(s) avec succès !`);
+                const demandeInput = document.getElementById('demandetransfertidInput');
+                if (added > 0 && demandeInput && !demandeInput.value) {
+                    demandeInput.value = demandeId;
+                }
+                notifier(`${added} article(s) importé(s) avec succès !`);
                 document.getElementById('importDemandeSelect').value = '';
             })
             .catch(err => {
                 console.error(err);
-                alert('Erreur lors de l\'importation');
+                notifier('Erreur lors de l\'importation');
                 document.getElementById('importDemandeSelect').value = '';
             });
     }
@@ -388,7 +416,7 @@
 
     function addLine() {
         if (!currentSelectedProduct) {
-            alert('Veuillez sélectionner un produit');
+            notifier('Veuillez sélectionner un produit');
             return;
         }
 
@@ -402,20 +430,21 @@
         const tbody = document.getElementById('linesTableBody');
         const tr = document.createElement('tr');
         tr.className = 'existing-row hover-row';
-        tr.setAttribute('data-ref', currentSelectedProduct.produitcode.toLowerCase());
-        tr.setAttribute('data-desig', currentSelectedProduct.designation.toLowerCase());
-        tr.setAttribute('data-taille', (currentSelectedProduct.taille || '').toLowerCase());
-        tr.setAttribute('data-couleur', (currentSelectedProduct.couleur || '').toLowerCase());
+        tr.setAttribute('data-ref', String(currentSelectedProduct.produitcode || '').toLowerCase());
+        tr.setAttribute('data-desig', String(currentSelectedProduct.designation || '').toLowerCase());
+        tr.setAttribute('data-taille', String(currentSelectedProduct.taille || '').toLowerCase());
+        tr.setAttribute('data-couleur', String(currentSelectedProduct.couleur || '').toLowerCase());
         
         tr.innerHTML = `
             <td class="font-medium" style="color: var(--primary);">
-                ${currentSelectedProduct.produitcode}
-                <input type="hidden" name="lignes[${lineIndex}][produitid]" value="${currentSelectedProduct.produitid}">
-                <input type="hidden" name="lignes[${lineIndex}][produit2id]" value="${currentSelectedProduct.produit2id || currentSelectedProduct.produitid}">
+                ${escHtml(currentSelectedProduct.produitcode)}
+                <input type="hidden" name="lignes[${lineIndex}][produitid]" value="${escHtml(currentSelectedProduct.produitid)}">
+                <input type="hidden" name="lignes[${lineIndex}][produit2id]" value="${escHtml(currentSelectedProduct.produit2id || currentSelectedProduct.produitid)}">
+                <input type="hidden" name="lignes[${lineIndex}][detdemandetransfertid]" value="${escHtml(currentSelectedProduct.detdemandetransfertid || '')}">
             </td>
-            <td>${currentSelectedProduct.designation}</td>
-            <td>${currentSelectedProduct.taille || ''}</td>
-            <td>${currentSelectedProduct.couleur || ''}</td>
+            <td>${escHtml(currentSelectedProduct.designation)}</td>
+            <td>${escHtml(currentSelectedProduct.taille)}</td>
+            <td>${escHtml(currentSelectedProduct.couleur)}</td>
             <td style="text-align: center;">
                 <input type="number" name="lignes[${lineIndex}][qte]" value="${qte}" class="form-control" style="width: 70px; height: 28px; padding: 4px; display: inline-block; text-align: center;" min="1" onchange="updateTotals()">
             </td>
@@ -423,8 +452,8 @@
                 <input type="number" name="lignes[${lineIndex}][qteenvoi]" value="${qteEnvoi}" class="form-control" style="width: 70px; height: 28px; padding: 4px; display: inline-block; text-align: center;" min="1" onchange="updateTotals()">
             </td>
             <td>
-                ${parseFloat(prix).toFixed(3)}
-                <input type="hidden" name="lignes[${lineIndex}][prix]" value="${prix}">
+                ${(parseFloat(prix) || 0).toFixed(3)}
+                <input type="hidden" name="lignes[${lineIndex}][prix]" value="${escHtml(prix)}">
             </td>
             <td style="text-align: center;">
                 <button type="button" class="btn" style="color: var(--danger); padding: 4px; background: transparent;" onclick="this.closest('tr').remove(); updateTotals(); filterTable();">
@@ -506,15 +535,15 @@
                     tr.onclick = () => openVariantsModal(p);
 
                     tr.innerHTML = `
-                        <td class="font-medium" style="color: var(--primary);">${p.produitcode || ''}</td>
-                        <td>${p.reference || ''}</td>
-                        <td>${p.barcode2 || ''}</td>
-                        <td>${p.produitlibelle || ''}</td>
-                        <td>${p.famillelibelle || ''}</td>
-                        <td>${p.sousfamillelibelle || ''}</td>
+                        <td class="font-medium" style="color: var(--primary);">${escHtml(p.produitcode)}</td>
+                        <td>${escHtml(p.reference)}</td>
+                        <td>${escHtml(p.barcode2)}</td>
+                        <td>${escHtml(p.produitlibelle)}</td>
+                        <td>${escHtml(p.famillelibelle)}</td>
+                        <td>${escHtml(p.sousfamillelibelle)}</td>
                         <td style="text-align: right;">${parseFloat(p.ttc_vente || p.ttc || 0).toFixed(3)}</td>
-                        <td style="text-align: center;"><span class="status-badge ${p.total_stock > 0 ? 'status-paid' : 'status-danger'}">${p.total_stock || 0}</span></td>
-                        <td>${p.fournisseur || ''}</td>
+                        <td style="text-align: center;"><span class="status-badge ${p.total_stock > 0 ? 'status-paid' : 'status-danger'}">${escHtml(p.total_stock || 0)}</span></td>
+                        <td>${escHtml(p.fournisseur)}</td>
                     `;
                     tbody.appendChild(tr);
                 });

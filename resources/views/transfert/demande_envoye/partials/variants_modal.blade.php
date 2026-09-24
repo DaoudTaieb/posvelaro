@@ -74,6 +74,16 @@
             });
     }
 
+    // Échappe les valeurs insérées dans innerHTML (texte et attributs)
+    function escHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function renderVariantsList(variants) {
         const tbody = document.getElementById('variants-tbody');
         tbody.innerHTML = '';
@@ -90,17 +100,18 @@
             tr.style.borderBottom = '1px solid #e5e7eb';
             
             tr.innerHTML = `
-                <td style="padding: 6px; color: #111827;">${v.produitcode || ''}</td>
-                <td style="padding: 6px; color: #111827;">${v.couleurlibelle || ''}</td>
-                <td style="padding: 6px; color: #111827;">${v.taillelibelle || ''}</td>
+                <td style="padding: 6px; color: #111827;">${escHtml(v.produitcode)}</td>
+                <td style="padding: 6px; color: #111827;">${escHtml(v.couleurlibelle)}</td>
+                <td style="padding: 6px; color: #111827;">${escHtml(v.taillelibelle)}</td>
                 <td style="padding: 6px; text-align: right; color: #111827;">${price.toFixed(3)}</td>
                 <td style="padding: 6px; text-align: right; color: #111827;">${Number.isInteger(stk) ? stk : stk.toFixed(2)}</td>
                 <td style="padding: 6px; text-align: center;">
-                    <button type="button" style="background: var(--primary); color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer;" onclick='selectVariant(${JSON.stringify(v).replace(/'/g, "&#39;")})'>
+                    <button type="button" class="select-variant-btn" style="background: var(--primary); color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     </button>
                 </td>
             `;
+            tr.querySelector('.select-variant-btn').addEventListener('click', () => selectVariant(Object.assign({}, v)));
             tbody.appendChild(tr);
         });
     }

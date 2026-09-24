@@ -934,6 +934,8 @@
     @yield('styles')
 </head>
 <body>
+    @include('partials.ui-dialogs')
+    @include('partials.ui-dialogs')
     <!-- Top bar -->
     <nav class="topbar">
         <a href="{{ route('dashboard') }}" class="topbar-brand" style="text-decoration: none; cursor: pointer;">
@@ -982,18 +984,18 @@
                     Vente
                 </div>
                 <ul class="menu-list">
-                    <li>
+                    @peut('caisse')<li>
                         <a href="{{ route('vente.caisse.pos') }}" class="menu-item {{ request()->routeIs('vente.caisse.*') ? 'active' : '' }}">Caisse</a>
-                    </li>
-                    <li>
+                    </li>@endpeut
+                    @peut('backoffice')<li>
                         <a href="{{ route('vente.tickets.index') }}" class="menu-item {{ request()->routeIs('vente.tickets.*') ? 'active' : '' }}">Consultation Tickets</a>
-                    </li>
-                    <li>
+                    </li>@endpeut
+                    @peut('backoffice')@peut('cons.commission.vendeur')<li>
                         <a href="{{ route('vente.commissions.index') }}" class="menu-item {{ request()->routeIs('vente.commissions.*') ? 'active' : '' }}">Calcul Commissions</a>
-                    </li>
-                    <li>
+                    </li>@endpeut @endpeut
+                    @peut('backoffice')@peut('cons.client')<li>
                         <a href="{{ route('vente.clients.index') }}" class="menu-item {{ request()->routeIs('vente.clients.*') ? 'active' : '' }}">Clients</a>
-                    </li>
+                    </li>@endpeut @endpeut
                 </ul>
             </div>
 
@@ -1006,21 +1008,27 @@
                     Journée
                 </div>
                 <ul class="menu-list">
-                    <li>
+                    @peut('caisse')<li>
                         <a href="{{ route('vente.journee.ouverture') }}" class="menu-item {{ request()->routeIs('vente.journee.ouverture') ? 'active' : '' }}">Ouverture Journée</a>
-                    </li>
-                    <li>
+                    </li>@endpeut
+                    @peut('caisse')@peut('clot.caisse')<li>
                         <a href="{{ route('vente.journee.cloture') }}" class="menu-item {{ request()->routeIs('vente.journee.cloture') ? 'active' : '' }}">Clôture Journée</a>
-                    </li>
+                    </li>@endpeut @endpeut
                     <li>
+                        @peut('cons.etatjourneecaisse')
                         <a href="{{ route('vente.journee.etat') }}" class="menu-item">
                             Etat Journée
                         </a>
+                        @endpeut
+                        @peut('cons.journeecaisse')
                         <a href="{{ route('vente.journee.index') }}" class="menu-item {{ request()->routeIs('vente.journee.index') ? 'active' : '' }}">Consultation Journées</a>
+                        @endpeut
                     </li>
                 </ul>
             </div>
 
+            @peut('backoffice')
+            @peut('cons.stock')
             <div class="menu-group">
                 <div class="menu-title">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1048,6 +1056,9 @@
                     </li>
                 </ul>
             </div>
+            @endpeut
+            @endpeut
+            @peut('backoffice')
             <!-- Section Transfert -->
             <div class="menu-group">
                 <div class="menu-title">
@@ -1059,21 +1070,23 @@
                     Transfert
                 </div>
                 <ul class="menu-list">
-                    <li>
+                    @peut('cons.demandebontransfert')<li>
                         <a href="{{ route('transfert.demande_envoye.index') }}" class="menu-item {{ request()->routeIs('transfert.demande_envoye.*') ? 'active' : '' }}">Demande Trans Envoyé</a>
-                    </li>
-                    <li>
+                    </li>@endpeut
+                    @peut('cons.demandebontransfert')<li>
                         <a href="{{ route('transfert.demande_recu.index') }}" class="menu-item {{ request()->routeIs('transfert.demande_recu.*') ? 'active' : '' }}">Demande Trans reçu</a>
-                    </li>
-                    <li>
+                    </li>@endpeut
+                    @peut('cons.bontransfert')<li>
                         <a href="{{ route('transfert.envoye.index') }}" class="menu-item {{ request()->routeIs('transfert.envoye.*') ? 'active' : '' }}">Transfert Envoyé</a>
-                    </li>
-                    <li>
+                    </li>@endpeut
+                    @peut('cons.bontransfert')<li>
                         <a href="{{ route('transfert.recu.index') }}" class="menu-item {{ request()->routeIs('transfert.recu.*') ? 'active' : '' }}">Transfert reçu</a>
-                    </li>
+                    </li>@endpeut
                 </ul>
             </div>
+            @endpeut
 
+            @peut('backoffice')
             <!-- Section Paramètres -->
             <div class="menu-group">
                 <div class="menu-title">
@@ -1084,14 +1097,15 @@
                     Parametres
                 </div>
                 <ul class="menu-list">
-                    <li><a href="{{ route('parametre.configuration.general') }}" class="menu-item {{ request()->routeIs('parametre.configuration.general') ? 'active' : '' }}">General</a></li>
-                    <li><a href="{{ route('parametre.caisse.index') }}" class="menu-item {{ request()->routeIs('parametre.caisse.index') ? 'active' : '' }}">Caisse</a></li>
-                    <li><a href="{{ route('parametre.utilisateur.index') }}" class="menu-item {{ request()->routeIs('parametre.utilisateur.*') ? 'active' : '' }}">Gestion des utilisateur</a></li>
-                    <li><a href="{{ route('parametre.droit.index') }}" class="menu-item {{ request()->routeIs('parametre.droit.*') ? 'active' : '' }}">Gestion des Droits</a></li>
-                    <li><a href="{{ route('parametre.vendeur.index') }}" class="menu-item {{ request()->routeIs('parametre.vendeur.*') ? 'active' : '' }}">Gestion des Vendeurs</a></li>
-                    <li><a href="{{ route('parametre.caisse.liberation') }}" class="menu-item {{ request()->routeIs('parametre.caisse.liberation') ? 'active' : '' }}">Libération de caisse</a></li>
+                    @peut('config')<li><a href="{{ route('parametre.configuration.general') }}" class="menu-item {{ request()->routeIs('parametre.configuration.general') ? 'active' : '' }}">General</a></li>@endpeut
+                    @peut('config.caisses')<li><a href="{{ route('parametre.caisse.index') }}" class="menu-item {{ request()->routeIs('parametre.caisse.index') ? 'active' : '' }}">Caisse</a></li>@endpeut
+                    @peut('gestion.users')<li><a href="{{ route('parametre.utilisateur.index') }}" class="menu-item {{ request()->routeIs('parametre.utilisateur.*') ? 'active' : '' }}">Gestion des utilisateur</a></li>@endpeut
+                    @peut('gestion.droits')<li><a href="{{ route('parametre.droit.index') }}" class="menu-item {{ request()->routeIs('parametre.droit.*') ? 'active' : '' }}">Gestion des Droits</a></li>@endpeut
+                    @peut('gestion.vendeur')<li><a href="{{ route('parametre.vendeur.index') }}" class="menu-item {{ request()->routeIs('parametre.vendeur.*') ? 'active' : '' }}">Gestion des Vendeurs</a></li>@endpeut
+                    @peut('config.caisses')<li><a href="{{ route('parametre.caisse.liberation') }}" class="menu-item {{ request()->routeIs('parametre.caisse.liberation') ? 'active' : '' }}">Libération de caisse</a></li>@endpeut
                 </ul>
             </div>
+            @endpeut
         </aside>
 
         <!-- Main content -->
@@ -1114,6 +1128,22 @@
                         <line x1="9" y1="9" x2="15" y2="15"></line>
                     </svg>
                     {{ session('error') }}
+                </div>
+            @endif
+
+            {{-- Erreurs de validation (la clôture de journée les affiche déjà elle-même) --}}
+            @if($errors->any() && !request()->routeIs('vente.journee.cloture'))
+                <div style="background: var(--danger); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; display: flex; align-items: flex-start; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <ul style="margin: 0; padding-left: 16px;">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
                 </div>
             @endif
 

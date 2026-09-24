@@ -14,7 +14,7 @@ class TransfertRecuController extends Controller
     {
         $siteid = auth()->user()->siteid ?? 102; // Nous sommes le récepteur
 
-        $etats = DB::table('etatbontranferts')->get();
+        $etats = DB::table('etatbontranferts')->where('etatbontransfertid', '>', 1)->get();
         $sites = DB::table('sites')->get();
         $siteRecepteur = DB::table('sites')->where('siteid', $siteid)->first();
         $siteLibelle = $siteRecepteur ? $siteRecepteur->libelle : 'Golden Pos';
@@ -24,7 +24,8 @@ class TransfertRecuController extends Controller
             ->join('sites as emet', 'emet.siteid', '=', 'b.siteid')
             ->leftJoin('etatbontranferts as e', 'e.etatbontransfertid', '=', 'b.etatbontransfertid')
             ->leftJoin('vehicules as v', 'v.vehiculeid', '=', 'b.vehiculeid')
-            ->where('b.siterecepteurid', $siteid); // On est le récepteur
+            ->where('b.siterecepteurid', $siteid) // On est le récepteur
+            ->where('b.etatbontransfertid', '>', 1); // Les brouillons de l'expéditeur ne sont pas visibles
 
         // Calcul des KPIs
         $kpiQuery = clone $query;
@@ -53,17 +54,17 @@ class TransfertRecuController extends Controller
         if ($request->filled('search')) {
             $search = '%' . strtolower($request->search) . '%';
             $query->where(function ($q) use ($search) {
-                $q->whereRaw('LOWER(b.bontransfertnumero) LIKE ?', [$search])
+                $q->whereRaw('CAST(b.bontransfertnumero AS TEXT) ILIKE ?', [$search])
                   ->orWhereRaw('LOWER(emet.libelle) LIKE ?', [$search])
                   ->orWhereRaw('LOWER(b.description) LIKE ?', [$search]);
             });
         }
 
-        if ($request->filled('datedebut') && $request->filled('datefin')) {
-            $query->whereBetween('b.bontransfertdate', [$request->datedebut, $request->datefin]);
-        } elseif ($request->filled('datedebut')) {
+        // whereDate pour inclure toute la journée de fin
+        if ($request->filled('datedebut')) {
             $query->whereDate('b.bontransfertdate', '>=', $request->datedebut);
-        } elseif ($request->filled('datefin')) {
+        }
+        if ($request->filled('datefin')) {
             $query->whereDate('b.bontransfertdate', '<=', $request->datefin);
         }
 
@@ -118,12 +119,16 @@ class TransfertRecuController extends Controller
 
     public function receptionner($id)
     {
+        $siteid = auth()->user()->siteid ?? 102;
+
         $bon = DB::table('bontransferts as b')
             ->join('sites as rec', 'rec.siteid', '=', 'b.siterecepteurid')
             ->join('sites as emet', 'emet.siteid', '=', 'b.siteid')
             ->leftJoin('vehicules as v', 'v.vehiculeid', '=', 'b.vehiculeid')
             ->leftJoin('etatbontranferts as e', 'e.etatbontransfertid', '=', 'b.etatbontransfertid')
             ->where('b.bontransfertid', $id)
+            ->where('b.siterecepteurid', $siteid) // Seul le site récepteur peut réceptionner
+            ->where('b.etatbontransfertid', '>', 1) // Pas de brouillon
             ->select(
                 'b.*',
                 'b.bontransfertnumero as numero',
@@ -138,7 +143,7 @@ class TransfertRecuController extends Controller
             ->first();
 
         if (!$bon) {
-            return redirect()->route('transfert.recu.index')->with('error', 'Bon introuvable');
+            return redirect()->route('transfert.recu.index')->with('error', 'Bon introuvable ou non destiné à votre site.');
         }
 
         // We fetch lines. If vproduit2stocks doesn't match siterecepteurid easily, we just join on produit2id.
@@ -164,22 +169,48 @@ class TransfertRecuController extends Controller
 
     public function storeReception(Request $request, $id)
     {
-        $receptions = $request->input('reception', []);
-        
-        foreach ($receptions as $detId => $data) {
-            DB::table('detbontransferts')
-                ->where('detbontransfertid', $detId)
-                ->update([
-                    'qterecu' => $data['qte_recue'] ?? 0,
-                    'description' => $data['observation'] ?? null,
-                    'pointer' => true
-                ]);
-        }
-        
-        DB::table('bontransferts')
-            ->where('bontransfertid', $id)
-            ->update(['etatbontransfertid' => 3]); // 3 = Reçu/Validé
+        $siteid = auth()->user()->siteid ?? 102;
+        $receptions = (array) $request->input('reception', []);
 
-        return redirect()->route('transfert.recu.index')->with('success', 'Bon de transfert réceptionné avec succès.');
+        return DB::transaction(function () use ($id, $siteid, $receptions) {
+            // Verrouiller le bon : uniquement un bon envoyé (2) destiné à notre site (évite la double réception)
+            $bon = DB::table('bontransferts')
+                ->where('bontransfertid', $id)
+                ->where('siterecepteurid', $siteid)
+                ->where('etatbontransfertid', 2)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$bon) {
+                return redirect()->route('transfert.recu.index')->with('error', 'Ce bon de transfert ne peut pas être réceptionné (introuvable, non envoyé, déjà réceptionné ou destiné à un autre site).');
+            }
+
+            // Uniquement les lignes de ce bon. Le passage de la ligne à l'état 3 crédite le stock
+            // du site récepteur via le trigger calcul_stock (qterecu).
+            $lignes = DB::table('detbontransferts')->where('bontransfertid', $id)->get();
+
+            foreach ($lignes as $ligne) {
+                $data = $receptions[$ligne->detbontransfertid] ?? [];
+                $qteenvoi = (float) $ligne->qteenvoi;
+                $qterecu = max(0, min((float) ($data['qte_recue'] ?? 0), $qteenvoi));
+
+                DB::table('detbontransferts')
+                    ->where('detbontransfertid', $ligne->detbontransfertid)
+                    ->where('bontransfertid', $id)
+                    ->update([
+                        'qterecu' => $qterecu,
+                        'qteecart' => $qteenvoi - $qterecu,
+                        'description' => $data['observation'] ?? null,
+                        'pointer' => true,
+                        'etatbontransfertid' => 3
+                    ]);
+            }
+
+            DB::table('bontransferts')
+                ->where('bontransfertid', $id)
+                ->update(['etatbontransfertid' => 3]); // 3 = Reçu/Validé
+
+            return redirect()->route('transfert.recu.index')->with('success', 'Bon de transfert réceptionné avec succès.');
+        });
     }
 }

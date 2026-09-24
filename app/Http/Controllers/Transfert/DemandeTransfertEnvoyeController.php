@@ -9,6 +9,9 @@ use Carbon\Carbon;
 
 class DemandeTransfertEnvoyeController extends Controller
 {
+    // Clé du verrou consultatif PostgreSQL qui sérialise la numérotation des demandes (max()+1)
+    private const LOCK_NUMEROTATION_DEMANDE = 730102;
+
     public function index(Request $request)
     {
         $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
@@ -21,13 +24,12 @@ class DemandeTransfertEnvoyeController extends Controller
         $query = DB::table('demandetransfertsviews')
             ->where('siteid', $siteid);
 
-        // Application des filtres de la barre d'outils
-        if ($request->filled('datedebut') && $request->filled('datefin')) {
-            $query->whereBetween('demandetransfertdate', [$request->datedebut, $request->datefin]);
-        } elseif ($request->filled('datedebut')) {
-            $query->where('demandetransfertdate', '>=', $request->datedebut);
-        } elseif ($request->filled('datefin')) {
-            $query->where('demandetransfertdate', '<=', $request->datefin);
+        // Application des filtres de la barre d'outils (whereDate pour inclure toute la journée de fin)
+        if ($request->filled('datedebut')) {
+            $query->whereDate('demandetransfertdate', '>=', $request->datedebut);
+        }
+        if ($request->filled('datefin')) {
+            $query->whereDate('demandetransfertdate', '<=', $request->datefin);
         }
 
         if ($request->filled('siterecepteurid')) {
@@ -123,183 +125,204 @@ class DemandeTransfertEnvoyeController extends Controller
 
     public function store(Request $request)
     {
-        $siteid = $request->siteid ?? auth()->user()->siteid ?? 102;
+        // Le site demandeur est toujours celui de l'utilisateur connecté
+        $siteid = auth()->user()->siteid ?? 102;
         $siterecepteurid = $request->siterecepteurid;
-        
+
         if ($siteid == $siterecepteurid) {
             return back()
                 ->with('error', "Le site expéditeur et le site récepteur ne peuvent pas être identiques.")
                 ->withInput();
         }
 
-        $description = $request->description;
         $action_type = $request->input('action_type', 'save');
-        
+
         $nouvel_etat = ($action_type === 'envoyer') ? 2 : 1; // 1 = Brouillon, 2 = Envoyé
 
-        // Validate stock availability on the receptor site (the site supplying the stock) before any DB inserts/updates
-        if ($nouvel_etat === 2) {
-            $lignes = $request->input('lignes', []);
-            $checkRecepteurId = $siterecepteurid;
-            if (!$checkRecepteurId && $request->filled('demandetransfertid')) {
-                $checkRecepteurId = DB::table('demandetransferts')
+        // Ignorer les lignes sans produit
+        $lignes = array_values(array_filter((array) $request->input('lignes', []), function ($ligne) {
+            return !empty($ligne['produitid']);
+        }));
+
+        return DB::transaction(function () use ($request, $siteid, $siterecepteurid, $nouvel_etat, $lignes) {
+            $demande = null;
+
+            if ($request->filled('demandetransfertid')) {
+                $demande = DB::table('demandetransferts')
                     ->where('demandetransfertid', $request->demandetransfertid)
-                    ->value('siterecepteurid');
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$demande) {
+                    return redirect()->route('transfert.demande_envoye.index')->with('error', 'Demande introuvable.');
+                }
+                if ($demande->siteid != $siteid || $demande->etatdemandetransfertid != 1) {
+                    return back()->with('error', 'Seules les demandes en brouillon de votre site peuvent être modifiées.');
+                }
+
+                $siterecepteurid = $demande->siterecepteurid;
             }
 
-            foreach ($lignes as $ligne) {
-                if (empty($ligne['produitid'])) continue;
+            // Validate stock availability on the receptor site (the site supplying the stock) before any DB inserts/updates
+            if ($nouvel_etat === 2) {
+                foreach ($lignes as $ligne) {
+                    $qte = (int) $ligne['qte'];
+                    $produit2id = $ligne['produit2id'] ?? $ligne['produitid'];
 
-                $qte = (int) $ligne['qte'];
-                $produit2id = $ligne['produit2id'] ?? $ligne['produitid'];
+                    $stock = DB::table('vproduit2stocks')
+                        ->where('produit2id', $produit2id)
+                        ->where('siteid', $siterecepteurid)
+                        ->value('qtestock');
 
-                $stock = DB::table('vproduit2stocks')
-                    ->where('produit2id', $produit2id)
-                    ->where('siteid', $checkRecepteurId)
-                    ->value('qtestock');
+                    $stockAvailable = $stock ? (float)$stock : 0.0;
 
-                $stockAvailable = $stock ? (float)$stock : 0.0;
+                    if ($qte > $stockAvailable) {
+                        $reference = DB::table('produits as p')
+                            ->join('produit2s as p2', 'p2.produitid', '=', 'p.produitid')
+                            ->where('p2.produit2id', $produit2id)
+                            ->value('p.reference') ?? 'Produit';
 
-                if ($qte > $stockAvailable) {
-                    $reference = DB::table('produits as p')
-                        ->join('produit2s as p2', 'p2.produitid', '=', 'p.produitid')
-                        ->where('p2.produit2id', $produit2id)
-                        ->value('p.reference') ?? 'Produit';
-
-                    return back()
-                        ->with('error', "Stock insuffisant pour le produit {$reference} sur le site destinataire. Demandé: {$qte}, Disponible: {$stockAvailable}")
-                        ->withInput();
+                        return back()
+                            ->with('error', "Stock insuffisant pour le produit {$reference} sur le site destinataire. Demandé: {$qte}, Disponible: {$stockAvailable}")
+                            ->withInput();
+                    }
                 }
             }
-        }
 
-        if ($request->filled('demandetransfertid')) {
-            $id = $request->demandetransfertid;
-            
-            DB::table('demandetransferts')
-                ->where('demandetransfertid', $id)
-                ->update([
-                    'description' => $description,
-                    'etatdemandetransfertid' => $nouvel_etat
+            if ($demande) {
+                $id = $demande->demandetransfertid;
+
+                $entete = ['etatdemandetransfertid' => $nouvel_etat];
+                // Ne pas écraser l'observation si le champ n'est pas envoyé
+                if ($request->has('description')) {
+                    $entete['description'] = $request->description;
+                }
+
+                DB::table('demandetransferts')
+                    ->where('demandetransfertid', $id)
+                    ->update($entete);
+
+                // Clear old lines to replace them
+                DB::table('detdemandetransferts')->where('demandetransfertid', $id)->delete();
+                $numero = $demande->demandetransfertnumero;
+            } else {
+                // Sérialiser le calcul max()+1 du numéro pour éviter les doublons
+                DB::statement('SELECT pg_advisory_xact_lock(?)', [self::LOCK_NUMEROTATION_DEMANDE]);
+
+                // Récupérer le prochain ID depuis la séquence
+                $id = DB::selectOne("SELECT nextval('demandetransfert_demandetransfertid_seq') as id")->id;
+
+                // Générer un numéro de séquence (simplifié)
+                $numero = (DB::table('demandetransferts')->max('demandetransfertnumero') ?? 0) + 1;
+                $numeroInterne = 'DTE-' . date('Y') . '-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+
+                DB::table('demandetransferts')->insert([
+                    'demandetransfertid' => $id,
+                    'siteid' => $siteid,
+                    'siterecepteurid' => $siterecepteurid,
+                    'etatdemandetransfertid' => $nouvel_etat, // 1 = Brouillon, 2 = Envoyé
+                    'demandetransfertnumero' => $numero,
+                    'numerointerne' => $numeroInterne,
+                    'datecreation' => Carbon::now(),
+                    'demandetransfertdate' => Carbon::now(),
+                    'datedebut' => Carbon::now(),
+                    'datefin' => Carbon::now(),
+                    'userid' => auth()->id() ?? 2,
+                    'description' => $request->description,
+                    'confirmer' => false,
+                    'totalqte' => 0,
+                    'totalbrutht' => 0,
+                    'remise' => 0,
+                    'vremise' => 0,
+                    'totalnetht' => 0,
+                    'totaltva' => 0,
+                    'totalttc' => 0,
+                    'acompte' => 0,
+                    'netapayer' => 0
                 ]);
+            }
 
-            // Clear old lines to replace them
-            DB::table('detdemandetransferts')->where('demandetransfertid', $id)->delete();
-            $numero = DB::table('demandetransferts')->where('demandetransfertid', $id)->value('demandetransfertnumero');
-        } else {
-            // Récupérer le prochain ID depuis la séquence
-            $id = DB::selectOne("SELECT nextval('demandetransfert_demandetransfertid_seq') as id")->id;
+            $totalqte = 0;
+            $totalht = 0;
+            $totalttc = 0;
 
-            // Générer un numéro de séquence (simplifié)
-            $numero = DB::table('demandetransferts')->max('demandetransfertnumero') + 1;
-            $numeroInterne = 'DTE-' . date('Y') . '-' . str_pad($numero, 4, '0', STR_PAD_LEFT);
+            foreach ($lignes as $index => $ligne) {
+                $qte = (int) $ligne['qte'];
+                $prix = (float) ($ligne['prix'] ?? 0);
+                $ht = $prix / 1.19; // Assuming standard 19% TVA for generic calculation if not provided
+                $totalqte += $qte;
+                $totalttc += ($prix * $qte);
+                $totalht += ($ht * $qte);
 
-            DB::table('demandetransferts')->insert([
-                'demandetransfertid' => $id,
-                'siteid' => $siteid,
-                'siterecepteurid' => $siterecepteurid,
-                'etatdemandetransfertid' => $nouvel_etat, // 1 = Brouillon, 2 = Envoyé
-                'demandetransfertnumero' => $numero,
-                'numerointerne' => $numeroInterne,
-                'datecreation' => Carbon::now(),
-                'demandetransfertdate' => Carbon::now(),
-                'datedebut' => Carbon::now(),
-                'datefin' => Carbon::now(),
-                'userid' => auth()->id() ?? 2,
-                'description' => $description,
-                'confirmer' => false,
-                'totalqte' => 0,
-                'totalbrutht' => 0,
-                'remise' => 0,
-                'vremise' => 0,
-                'totalnetht' => 0,
-                'totaltva' => 0,
-                'totalttc' => 0,
-                'acompte' => 0,
-                'netapayer' => 0
-            ]);
-        }
-
-        $lignes = $request->input('lignes', []);
-        $totalqte = 0;
-        $totalht = 0;
-        $totalttc = 0;
-
-        foreach ($lignes as $index => $ligne) {
-            $qte = (int) $ligne['qte'];
-            $prix = (float) ($ligne['prix'] ?? 0);
-            $ht = $prix / 1.19; // Assuming standard 19% TVA for generic calculation if not provided
-            $totalqte += $qte;
-            $totalttc += ($prix * $qte);
-            $totalht += ($ht * $qte);
-
-            DB::table('detdemandetransferts')->insert([
-                'demandetransfertid' => $id,
-                'siteid' => $siteid,
-                'siterecepteurid' => $siterecepteurid,
-                'produitid' => $ligne['produitid'],
-                'produit2id' => $ligne['produit2id'] ?? $ligne['produitid'],
-                'taxefamilleid' => 1,
-                'ht' => $ht,
-                'ttc' => $prix,
-                'qte' => $qte,
-                'qteenvoi' => 0,
-                'qterecu' => 0,
-                'etatdemandetransfertid' => $nouvel_etat,
-                'totalht' => $ht * $qte,
-                'remise' => 0,
-                'remise2' => 0,
-                'totalhtnet' => $ht * $qte,
-                'taxe1' => 0, 'vtaxe1' => 0,
-                'taxe2' => 0, 'vtaxe2' => 0,
-                'taxe3' => 0, 'vtaxe3' => 0,
-                'taxe4' => 0, 'vtaxe4' => 0,
-                'tva' => 19,
-                'vtva' => 0,
-                'totalttc' => $prix * $qte,
-                'totalttcnet' => $prix * $qte,
-                'qteecart' => 0,
-                'qteenvoi' => 0,
-                'qterecu' => 0,
-                'date' => Carbon::now(),
-                'largeur' => 0,
-                'longueur' => 0,
-                'surface' => 0,
-                'pointer' => false,
-                'ordre' => $index + 1,
-                'prodid' => 0, // prodid is integer, produitid is bigint, using 0 to bypass constraint
-                'modestock' => 1
-            ]);
-        }
-
-        // Update totals
-        if (count($lignes) > 0) {
-            DB::table('demandetransferts')
-                ->where('demandetransfertid', $id)
-                ->update([
-                    'totalqte' => $totalqte,
-                    'totalbrutht' => $totalht,
-                    'totalnetht' => $totalht,
-                    'totalttc' => $totalttc,
-                    'netapayer' => $totalttc
+                DB::table('detdemandetransferts')->insert([
+                    'demandetransfertid' => $id,
+                    'siteid' => $siteid,
+                    'siterecepteurid' => $siterecepteurid,
+                    'produitid' => $ligne['produitid'],
+                    'produit2id' => $ligne['produit2id'] ?? $ligne['produitid'],
+                    'taxefamilleid' => 1,
+                    'ht' => $ht,
+                    'ttc' => $prix,
+                    'qte' => $qte,
+                    'qteenvoi' => 0,
+                    'qterecu' => 0,
+                    'etatdemandetransfertid' => $nouvel_etat,
+                    'totalht' => $ht * $qte,
+                    'remise' => 0,
+                    'remise2' => 0,
+                    'totalhtnet' => $ht * $qte,
+                    'taxe1' => 0, 'vtaxe1' => 0,
+                    'taxe2' => 0, 'vtaxe2' => 0,
+                    'taxe3' => 0, 'vtaxe3' => 0,
+                    'taxe4' => 0, 'vtaxe4' => 0,
+                    'tva' => 19,
+                    'vtva' => 0,
+                    'totalttc' => $prix * $qte,
+                    'totalttcnet' => $prix * $qte,
+                    'qteecart' => 0,
+                    'date' => Carbon::now(),
+                    'largeur' => 0,
+                    'longueur' => 0,
+                    'surface' => 0,
+                    'pointer' => false,
+                    'ordre' => $index + 1,
+                    'prodid' => 0, // prodid is integer, produitid is bigint, using 0 to bypass constraint
+                    'modestock' => 1
                 ]);
-        }
+            }
 
-        return redirect()->route('transfert.demande_envoye.index')->with('success', 'En-tête de la demande enregistré avec succès ! (N° '.$numero.')');
+            // Update totals
+            if (count($lignes) > 0) {
+                DB::table('demandetransferts')
+                    ->where('demandetransfertid', $id)
+                    ->update([
+                        'totalqte' => $totalqte,
+                        'totalbrutht' => $totalht,
+                        'totalnetht' => $totalht,
+                        'totalttc' => $totalttc,
+                        'netapayer' => $totalttc
+                    ]);
+            }
+
+            return redirect()->route('transfert.demande_envoye.index')->with('success', 'En-tête de la demande enregistré avec succès ! (N° '.$numero.')');
+        });
     }
 
     public function edit($id)
     {
+        $siteid = auth()->user()->siteid ?? 102;
+
         $demande = DB::table('demandetransferts')->where('demandetransfertid', $id)->first();
         if (!$demande) {
             return redirect()->route('transfert.demande_envoye.index')->with('error', 'Demande introuvable.');
         }
+        if ($demande->siteid != $siteid || $demande->etatdemandetransfertid != 1) {
+            return back()->with('error', 'Seules les demandes en brouillon de votre site peuvent être modifiées.');
+        }
 
+        // produitctviews : une ligne par produit2id, indépendante du stock d'un site (aucune ligne perdue)
         $lignes = DB::table('detdemandetransferts as det')
-            ->join('vproduit2stocks as p', function($join) use ($demande) {
-                $join->on('p.produit2id', '=', 'det.produit2id')
-                     ->where('p.siteid', $demande->siteid);
-            })
+            ->leftJoin('produitctviews as p', 'p.produit2id', '=', 'det.produit2id')
             ->where('det.demandetransfertid', $id)
             ->select(
                 'det.*',
@@ -310,10 +333,11 @@ class DemandeTransfertEnvoyeController extends Controller
                 'p.couleurlibelle',
                 'p.ttc_vente'
             )
+            ->orderBy('det.ordre')
             ->get();
 
         $sites = DB::table('sites')->orderBy('libelle')->get();
-        $site = DB::table('sites')->where('siteid', auth()->user()->siteid ?? 102)->first();
+        $site = DB::table('sites')->where('siteid', $siteid)->first();
 
         // Data for modal
         $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
@@ -328,10 +352,22 @@ class DemandeTransfertEnvoyeController extends Controller
 
     public function destroy($id)
     {
-        DB::table('detdemandetransferts')->where('demandetransfertid', $id)->delete();
-        DB::table('demandetransferts')->where('demandetransfertid', $id)->delete();
+        $siteid = auth()->user()->siteid ?? 102;
 
-        return redirect()->route('transfert.demande_envoye.index')->with('success', 'Demande supprimée avec succès.');
+        return DB::transaction(function () use ($id, $siteid) {
+            $demande = DB::table('demandetransferts')->where('demandetransfertid', $id)->lockForUpdate()->first();
+            if (!$demande) {
+                return redirect()->route('transfert.demande_envoye.index')->with('error', 'Demande introuvable.');
+            }
+            if ($demande->siteid != $siteid || $demande->etatdemandetransfertid != 1) {
+                return back()->with('error', 'Seules les demandes en brouillon de votre site peuvent être supprimées.');
+            }
+
+            DB::table('detdemandetransferts')->where('demandetransfertid', $id)->delete();
+            DB::table('demandetransferts')->where('demandetransfertid', $id)->delete();
+
+            return redirect()->route('transfert.demande_envoye.index')->with('success', 'Demande supprimée avec succès.');
+        });
     }
 
     public function searchProducts(Request $request)

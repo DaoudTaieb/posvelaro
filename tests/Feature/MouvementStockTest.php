@@ -15,7 +15,7 @@ class MouvementStockTest extends TestCase
     {
         parent::setUp();
         
-        $user = DB::table('users')->first();
+        $user = DB::table('users')->orderBy('userid')->first();
         if ($user) {
             $userModel = new User();
             $userModel->userid = $user->userid;

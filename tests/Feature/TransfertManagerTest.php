@@ -19,7 +19,7 @@ class TransfertManagerTest extends TestCase
     {
         parent::setUp();
         
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->userExpediteur = new User();
             $this->userExpediteur->userid = $dbUser->userid;

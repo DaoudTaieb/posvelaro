@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Caisse {{ $siteName }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
@@ -412,6 +413,8 @@
     </style>
 </head>
 <body>
+@include('partials.ui-dialogs')
+@include('partials.ui-dialogs')
 
 <div class="pos-container">
 
@@ -571,7 +574,7 @@
                 <button class="grid-btn" onclick="openChequeModal()">Cheque</button>
             </div>
             <div class="split-col">
-                <button class="grid-btn" onclick="openQuickPaymentModal(3, 'Réglement Carte Bancaire')">C.B</button>
+                <button class="grid-btn" onclick="openQuickPaymentModal(4, 'Réglement Carte Bancaire')">C.B</button>
                 <button class="grid-btn" onclick="openChequeCadeauxModal()">Chq.Cad</button>
             </div>
             <div class="split-col">
@@ -1022,7 +1025,12 @@
 <!-- JAVASCRIPT FOR LOGIC -->
 <script>
     console.log("=== GOLDEN POS POS SCRIPT START ===");
-    
+
+    // Échappe les données (noms clients, articles...) avant insertion via innerHTML
+    function escHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    }
+
     // Global functions definition at the very top
     function sendSmsDirectly(tel, msg) {
         let formData = new FormData();
@@ -1040,14 +1048,14 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('SMS envoyé avec succès !');
+                notifier('SMS envoyé avec succès !');
             } else {
-                alert('Erreur lors de l\'envoi du SMS: ' + (data.message || ''));
+                notifier('Erreur lors de l\'envoi du SMS: ' + (data.message || ''));
             }
         })
         .catch(error => {
             console.error(error);
-            alert('Erreur réseau lors de l\'envoi du SMS.');
+            notifier('Erreur réseau lors de l\'envoi du SMS.');
         });
     }
 
@@ -1065,7 +1073,7 @@
             if (res.success) {
                 if (typeof closePaymentModal === 'function') closePaymentModal();
                 if (typeof closeMultiPaymentModal === 'function') closeMultiPaymentModal();
-                alert(res.message);
+                notifier(res.message);
                 
                 // Prompt to send SMS if client phone is available
                 if (res.client_tel) {
@@ -1076,14 +1084,12 @@
                         message = `Merci pour votre fidélité chez Golden Pos, ${res.client_nom}! Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
                     }
                     
-                    if (confirm(`Voulez-vous envoyer un SMS de confirmation au client (${res.client_tel}) ?`)) {
-                        sendSmsDirectly(res.client_tel, message);
-                    }
+                    confirmer(`Voulez-vous envoyer un SMS de confirmation au client (${res.client_tel}) ?`, { titre: 'SMS client', okLabel: 'Envoyer' })
+                        .then(ok => { if (ok) sendSmsDirectly(res.client_tel, message); });
                 }
 
-                if (res.print_url) {
-                    window.open(res.print_url, '_blank').focus();
-                }
+                // Vider le panier AVANT d'ouvrir le reçu : le ticket est enregistré,
+                // il ne doit plus pouvoir être re-validé même si l'ouverture du reçu échoue.
                 ticketLines = [];
                 currentClientId = {{ $client ? $client->clientid : 1 }};
                 document.getElementById('clientName').innerText = 'PASSAGER';
@@ -1098,18 +1104,27 @@
                 // Keep the same currentVendeurId (vendor persists across tickets)
                 
                 renderTable();
+
+                if (res.print_url) {
+                    const recu = window.open(res.print_url, '_blank');
+                    if (recu) {
+                        recu.focus();
+                    } else {
+                        notifier("Le reçu n'a pas pu s'ouvrir : autorisez les fenêtres pop-up pour ce site afin d'imprimer les tickets.", 'warning', 8000);
+                    }
+                }
                 
                 fetch(`{{ route('vente.caisse.en_attente') }}`)
                     .then(r => r.json())
                     .then(r => { console.log('En attente count:', r.count); })
                     .catch(e => console.error(e));
             } else {
-                alert("Erreur : " + res.message);
+                notifier("Erreur : " + res.message);
             }
         })
         .catch(err => {
             console.error(err);
-            alert("Une erreur est survenue lors de l'enregistrement.");
+            notifier("Une erreur est survenue lors de l'enregistrement.");
         });
     };
 
@@ -1126,14 +1141,18 @@
     window.miseEnAttente = function() {
         try {
             if (ticketLines.length === 0) {
-                alert("Le ticket est vide.");
+                notifier("Le ticket est vide.");
+                return;
+            }
+            if (typeof complementMode !== 'undefined' && complementMode) {
+                notifier("Impossible de mettre en attente un complément d'acompte.");
                 return;
             }
             pendingAction = 'miseEnAttente';
             openVendeurModal();
         } catch (e) {
             console.error("Error in miseEnAttente:", e);
-            alert("Erreur lors de l'ouverture du popup: " + e.message);
+            notifier("Erreur lors de l'ouverture du popup: " + e.message);
         }
     };
 
@@ -1149,23 +1168,37 @@
             fetch(`{{ route('vente.caisse.pos.scan_product') }}?code=${encodeURIComponent(ref)}`)
                 .then(response => response.json())
                 .then(product => {
-                    if(product) {
+                    if (product && product.choisir_variante) {
+                        // Code commun à plusieurs tailles/couleurs : choisir la variante
+                        openVariantsModal(product);
+                    } else if(product) {
                         addProductToTicket(product);
                     } else {
-                        alert('Produit non trouvé');
+                        notifier('Produit non trouvé');
                     }
                     this.value = '';
                 })
                 .catch(error => {
                     console.error('Erreur:', error);
-                    alert('Erreur lors de la recherche du produit');
+                    notifier('Erreur lors de la recherche du produit');
                 });
         }
     });
 
     let isRetourMode = false;
 
+    // Un ticket existant chargé depuis le journal (réglé ou en complément) ne se modifie pas :
+    // seules ses lignes enregistrées font foi. Pour vendre, il faut d'abord l'annuler (poubelle).
+    function ticketExistantVerrouille() {
+        if (typeof complementMode !== 'undefined' && complementMode) {
+            notifier(`Le ticket N° ${complementNumero} est un ticket existant : il ne peut pas être modifié. Annulez-le (poubelle) pour commencer une nouvelle vente.`, 'warning');
+            return true;
+        }
+        return false;
+    }
+
     function addProductToTicket(productData) {
+        if (ticketExistantVerrouille()) return;
         let prix = parseFloat(productData.ttc_vente) || 0;
         let remise = 0;
         if (productData.is_loyalty_enabled == 1) {
@@ -1191,8 +1224,14 @@
             is_loyalty_enabled: productData.is_loyalty_enabled || 0
         };
         
-        // Check if product already exists to increment Qty
-        let existingLine = ticketLines.find(l => l.produitid === product.produitid && l.produit2id === product.produit2id);
+        // Même article déjà dans le panier : on cumule seulement une ligne de même sens (vente avec vente,
+        // retour avec retour), non liée à un ticket d'origine et au même prix net.
+        // Sinon une vente scannée annulerait une ligne de retour (quantité 0 = article gratuit).
+        let existingLine = ticketLines.find(l =>
+            String(l.produit2id) === String(product.produit2id)
+            && !l.detventeid
+            && Math.sign(parseFloat(l.qte)) === Math.sign(qteVal)
+            && Math.abs(parseFloat(l.prixNet) - prixNet) < 0.0005);
         if (existingLine) {
             existingLine.qte += qteVal;
             existingLine.total = existingLine.qte * existingLine.prixNet;
@@ -1268,8 +1307,8 @@
             }
 
             tr.innerHTML = `
-                <td>${line.reference || line.ref || ''}</td>
-                <td>${line.designation || ''} ${line.taille ? ' - ' + line.taille : ''} ${line.couleur ? ' - ' + line.couleur : ''}</td>
+                <td>${escHtml(line.reference || line.ref || '')}</td>
+                <td>${escHtml(line.designation || '')} ${escHtml(line.taille ? ' - ' + line.taille : '')} ${escHtml(line.couleur ? ' - ' + line.couleur : '')}</td>
                 <td class="align-right">
                     <input type="number" value="${qte}" class="editable-cell" onchange="updateQty(${index}, this.value)" onfocus="this.select(); selectLine(${index});">
                 </td>
@@ -1312,7 +1351,16 @@
         // Re-focus input
         document.getElementById('scanInput').focus();
 
-        // Save to localStorage
+        // Save to localStorage (panier en cours uniquement).
+        // Un ticket existant chargé depuis le journal (mode complément) n'est jamais sauvegardé :
+        // restauré après un rechargement, il deviendrait une nouvelle vente des mêmes articles.
+        if (typeof complementMode !== 'undefined' && complementMode) {
+            localStorage.removeItem('pos_ticketLines');
+            localStorage.removeItem('pos_currentClientId');
+            localStorage.removeItem('pos_clientName');
+            localStorage.removeItem('pos_clientCode');
+            return;
+        }
         localStorage.setItem('pos_ticketLines', JSON.stringify(ticketLines));
         if (currentClientId) {
             localStorage.setItem('pos_currentClientId', currentClientId);
@@ -1326,6 +1374,7 @@
     }
 
     function updateQty(index, newQty) {
+        if (ticketExistantVerrouille()) { renderTable(); return; }
         let qte = parseFloat(newQty);
         if (qte > 0) {
             ticketLines[index].qte = qte;
@@ -1335,6 +1384,7 @@
     }
 
     function updateRemise(index, newRemise) {
+        if (ticketExistantVerrouille()) { renderTable(); return; }
         let remise = parseFloat(newRemise) || 0;
         if (remise >= 0 && remise <= 100) {
             ticketLines[index].remise = remise;
@@ -1347,6 +1397,7 @@
     }
 
     function updateLineTotal(index, newTotal) {
+        if (ticketExistantVerrouille()) { renderTable(); return; }
         let targetTotal = parseFloat(newTotal);
         if (isNaN(targetTotal) || targetTotal < 0) return;
         
@@ -1368,6 +1419,7 @@
     }
 
     function removeLine(index) {
+        if (ticketExistantVerrouille()) { renderTable(); return; }
         ticketLines.splice(index, 1);
         renderTable();
     }
@@ -1378,7 +1430,7 @@
         if (!ticketId) return;
         console.log('Recherche du ticket N°:', ticketId);
         // TODO: Ajouter l'appel AJAX pour récupérer le ticket
-        alert('Recherche du ticket N° ' + ticketId + ' (fonctionnalité à implémenter)');
+        notifier('Recherche du ticket N° ' + ticketId + ' (fonctionnalité à implémenter)');
     }
 
     function annulerTicket() {
@@ -1405,6 +1457,7 @@
     }
 
     function openProductModal() {
+        if (ticketExistantVerrouille()) return;
         document.getElementById('productModal').style.display = 'flex';
         searchProducts(); // Load initially
     }
@@ -1449,12 +1502,12 @@
                     let stk = parseFloat(p.total_stock) || 0;
                     const cellStyle = 'padding: 10px 12px; font-size: 12px; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #e2e8f0;';
                     tr.innerHTML = `
-                        <td style="${cellStyle}">${p.produitcode || ''}</td>
-                        <td style="${cellStyle}">${p.reference || ''}</td>
-                        <td style="${cellStyle}">${p.barcode2 || ''}</td>
-                        <td style="${cellStyle} white-space: normal;">${p.produitlibelle || ''}</td>
-                        <td style="${cellStyle}">${p.famillelibelle || ''}</td>
-                        <td style="${cellStyle}">${p.sousfamillelibelle || ''}</td>
+                        <td style="${cellStyle}">${escHtml(p.produitcode || '')}</td>
+                        <td style="${cellStyle}">${escHtml(p.reference || '')}</td>
+                        <td style="${cellStyle}">${escHtml(p.barcode2 || '')}</td>
+                        <td style="${cellStyle} white-space: normal;">${escHtml(p.produitlibelle || '')}</td>
+                        <td style="${cellStyle}">${escHtml(p.famillelibelle || '')}</td>
+                        <td style="${cellStyle}">${escHtml(p.sousfamillelibelle || '')}</td>
                         <td style="${cellStyle} font-weight: bold; color: #059669; text-align: right;">${price.toFixed(3)}</td>
                         <td style="${cellStyle} text-align: center;">${Number.isInteger(stk) ? stk : stk.toFixed(2)}</td>
                         <td style="${cellStyle}">${p.fournisseur || ''}</td>
@@ -1531,9 +1584,9 @@
             tr.style.borderBottom = '1px solid #e5e7eb';
             
             tr.innerHTML = `
-                <td style="padding: 6px; color: #111827;">${v.produitcode || ''}</td>
-                <td style="padding: 6px; color: #111827;">${v.couleurlibelle || ''}</td>
-                <td style="padding: 6px; color: #111827;">${v.taillelibelle || ''}</td>
+                <td style="padding: 6px; color: #111827;">${escHtml(v.produitcode || '')}</td>
+                <td style="padding: 6px; color: #111827;">${escHtml(v.couleurlibelle || '')}</td>
+                <td style="padding: 6px; color: #111827;">${escHtml(v.taillelibelle || '')}</td>
                 <td style="padding: 6px; text-align: right; color: #111827;">${price.toFixed(3)}</td>
                 <td style="padding: 6px; text-align: right; color: #111827;">${Number.isInteger(stk) ? stk : stk.toFixed(2)}</td>
                 <td style="padding: 6px; text-align: right; color: #111827;">0</td>
@@ -1647,11 +1700,11 @@
                         confirmClientSelection();
                     };
                     tr.innerHTML = `
-                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${c.clientcode || ''}</td>
-                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${c.nom || ''}</td>
-                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${c.tel || ''}</td>
-                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${c.adressefacturation || ''}</td>
-                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${c.mf || ''}</td>
+                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${escHtml(c.clientcode || '')}</td>
+                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${escHtml(c.nom || '')}</td>
+                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${escHtml(c.tel || '')}</td>
+                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${escHtml(c.adressefacturation || '')}</td>
+                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${escHtml(c.mf || '')}</td>
                         <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${Number(c.remise || 0)}</td>
                         <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${Number(c.plafonremise || 0)}</td>
                         <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${Number(c.solde || 0)}</td>
@@ -1690,7 +1743,7 @@
         let raison = document.getElementById('newClientRaison').value.trim();
         let tel = document.getElementById('newClientTel').value.trim();
         if (!raison || !tel) {
-            alert("Raison et Téléphone sont obligatoires !");
+            notifier("Raison et Téléphone sont obligatoires !");
             return;
         }
 
@@ -1698,16 +1751,17 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
             },
-            body: JSON.stringify({ nom: raison, tel: tel })
+            body: JSON.stringify({ raison: raison, telephone: tel })
         })
         .then(r => r.json())
         .then(res => {
             if (res.success) {
                 selectClient(res.client);
             } else {
-                alert("Erreur: " + res.message);
+                notifier("Erreur: " + res.message);
             }
         });
     }
@@ -1812,18 +1866,18 @@
                 selectClient(data.client);
                 closeCreateClientModal();
             } else {
-                alert(data.message || 'Erreur lors de la création');
+                notifier(data.message || 'Erreur lors de la création');
             }
         })
         .catch(err => {
             console.error(err);
-            alert('Erreur serveur');
+            notifier('Erreur serveur');
         });
     }
 
     function openEditClientModal() {
         if (!currentClientId) {
-            alert('Veuillez d\'abord sélectionner un client.');
+            notifier('Veuillez d\'abord sélectionner un client.');
             return;
         }
 
@@ -1854,7 +1908,7 @@
                     
                     document.getElementById('editClientModal').style.display = 'flex';
                 } else {
-                    alert('Client introuvable.');
+                    notifier('Client introuvable.');
                 }
             })
             .catch(err => console.error(err));
@@ -1891,18 +1945,18 @@
                 selectClient(data.client);
                 closeEditClientModal();
             } else {
-                alert(data.message || 'Erreur lors de la modification');
+                notifier(data.message || 'Erreur lors de la modification');
             }
         })
         .catch(err => {
             console.error(err);
-            alert('Erreur serveur');
+            notifier('Erreur serveur');
         });
     }
 
     function openClientHistoryModal() {
         if (!currentClientId) {
-            alert('Veuillez d\'abord sélectionner un client.');
+            notifier('Veuillez d\'abord sélectionner un client.');
             return;
         }
 
@@ -1925,7 +1979,7 @@
                             html += `
                                 <tr style="border-bottom: 1px solid #eee; cursor: pointer;" onclick="showTicketPreview(${t.cticketid})" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='transparent'">
                                     <td style="padding: 8px;">${dateStr}</td>
-                                    <td style="padding: 8px; font-weight: bold;">${t.cticketnumero || ''}</td>
+                                    <td style="padding: 8px; font-weight: bold;">${escHtml(t.cticketnumero || '')}</td>
                                     <td style="padding: 8px; text-align: center;">${Number(t.totalqte).toFixed(2)}</td>
                                     <td style="padding: 8px; text-align: right; color: #059669; font-weight: bold;">${Number(t.totalttc).toFixed(3)}</td>
                                 </tr>
@@ -1978,10 +2032,10 @@
                             let varInfo = (h.couleur || '') + ' / ' + (h.taille || '');
                             html += `<tr style="border-bottom: 1px solid #eee;">
                                 <td style="padding: 8px;">${d}</td>
-                                <td style="padding: 8px;">${h.ticket || ''}</td>
-                                <td style="padding: 8px;">${clientInfo}</td>
-                                <td style="padding: 8px;">${prodInfo}</td>
-                                <td style="padding: 8px;">${varInfo}</td>
+                                <td style="padding: 8px;">${escHtml(h.ticket || '')}</td>
+                                <td style="padding: 8px;">${escHtml(clientInfo)}</td>
+                                <td style="padding: 8px;">${escHtml(prodInfo)}</td>
+                                <td style="padding: 8px;">${escHtml(varInfo)}</td>
                                 <td style="padding: 8px; text-align: center;">${parseFloat(h.qte).toFixed(0)}</td>
                                 <td style="padding: 8px; text-align: right; font-weight: bold;">${parseFloat(h.totalttc).toFixed(3)}</td>
                             </tr>`;
@@ -2151,12 +2205,12 @@
                             
                             html += `
                                 <tr style="border-bottom: 1px solid #eee;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
-                                    <td style="padding: 8px; border-right: 1px solid #eee;">${s.reference || ''}</td>
-                                    <td style="padding: 8px; border-right: 1px solid #eee;">${s.designation || ''}</td>
-                                    <td style="padding: 8px; border-right: 1px solid #eee;">${s.rayon || ''}</td>
-                                    <td style="padding: 8px; border-right: 1px solid #eee;">${s.couleur || ''}</td>
-                                    <td style="padding: 8px; border-right: 1px solid #eee;">${s.taille || ''}</td>
-                                    <td style="padding: 8px; border-right: 1px solid #eee; font-weight: bold;">${s.site_nom || ''}</td>
+                                    <td style="padding: 8px; border-right: 1px solid #eee;">${escHtml(s.reference || '')}</td>
+                                    <td style="padding: 8px; border-right: 1px solid #eee;">${escHtml(s.designation || '')}</td>
+                                    <td style="padding: 8px; border-right: 1px solid #eee;">${escHtml(s.rayon || '')}</td>
+                                    <td style="padding: 8px; border-right: 1px solid #eee;">${escHtml(s.couleur || '')}</td>
+                                    <td style="padding: 8px; border-right: 1px solid #eee;">${escHtml(s.taille || '')}</td>
+                                    <td style="padding: 8px; border-right: 1px solid #eee; font-weight: bold;">${escHtml(s.site_nom || '')}</td>
                                     <td style="padding: 8px; text-align: right; font-weight: bold; color: ${qty < 0 ? '#dc2626' : (qty > 0 ? '#059669' : '#333')}">${Number(qty).toFixed(2)}</td>
                                 </tr>
                             `;
@@ -2179,8 +2233,9 @@
 
     // --- MODIFICATION LIGNE ---
     function openEditLineModal() {
+        if (ticketExistantVerrouille()) return;
         if (selectedLineIndex < 0 || selectedLineIndex >= ticketLines.length) {
-            alert('Veuillez d\'abord sélectionner un article dans le ticket.');
+            notifier('Veuillez d\'abord sélectionner un article dans le ticket.');
             return;
         }
 
@@ -2206,7 +2261,7 @@
         let newRemise = parseFloat(document.getElementById('editLineRemise').value) || 0;
         
         if (newQte <= 0) {
-            alert("La quantité doit être supérieure à 0.");
+            notifier("La quantité doit être supérieure à 0.");
             return;
         }
         
@@ -2226,7 +2281,7 @@
     // --- IMPRIMER TICKET (PROVISOIRE) ---
     function printDraftTicket() {
         if (ticketLines.length === 0) {
-            alert('Le ticket est vide !');
+            notifier('Le ticket est vide !');
             return;
         }
         
@@ -2252,7 +2307,7 @@
                 <div class="center">Ticket Provisoire</div>
                 <div class="line"></div>
                 <div>Date: ${dateStr}</div>
-                <div>Client: ${clientName}</div>
+                <div>Client: ${escHtml(clientName)}</div>
                 <div>Vendeur: ${vendeur}</div>
                 <div class="line"></div>
                 <table>
@@ -2302,6 +2357,10 @@
         `;
         
         let printWindow = window.open('', '', 'width=400,height=600');
+        if (!printWindow) {
+            notifier("Impression impossible : autorisez les fenêtres pop-up pour ce site.", 'warning', 8000);
+            return;
+        }
         printWindow.document.write(ticketHTML);
         printWindow.document.close();
         printWindow.focus();
@@ -2383,8 +2442,8 @@
                         confirmVendeurSelection();
                     };
                     tr.innerHTML = `
-                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${v.code || ''}</td>
-                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${v.nom || ''}</td>
+                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${escHtml(v.code || '')}</td>
+                        <td style="padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${escHtml(v.nom || '')}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -2769,14 +2828,14 @@
                     // Populate Client Dropdown
                     let clientOpts = '<option value="Tous"></option>';
                     if(data.clients) {
-                        data.clients.forEach(c => { clientOpts += `<option value="${c.clientid}">${c.nom}</option>`; });
+                        data.clients.forEach(c => { clientOpts += `<option value="${escHtml(c.clientid)}">${escHtml(c.nom)}</option>`; });
                     }
                     document.getElementById('consultationClientSelect').innerHTML = clientOpts;
                     
                     // Populate Vendeur Dropdown
                     let vendeurOpts = '<option value="Tous">Tous</option>';
                     if(data.vendeurs) {
-                        data.vendeurs.forEach(v => { vendeurOpts += `<option value="${v.employeeid}">${v.nom}</option>`; });
+                        data.vendeurs.forEach(v => { vendeurOpts += `<option value="${escHtml(v.employeeid)}">${escHtml(v.nom)}</option>`; });
                     }
                     document.getElementById('consultationVendeurSelect').innerHTML = vendeurOpts;
 
@@ -2864,13 +2923,13 @@
                 </td>
                 <td style="padding: 6px 8px; border-right: 1px solid #eee;">${dateStr}</td>
                 <td style="padding: 6px 8px; border-right: 1px solid #eee;">${num}</td>
-                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${cnom}</td>
-                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${ctel}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${escHtml(cnom)}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${escHtml(ctel)}</td>
                 <td style="padding: 6px 8px; border-right: 1px solid #eee; text-align: right;">${parseFloat(t.totalttc).toFixed(3)}</td>
                 <td style="padding: 6px 8px; border-right: 1px solid #eee; text-align: right;">${parseFloat(t.acompte).toFixed(3)}</td>
                 <td style="padding: 6px 8px; border-right: 1px solid #eee; text-align: right;">${parseFloat(t.netapayer).toFixed(3)}</td>
-                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${cainom}</td>
-                <td style="padding: 6px 8px;">${vnom}</td>
+                <td style="padding: 6px 8px; border-right: 1px solid #eee;">${escHtml(cainom)}</td>
+                <td style="padding: 6px 8px;">${escHtml(vnom)}</td>
             `;
             tr.onclick = () => { loadTicketIntoPos(t); };
             tr.ondblclick = () => { window.open(`/vente/tickets/${t.cticketid}`, '_blank', 'width=800,height=600'); };
@@ -2887,67 +2946,23 @@
         inp.addEventListener('input', () => { renderConsultationTickets(); });
     });
 
+    // Ouverture d'un ticket depuis le journal des ventes : il se charge dans la caisse avec son état
+    // réel (acompte déjà versé, reste à payer, numéro). Un ticket est un document déjà enregistré :
+    // il n'est jamais re-validé comme une nouvelle vente. S'il reste un montant à payer, l'encaissement
+    // se fait en complément d'acompte sur ce ticket.
     function loadTicketIntoPos(ticket) {
-        if (ticketLines.length > 0 && !confirm("Un ticket est en cours. Voulez-vous le remplacer par ce ticket ?")) {
-            return;
-        }
-        fetch(`{{ url('/vente/caisse/ticket-details') }}/${ticket.cticketnumero}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    // Set Client
-                    if (data.ticket.clientid) {
-                        currentClientId = data.ticket.clientid;
-                        document.getElementById('clientName').innerText = ticket.client_nom || 'PASSAGER';
-                        let clientBadge = document.getElementById('clientBadge');
-                        if(clientBadge) clientBadge.style.display = 'inline-block';
-                    }
-                    
-                    // Set Vendeur
-                    if (data.ticket.employeeid) {
-                        let vendeurInput = document.getElementById('vendeurName');
-                        if(vendeurInput) {
-                            vendeurInput.dataset.id = data.ticket.employeeid;
-                            vendeurInput.value = ticket.vendeur_nom || '';
-                        }
-                    }
+        const reste = Math.max(0, parseFloat(ticket.netapayer) || 0);
+        closeConsultationModal();
+        selectComplementTicket(ticket.cticketid, ticket.cticketnumero, reste, ticket.clientid);
+    }
 
-                    // Map lines
-                    ticketLines = data.lines.map(l => {
-                        let remise = parseFloat(l.remise || 0);
-                        let prixNet = parseFloat(l.prix); // In backend, 'prix' alias is detctickets.ttc
-                        let basePrix = prixNet;
-                        if(remise > 0 && remise < 100) {
-                            basePrix = prixNet / (1 - (remise / 100));
-                        } else if (remise == 100) {
-                            basePrix = prixNet; // Prevent division by zero, though if 100% off, net is 0.
-                        }
-                        
-                        return {
-                            code: l.article_ref,
-                            ref: l.article_ref,
-                            designation: l.article_designation,
-                            couleur: l.couleur || '',
-                            taille: l.taille || '',
-                            qte: parseFloat(l.qte),
-                            prix: basePrix,
-                            remise: remise,
-                            prixNet: prixNet,
-                            total: parseFloat(l.totalttc),
-                            produit2id: l.produit2id
-                        };
-                    });
-                    
-                    renderTable();
-                    closeConsultationModal();
-                } else {
-                    alert(data.message || "Erreur lors du chargement du ticket.");
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                alert("Erreur de connexion.");
-            });
+    // Ticket déjà réglé chargé dans la caisse : plus aucun encaissement possible
+    function ticketDejaRegle() {
+        if (complementMode && complementReste <= 0.0005) {
+            notifier(`Le ticket N° ${complementNumero} est déjà réglé : aucun encaissement possible.`, 'info');
+            return true;
+        }
+        return false;
     }
 
     function validerTicket() {
@@ -2957,18 +2972,19 @@
     let mpTotalDu = 0;
 
     function openCreditFlow() {
+        if (ticketDejaRegle()) return;
         if (ticketLines.length === 0 && !complementMode) {
-            alert("Le ticket est vide.");
+            notifier("Le ticket est vide.");
             return;
         }
         let clientName = document.getElementById('clientName').innerText;
         if (clientName === 'PASSAGER' || !currentClientId || currentClientId == 1) {
-            alert("Veuillez d'abord sélectionner un client pour effectuer une vente à crédit.");
+            notifier("Veuillez d'abord sélectionner un client pour effectuer une vente à crédit.");
             openClientModal();
         } else {
             let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
             let payload = {
-                vendeurid: document.getElementById('vendeurName').dataset.id || null,
+                vendeurid: currentVendeurId,
                 clientid: currentClientId,
                 lignes: ticketLines,
                 totalttc: total,
@@ -2978,7 +2994,7 @@
             };
 
             if (complementMode) {
-                alert("Impossible de passer un crédit total sur un complément d'acompte.");
+                notifier("Impossible de passer un crédit total sur un complément d'acompte.");
                 return;
             } else {
                 window.submitTicketToBackend(payload, false);
@@ -2987,8 +3003,9 @@
     }
 
     function openMultiPaymentModal(defaultModeId = null) {
+        if (ticketDejaRegle()) return;
         if (ticketLines.length === 0 && !complementMode) {
-            alert("Le ticket est vide.");
+            notifier("Le ticket est vide.");
             return;
         }
 
@@ -3077,9 +3094,9 @@
                     <td style="padding: 2px; border-right: 1px solid #ddd;"></td>
                 `;
 
-                if (row.modeId === 2 || row.modeId === 3 || row.modeId === 4 || row.modeId === 9) {
+                if ([2, 4, 9, 10].includes(row.modeId)) {
                     detailsHTML = `
-                        <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${row.numero}" onchange="updateMpRow(${index}, 'numero', this.value)" style="width: 100%; border: 1px solid #eee; padding: 4px; box-sizing: border-box; outline: none;" placeholder="Numéro"></td>
+                        <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${escHtml(row.numero)}" onchange="updateMpRow(${index}, 'numero', this.value)" style="width: 100%; border: 1px solid #eee; padding: 4px; box-sizing: border-box; outline: none;" placeholder="Numéro"></td>
                         <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="date" value="${row.date}" onchange="updateMpRow(${index}, 'date', this.value)" style="width: 100%; border: 1px solid #eee; padding: 4px; box-sizing: border-box; outline: none;"></td>
                         <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${row.banque}" onchange="updateMpRow(${index}, 'banque', this.value)" style="width: 100%; border: 1px solid #eee; padding: 4px; box-sizing: border-box; outline: none;" placeholder="Banque"></td>
                     `;
@@ -3097,7 +3114,7 @@
         
         let reste = mpTotalDu - paye;
         document.getElementById('mpResteAPayer').value = reste.toFixed(3);
-        let sumBonAchat = mpReglementsArray.filter(r => r.modeId === 4).reduce((sum, r) => sum + r.montant, 0);
+        let sumBonAchat = mpReglementsArray.filter(r => r.modeId === 10).reduce((sum, r) => sum + r.montant, 0);
         let elBonAchat = document.getElementById('mpBonAchatVal');
         if (elBonAchat) elBonAchat.value = sumBonAchat.toFixed(3);
     }
@@ -3114,6 +3131,7 @@
 
     // CHEQUE CADEAU LOGIC
     function openChequeCadeauModal() {
+        if (ticketDejaRegle()) return;
         let total = parseFloat(document.getElementById('grandTotal').innerText);
         document.getElementById('chequeCadeauMontant').value = total.toFixed(3);
         document.getElementById('chequeCadeauModal').style.display = 'flex';
@@ -3128,7 +3146,7 @@
         let grandTotal = parseFloat(document.getElementById('grandTotal').innerText);
         
         if (mnt <= 0) {
-            alert("Le montant doit être supérieur à 0");
+            notifier("Le montant doit être supérieur à 0");
             return;
         }
 
@@ -3164,7 +3182,9 @@
             montant: r.montant,
             numero: r.numero || '',
             banque: r.banque || '',
-            date: r.date || ''
+            date: r.date || '',
+            proprietaire: r.proprietaire || '',
+            cavoirid: r.cavoirid || null
         }));
     }
 
@@ -3201,7 +3221,7 @@
         let mnt = parseFloat(document.getElementById('baDraftMnt').value);
         let rem = parseFloat(document.getElementById('baDraftRem').value) || 0;
         if (!num || isNaN(mnt) || mnt <= 0) {
-            alert("Veuillez saisir un numéro et un montant valide.");
+            notifier("Veuillez saisir un numéro et un montant valide.");
             return;
         }
         baLignes.push({ numero: num, montant: mnt, remise: rem });
@@ -3225,7 +3245,7 @@
         baLignes.forEach((l, index) => {
             let tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${l.numero}" onchange="baUpdate(${index}, 'numero', this.value)" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;"></td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${escHtml(l.numero)}" onchange="baUpdate(${index}, 'numero', this.value)" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;"></td>
                 <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="number" step="0.001" value="${l.montant}" onchange="baUpdate(${index}, 'montant', this.value)" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;"></td>
                 <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="number" step="0.01" value="${l.remise}" onchange="baUpdate(${index}, 'remise', this.value)" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;"></td>
                 <td style="padding: 2px; text-align: center;"><button onclick="baRemove(${index})" style="background: none; border: none; color: red; cursor: pointer; font-weight: bold;">X</button></td>
@@ -3237,7 +3257,7 @@
             let tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="padding: 2px; border-right: 1px solid #ddd;">
-                    <input type="text" id="baDraftNum" value="${baDraft.numero}" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;">
+                    <input type="text" id="baDraftNum" value="${escHtml(baDraft.numero)}" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;">
                 </td>
                 <td style="padding: 2px; border-right: 1px solid #ddd;">
                     <input type="number" step="0.001" id="baDraftMnt" value="${baDraft.montant}" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;">
@@ -3267,7 +3287,7 @@
     function validerBonAchat() {
         let nom = document.getElementById('baNom').value.trim();
         if (nom === '') {
-            alert("Nom et Prénom sont obligatoires.");
+            notifier("Nom et Prénom sont obligatoires.");
             return;
         }
 
@@ -3278,7 +3298,7 @@
                     let today = new Date().toISOString().split('T')[0];
                     mpReglementsArray.push({
                         id: Date.now() + Math.random(),
-                        modeId: 4,
+                        modeId: 10, // 10 = Bon d'achat
                         mode: "Bon d'achat",
                         montant: l.montant,
                         numero: l.numero,
@@ -3308,19 +3328,19 @@
     function validerAvoir() {
         let barcode = document.getElementById('avoirBarcodeInput').value.trim();
         if (barcode === '') {
-            alert("Veuillez saisir ou scanner un code à barre.");
+            notifier("Veuillez saisir ou scanner un code à barre.");
             return;
         }
 
         fetch(`/vente/caisse/pos/check-avoir?code=${encodeURIComponent(barcode)}`)
             .then(res => res.json())
-            .then(data => {
+            .then(async data => {
                 if (data.success) {
                     let av = data.avoir;
 
                     // Warn if avoir client doesn't match current client (except if current is PASSAGER)
                     if (av.clientid && av.clientid != currentClientId && currentClientId != 1) {
-                        if (!confirm(`Cet avoir appartient à ${av.client_name}. Voulez-vous quand même l'utiliser ?`)) {
+                        if (!(await confirmer(`Cet avoir appartient à ${av.client_name}. Voulez-vous quand même l'utiliser ?`, { titre: 'Avoir', okLabel: 'Utiliser' }))) {
                             return;
                         }
                     }
@@ -3329,7 +3349,7 @@
                     let reste = mpTotalDu - paye;
 
                     if (reste <= 0) {
-                        alert("Le ticket est déjà entièrement réglé.");
+                        notifier("Le ticket est déjà entièrement réglé.");
                         return;
                     }
 
@@ -3340,6 +3360,7 @@
                         id: Date.now() + Math.random(),
                         modeId: 9,
                         mode: "Avoir",
+                        cavoirid: av.cavoirid,
                         montant: montantAUtiliser,
                         numero: av.numerointerne || av.cavoirnumero || barcode,
                         date: today,
@@ -3349,12 +3370,12 @@
                     renderMpTable();
                     closeAvoirModal();
                 } else {
-                    alert(data.message || "Avoir invalide ou introuvable.");
+                    notifier(data.message || "Avoir invalide ou introuvable.");
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert("Erreur lors de la vérification de l'avoir.");
+                notifier("Erreur lors de la vérification de l'avoir.");
             });
     }
 
@@ -3364,17 +3385,17 @@
         let reste = mpTotalDu - paye;
 
         if (paye <= 0) {
-            alert("Veuillez saisir au moins un montant.");
+            notifier("Veuillez saisir au moins un montant.");
             return;
         }
 
         if (!isAcompte && reste > 0.005) {
-            alert("Le total n'est pas réglé. Cliquez sur 'Valider Acompte' si vous souhaitez valider un paiement partiel.");
+            notifier("Le total n'est pas réglé. Cliquez sur 'Valider Acompte' si vous souhaitez valider un paiement partiel.");
             return;
         }
 
         if (paye > mpTotalDu + 0.005) {
-            alert("Le montant reçu ne peut pas dépasser le total (pas de rendu automatique pour les paiements multiples).");
+            notifier("Le montant reçu ne peut pas dépasser le total (pas de rendu automatique pour les paiements multiples).");
             return;
         }
 
@@ -3394,24 +3415,24 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    alert('Complément enregistré avec succès!');
+                    notifier('Complément enregistré avec succès!');
                     closeMultiPaymentModal();
                     exitComplementMode();
                     document.getElementById('complementAcompteModal').style.display = 'none';
                 } else {
-                    alert('Erreur: ' + (data.message || ''));
+                    notifier('Erreur: ' + (data.message || ''));
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert("Erreur de communication.");
+                notifier("Erreur de communication.");
             });
             return;
         }
 
         // Standard Ticket Mode
         let payload = {
-            vendeurid: document.getElementById('vendeurName').dataset.id || null,
+            vendeurid: currentVendeurId,
             clientid: currentClientId,
             lignes: ticketLines,
             reglements: reglements,
@@ -3437,8 +3458,8 @@
                             let tr = document.createElement('tr');
                             tr.style.borderBottom = '1px solid #ddd';
                             tr.innerHTML = `
-                                <td style="padding: 8px;">${t.cticketnumero || t.cticketid}</td>
-                                <td style="padding: 8px;">${t.client_nom || 'PASSAGER'}</td>
+                                <td style="padding: 8px;">${escHtml(t.cticketnumero || t.cticketid)}</td>
+                                <td style="padding: 8px;">${escHtml(t.client_nom || 'PASSAGER')}</td>
                                 <td style="padding: 8px;">${t.datecreation}</td>
                                 <td style="padding: 8px; text-align: right; font-weight: bold;">${parseFloat(t.totalttc).toFixed(3)}</td>
                                 <td style="padding: 8px; text-align: center;">
@@ -3457,14 +3478,17 @@
         document.getElementById('repriseModal').style.display = 'none';
     }
 
-    function loadReprise(id) {
+    async function loadReprise(id) {
         if (ticketLines.length > 0) {
-            if (!confirm("Attention, votre ticket en cours n'est pas vide. Voulez-vous vraiment le remplacer par le ticket en attente ?")) {
+            if (!(await confirmer("Attention, votre ticket en cours n'est pas vide. Voulez-vous vraiment le remplacer par le ticket en attente ?", { okLabel: 'Remplacer' }))) {
                 return;
             }
         }
 
-        fetch(`{{ url('vente/caisse/reprise') }}/${id}`)
+        fetch(`{{ url('vente/caisse/reprise') }}/${id}`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+        })
             .then(r => r.json())
             .then(res => {
                 if (res.success) {
@@ -3502,7 +3526,7 @@
                     renderTable();
                     closeRepriseModal();
                 } else {
-                    alert("Erreur: " + res.message);
+                    notifier("Erreur: " + res.message);
                 }
             });
     }
@@ -3552,6 +3576,7 @@
     let ticketRetourLines = []; 
 
     function openRetourModal() {
+        if (ticketExistantVerrouille()) return;
         document.getElementById('retourTicketNumero').value = '';
         document.getElementById('retourTbody').innerHTML = '';
         ticketRetourLines = [];
@@ -3569,17 +3594,17 @@
         if (!num) return;
         
         // Fetch ticket details from backend
-        fetch(`/vente/caisse/ticket-details/${num}`)
+        fetch(`{{ url('/vente/caisse/ticket-details') }}/${encodeURIComponent(num)}?par=numero`)
             .then(r => r.json())
             .then(res => {
                 if (res.success && res.ticket) {
                     ticketRetourLines = res.lines;
                     renderRetourTbody();
                 } else {
-                    alert("Ticket introuvable.");
+                    notifier("Ticket introuvable.");
                 }
             })
-            .catch(err => alert("Erreur de récupération du ticket."));
+            .catch(err => notifier("Erreur de récupération du ticket."));
     }
 
     function renderRetourTbody() {
@@ -3588,12 +3613,12 @@
         ticketRetourLines.forEach((l, index) => {
             let tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; text-align: left;">${l.article_ref}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; text-align: left;">${l.article_designation}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; text-align: left;">${escHtml(l.article_ref)}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; text-align: left;">${escHtml(l.article_designation)}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">${parseFloat(l.qte)}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">0</td> <!-- Qte Récupérée -->
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">${parseFloat(l.qte_retournee || 0)}</td> <!-- Qte Récupérée -->
                 <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">
-                    <input type="number" step="1" max="${parseFloat(l.qte)}" min="0" value="0" style="width: 60px; text-align: center; border: 1px solid #ccc; font-weight: bold;" onchange="updateRetourLine(${index}, this.value)" onkeyup="updateRetourLine(${index}, this.value)">
+                    <input type="number" step="1" max="${parseFloat(l.qte) - parseFloat(l.qte_retournee || 0)}" min="0" value="0" style="width: 60px; text-align: center; border: 1px solid #ccc; font-weight: bold;" onchange="updateRetourLine(${index}, this.value)" onkeyup="updateRetourLine(${index}, this.value)">
                 </td>
                 <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">${parseFloat(l.prix).toFixed(3)}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd;">${parseFloat(l.remise).toFixed(2)}</td>
@@ -3606,9 +3631,12 @@
     function updateRetourLine(index, retQte) {
         let qte = parseFloat(retQte) || 0;
         let line = ticketRetourLines[index];
-        if (qte > parseFloat(line.qte)) {
-            alert("La quantité à retourner ne peut pas dépasser la quantité vendue.");
-            qte = parseFloat(line.qte);
+        const restant = parseFloat(line.qte) - parseFloat(line.qte_retournee || 0);
+        if (qte > restant) {
+            notifier(restant > 0
+                ? `La quantité à retourner ne peut pas dépasser la quantité restante (${restant}).`
+                : "Cet article a déjà été entièrement retourné.");
+            qte = restant;
             document.querySelectorAll('#retourTbody tr')[index].querySelector('input[type=number]').value = qte;
         }
         line.qte_retour = qte;
@@ -3622,16 +3650,17 @@
             if (l.qte_retour > 0) {
                 // Add to current ticket lines as negative quantities
                 let retourLine = {
-                    produitid: l.articleid,
+                    produitid: l.produitid,
                     produit2id: l.produit2id,
+                    detventeid: l.detcticketid,
                     code: l.article_ref,
                     reference: l.article_ref,
                     designation: l.article_designation,
                     qte: -Math.abs(l.qte_retour),
                     prix: l.prix,
                     remise: l.remise,
-                    prixNet: parseFloat(l.prix) * (1 - (parseFloat(l.remise)/100)),
-                    total: -(l.qte_retour * parseFloat(l.prix) * (1 - (parseFloat(l.remise)/100))),
+                    prixNet: l.puttcnet != null ? parseFloat(l.puttcnet) : parseFloat(l.prix) * (1 - (parseFloat(l.remise)/100)),
+                    total: -(l.qte_retour * (l.puttcnet != null ? parseFloat(l.puttcnet) : parseFloat(l.prix) * (1 - (parseFloat(l.remise)/100)))),
                     stock: 0
                 };
                 ticketLines.push(retourLine);
@@ -3642,7 +3671,7 @@
             renderTable();
             closeRetourModal();
         } else {
-            alert("Veuillez saisir au moins une quantité à retourner pour valider.");
+            notifier("Veuillez saisir au moins une quantité à retourner pour valider.");
         }
     }
     
@@ -3689,10 +3718,10 @@
                     mouvementsData = res.mouvements;
                     renderMouvementsTable(mouvementsData);
                 } else {
-                    alert("Erreur de chargement des mouvements.");
+                    notifier("Erreur de chargement des mouvements.");
                 }
             })
-            .catch(err => alert("Erreur serveur."));
+            .catch(err => notifier("Erreur serveur."));
     }
 
     function renderMouvementsTable(data) {
@@ -3710,12 +3739,12 @@
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
                     <input type="checkbox" class="mvt-checkbox" data-index="${index}">
                 </td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${m.cticketnumero || ''}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${(m.date || '').substring(0,10)}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${m.reference || ''}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${m.designation || ''}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${m.taille || ''}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${m.couleur || ''}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${escHtml(m.cticketnumero || '')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${escHtml((m.date || '').substring(0,10))}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${escHtml(m.reference || '')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${escHtml(m.designation || '')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${escHtml(m.taille || '')}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${escHtml(m.couleur || '')}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(m.qte)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(m.prix).toFixed(3)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${parseFloat(m.remise).toFixed(2)}</td>
@@ -3748,7 +3777,7 @@
         });
         
         if (selectedIndexes.length === 0) {
-            alert("Veuillez sélectionner au moins un mouvement.");
+            notifier("Veuillez sélectionner au moins un mouvement.");
             return;
         }
         
@@ -3837,8 +3866,9 @@
     let chqLines = [];
 
     function openChequeModal() {
+        if (ticketDejaRegle()) return;
         if (ticketLines.length === 0 && !complementMode) {
-            alert("Le ticket est vide.");
+            notifier("Le ticket est vide.");
             return;
         }
 
@@ -3899,7 +3929,7 @@
                     <input type="text" value="${l.proprietaire}" onchange="updateChqLine(${index}, 'proprietaire', this.value)" style="width: 100px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
                 </td>
                 <td style="padding: 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
-                    <input type="text" placeholder="Numéro" value="${l.numero}" onchange="updateChqLine(${index}, 'numero', this.value)" style="width: 90px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
+                    <input type="text" placeholder="Numéro" value="${escHtml(l.numero)}" onchange="updateChqLine(${index}, 'numero', this.value)" style="width: 90px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
                 </td>
                 <td style="padding: 4px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd;">
                     <input type="text" placeholder="Banque" value="${l.banque}" onchange="updateChqLine(${index}, 'banque', this.value)" style="width: 90px; padding: 4px; border: 1px solid #ccc; outline: none; font-size: 12px;">
@@ -3920,7 +3950,7 @@
         for(let l of chqLines) {
             let m = parseFloat(l.montant) || 0;
             if (m <= 0 || !l.numero.trim()) {
-                alert("numéro chèque && Montant Obligatoire pour toutes les lignes.");
+                notifier("numéro chèque && Montant Obligatoire pour toutes les lignes.");
                 return;
             }
         }
@@ -3956,7 +3986,7 @@
             }));
 
             let payload = {
-                vendeurid: document.getElementById('vendeurName').dataset.id || null,
+                vendeurid: currentVendeurId,
                 clientid: currentClientId,
                 lignes: ticketLines,
                 totalttc: total,
@@ -3980,17 +4010,17 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Complément enregistré avec succès!');
+                        notifier('Complément enregistré avec succès!');
                         closeChequeModal();
                         exitComplementMode();
                         document.getElementById('complementAcompteModal').style.display = 'none';
                     } else {
-                        alert('Erreur: ' + (data.message || ''));
+                        notifier('Erreur: ' + (data.message || ''));
                     }
                 })
                 .catch(err => {
                     console.error(err);
-                    alert("Erreur réseau.");
+                    notifier("Erreur réseau.");
                 });
             } else {
                 closeChequeModal();
@@ -4084,6 +4114,7 @@
 <script>
     // GLOBAL DISCOUNT LOGIC
     function openGlobalDiscountModal() {
+        if (ticketExistantVerrouille()) return;
         if (ticketLines.length === 0) return;
         let currentTotal = parseFloat(document.getElementById('grandTotal').innerText);
         document.getElementById('globalDiscountInput').value = currentTotal.toFixed(3);
@@ -4102,7 +4133,7 @@
     function validerGlobalDiscount() {
         let targetTotal = parseFloat(document.getElementById('globalDiscountInput').value);
         if (isNaN(targetTotal) || targetTotal < 0) {
-            alert("Montant invalide");
+            notifier("Montant invalide");
             return;
         }
 
@@ -4114,7 +4145,7 @@
         });
 
         if (grossTotal === 0) {
-            alert("Total brut du ticket est 0");
+            notifier("Total brut du ticket est 0");
             return;
         }
 
@@ -4138,8 +4169,9 @@
     let quickPaymentModeId = 1;
 
     function openQuickPaymentModal(modeId, title) {
+        if (ticketDejaRegle()) return;
         if (ticketLines.length === 0 && !complementMode) {
-            alert("Le ticket est vide.");
+            notifier("Le ticket est vide.");
             return;
         }
         quickPaymentModeId = modeId;
@@ -4199,14 +4231,14 @@
         }
 
         if (recu < total) {
-            alert("Le montant reçu est inférieur au total à payer.");
+            notifier("Le montant reçu est inférieur au total à payer.");
             return;
         }
 
         let mnt = total; // On valide toujours le montant exact à payer pour la caisse
 
         let payload = {
-            vendeurid: document.getElementById('vendeurName').dataset.id || null,
+            vendeurid: currentVendeurId,
             clientid: currentClientId,
             lignes: ticketLines,
             totalttc: total,
@@ -4236,17 +4268,17 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    alert('Complément enregistré avec succès!');
+                    notifier('Complément enregistré avec succès!');
                     closeQuickPaymentModal();
                     exitComplementMode();
                     document.getElementById('complementAcompteModal').style.display = 'none';
                 } else {
-                    alert('Erreur: ' + (data.message || ''));
+                    notifier('Erreur: ' + (data.message || ''));
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert("Erreur réseau.");
+                notifier("Erreur réseau.");
             });
         } else {
             closeQuickPaymentModal();
@@ -4323,7 +4355,7 @@
                     <span>Carte Crédit</span>
                     <div style="display: flex; gap: 5px;">
                         <input type="number" id="mpCB" step="0.001" style="width: 120px; padding: 4px; border: 1px solid #ccc; text-align: right;" oninput="toggleMpAddBtn('CB')">
-                        <button id="mpBtnCB" onclick="mpAddLine('CB', 3)" style="padding: 0 5px; border: 1px solid #ccc; background: white; cursor: pointer; display: none; color: green; font-weight: bold;">✓</button>
+                        <button id="mpBtnCB" onclick="mpAddLine('CB', 4)" style="padding: 0 5px; border: 1px solid #ccc; background: white; cursor: pointer; display: none; color: green; font-weight: bold;">✓</button>
                     </div>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -4528,8 +4560,9 @@
 
 <script>
     function openChequeCadeauxModal() {
+        if (ticketDejaRegle()) return;
         if (ticketLines.length === 0 && !complementMode) {
-            alert("Le ticket est vide.");
+            notifier("Le ticket est vide.");
             return;
         }
 
@@ -4553,7 +4586,7 @@
     function addChequeCadeaux(type) {
         let val = parseFloat(document.getElementById('ccMontant').value) || 0;
         if (val <= 0) {
-            alert("Montant invalide");
+            notifier("Montant invalide");
             return;
         }
         
@@ -4563,7 +4596,7 @@
         if (isMultiOpen) {
             mpReglementsArray.push({
                 id: Date.now(),
-                modeId: 7, // Assuming 7 for cheque cadeau
+                modeId: 5, // 5 = Chèque Cadeaux
                 mode: 'Chèque Cadeau',
                 montant: val,
                 numero: '',
@@ -4577,14 +4610,14 @@
             // Direct submission
             let total = complementMode ? complementReste : parseFloat(document.getElementById('grandTotal').innerText);
             let payload = {
-                vendeurid: document.getElementById('vendeurName').dataset.id || null,
+                vendeurid: currentVendeurId,
                 clientid: currentClientId,
                 lignes: ticketLines,
                 totalttc: total,
                 acompte: val,
                 netapayer: Math.max(0, total - val),
                 reglements: [{
-                    modereglementid: 7,
+                    modereglementid: 5,
                     montant: val,
                     numero: '',
                     banque: type,
@@ -4607,17 +4640,17 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Complément enregistré avec succès!');
+                        notifier('Complément enregistré avec succès!');
                         closeChequeCadeauxModal();
                         exitComplementMode();
                         document.getElementById('complementAcompteModal').style.display = 'none';
                     } else {
-                        alert('Erreur: ' + (data.message || ''));
+                        notifier('Erreur: ' + (data.message || ''));
                     }
                 })
                 .catch(err => {
                     console.error(err);
-                    alert("Erreur réseau.");
+                    notifier("Erreur réseau.");
                 });
             } else {
                 closeChequeCadeauxModal();
@@ -4659,7 +4692,7 @@
         let num = document.getElementById('cpDraftNum').value.trim();
         let mnt = parseFloat(document.getElementById('cpDraftMnt').value);
         if (!num || isNaN(mnt) || mnt <= 0) {
-            alert("Veuillez saisir un numéro et un montant valide.");
+            notifier("Veuillez saisir un numéro et un montant valide.");
             return;
         }
         cpLignes.push({ numero: num, montant: mnt });
@@ -4683,7 +4716,7 @@
         cpLignes.forEach((l, index) => {
             let tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${l.numero}" onchange="cpUpdate(${index}, 'numero', this.value)" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;"></td>
+                <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="text" value="${escHtml(l.numero)}" onchange="cpUpdate(${index}, 'numero', this.value)" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;"></td>
                 <td style="padding: 2px; border-right: 1px solid #ddd;"><input type="number" step="0.001" value="${l.montant}" onchange="cpUpdate(${index}, 'montant', this.value)" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;"></td>
                 <td style="padding: 2px; text-align: center;"><button onclick="cpRemove(${index})" style="background: none; border: none; color: red; cursor: pointer; font-weight: bold;">X</button></td>
             `;
@@ -4694,7 +4727,7 @@
             let tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="padding: 2px; border-right: 1px solid #ddd;">
-                    <input type="text" id="cpDraftNum" value="${cpDraft.numero}" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;">
+                    <input type="text" id="cpDraftNum" value="${escHtml(cpDraft.numero)}" style="width: 100%; border: none; padding: 4px; outline: none; box-sizing: border-box;">
                 </td>
                 <td style="padding: 2px; border-right: 1px solid #ddd;">
                     <input type="number" step="0.001" id="cpDraftMnt" value="${cpDraft.montant}" style="width: 100%; border: none; padding: 4px; text-align: right; outline: none; box-sizing: border-box;">
@@ -4726,7 +4759,7 @@
                     let today = new Date().toISOString().split('T')[0];
                     mpReglementsArray.push({
                         id: Date.now() + Math.random(),
-                        modeId: 6, // Assuming 6 for coupon
+                        modeId: 13, // 13 = Coupon Manuella
                         mode: "Coupon",
                         montant: l.montant,
                         numero: l.numero,
@@ -4934,11 +4967,11 @@
             tr.onmouseover = function() { this.style.background = '#f0f7ff'; };
             tr.onmouseout = function() { this.style.background = ''; };
             tr.innerHTML = `
-                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.cticketnumero || ''}</td>
-                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${date}</td>
-                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.client_nom || ''}</td>
-                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.caissier_nom || ''}</td>
-                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${t.vendeur_nom || ''}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${escHtml(t.cticketnumero || '')}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${escHtml(date)}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${escHtml(t.client_nom || '')}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${escHtml(t.caissier_nom || '')}</td>
+                <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px;">${escHtml(t.vendeur_nom || '')}</td>
                 <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right;">${qte}</td>
                 <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right;">${ttc.toFixed(3)}</td>
                 <td style="padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 11px; text-align: right;">${acompte.toFixed(3)}</td>
@@ -4958,9 +4991,9 @@
         document.getElementById('compAcompte_totalReste').textContent = totalReste.toFixed(3);
     }
 
-    function selectComplementTicket(cticketid, numero, reste, clientid) {
+    async function selectComplementTicket(cticketid, numero, reste, clientid) {
         if (ticketLines.length > 0) {
-            if (!confirm("Le panier n'est pas vide. Voulez-vous le remplacer par ce ticket ?")) {
+            if (!(await confirmer("Le panier n'est pas vide. Voulez-vous le remplacer par ce ticket ?", { okLabel: 'Remplacer' }))) {
                 return;
             }
         }
@@ -4972,7 +5005,7 @@
         if (montantCustom > reste) montantCustom = reste;
 
         // Charger les détails du ticket dans le panier
-        fetch(`/vente/caisse/ticket-details/${numero}`)
+        fetch(`{{ url('/vente/caisse/ticket-details') }}/${cticketid}`)
             .then(r => r.json())
             .then(res => {
                 if (res.success) {
@@ -4997,8 +5030,8 @@
                             qte: parseFloat(l.qte) || 0,
                             prix: parseFloat(l.prix) || 0,
                             remise: parseFloat(l.remise) || 0,
-                            prixNet: parseFloat(l.prix) * (1 - (parseFloat(l.remise) || 0) / 100),
-                            total: parseFloat(l.totalttc) || 0,
+                            prixNet: l.puttcnet != null ? parseFloat(l.puttcnet) : parseFloat(l.prix) * (1 - (parseFloat(l.remise) || 0) / 100),
+                            total: parseFloat(l.totalttcnet) || 0,
                             stock: 0
                         });
                     });
@@ -5030,21 +5063,24 @@
 
                     closeComplementAcompteModal();
                 } else {
-                    alert("Erreur: " + (res.message || 'Ticket introuvable'));
+                    notifier("Erreur: " + (res.message || 'Ticket introuvable'));
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert('Erreur réseau lors du chargement du ticket.');
+                notifier('Erreur réseau lors du chargement du ticket.');
             });
     }
 
     function updateComplementDisplay() {
         if (!complementMode) return;
         let reste = complementReste;
+        const regle = reste <= 0.0005;
+        const couleur = regle ? '#16a34a' : '#dc2626';
+
         // Afficher le reste dans le grandTotal
         document.getElementById('grandTotal').innerText = reste.toFixed(3);
-        document.getElementById('grandTotal').style.color = '#dc2626';
+        document.getElementById('grandTotal').style.color = couleur;
 
         // Mettre à jour le footer
         let totalTTC = 0;
@@ -5052,14 +5088,18 @@
         let acompte = totalTTC - reste;
         document.getElementById('lblAcompte').innerText = acompte.toFixed(3);
         document.getElementById('lblRestePayer').innerText = reste.toFixed(3);
-        document.getElementById('lblRestePayer').style.color = '#dc2626';
+        document.getElementById('lblRestePayer').style.color = couleur;
 
-        // Afficher un bandeau "Mode Complément" dans le display
-        document.getElementById('display-qte-prix').innerText = `COMPLEMENT TICKET N° ${complementNumero}`;
-        document.getElementById('display-qte-prix').style.color = '#dc2626';
+        // Bandeau : ticket réglé (consultation) ou complément à encaisser
+        document.getElementById('display-qte-prix').innerText = regle
+            ? `TICKET N° ${complementNumero} - RÉGLÉ`
+            : `COMPLEMENT TICKET N° ${complementNumero}`;
+        document.getElementById('display-qte-prix').style.color = couleur;
         document.getElementById('display-remise').innerText = '';
-        document.getElementById('display-total').innerText = `RESTE: ${reste.toFixed(3)}`;
-        document.getElementById('display-total').style.color = '#dc2626';
+        document.getElementById('display-total').innerText = regle
+            ? `TOTAL: ${totalTTC.toFixed(3)}`
+            : `RESTE: ${reste.toFixed(3)}`;
+        document.getElementById('display-total').style.color = couleur;
 
         // Mettre le N° du ticket dans le champ
         document.getElementById('ticketNumber').value = complementNumero;
@@ -5117,12 +5157,12 @@
                 setTimeout(() => msg.remove(), 3000);
                 exitComplementMode();
             } else {
-                alert(data.message || "Erreur lors de l'enregistrement.");
+                notifier(data.message || "Erreur lors de l'enregistrement.");
             }
         })
         .catch(err => {
             console.error(err);
-            alert('Erreur réseau.');
+            notifier('Erreur réseau.');
         });
     }
 </script>

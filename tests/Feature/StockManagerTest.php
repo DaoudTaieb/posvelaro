@@ -16,7 +16,7 @@ class StockManagerTest extends TestCase
         parent::setUp();
         
         // Simuler un login d'utilisateur
-        $user = DB::table('users')->first();
+        $user = DB::table('users')->orderBy('userid')->first();
         if ($user) {
             $userModel = new \App\Models\User();
             $userModel->userid = $user->userid;

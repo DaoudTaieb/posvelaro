@@ -17,7 +17,7 @@ class DashboardTest extends TestCase
     {
         parent::setUp();
 
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->user = new User();
             $this->user->userid = $dbUser->userid;

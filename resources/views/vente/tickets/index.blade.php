@@ -448,6 +448,10 @@
         document.getElementById('printTicketBtn').addEventListener('click', function() {
             const content = document.getElementById('ticketModalContent').innerHTML;
             const printWindow = window.open('', '_blank', 'width=800,height=600');
+            if (!printWindow) {
+                notifier("Impression impossible : autorisez les fenêtres pop-up pour ce site.", 'warning', 8000);
+                return;
+            }
             printWindow.document.write('<html><head><title>Imprimer Ticket</title></head><body style="margin:0; padding:0; display:flex; justify-content:center;">');
             printWindow.document.write(content);
             printWindow.document.write('</body></html>');
@@ -484,7 +488,7 @@
                 });
 
                 if (rows.length === 0) {
-                    alert('Aucune donnée à exporter.');
+                    notifier('Aucune donnée à exporter.');
                     return;
                 }
 

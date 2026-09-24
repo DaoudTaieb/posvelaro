@@ -5,26 +5,30 @@ namespace App\Auth;
 use Illuminate\Auth\EloquentUserProvider;
 use Illuminate\Contracts\Auth\Authenticatable;
 
-use Illuminate\Support\Facades\Hash;
-
 class VelaroUserProvider extends EloquentUserProvider
 {
     /**
      * Validate a user against the given credentials.
-     * Some users have plain text passwords, others have hashed passwords.
+     * Passwords are stored in plain text (shared with the legacy desktop app),
+     * but some rows may contain a bcrypt hash.
      */
     public function validateCredentials(Authenticatable $user, array $credentials): bool
     {
-        $plain = $credentials['password'];
-        $storedPassword = $user->getAuthPassword();
+        $plain = (string) ($credentials['password'] ?? '');
+        $storedPassword = (string) $user->getAuthPassword();
 
-        // Check if the stored password looks like a bcrypt hash
-        if (strpos($storedPassword, '$2y$') === 0) {
-            return Hash::check($plain, $storedPassword);
+        // Empty / NULL stored password never authenticates
+        if ($storedPassword === '' || $plain === '') {
+            return false;
         }
 
-        // Fallback to plain text comparison
-        return $plain === $storedPassword;
+        // bcrypt hash ($2y$, $2a$, $2b$)
+        if (preg_match('/^\$2[aby]\$/', $storedPassword)) {
+            return password_verify($plain, $storedPassword);
+        }
+
+        // Fallback to plain text comparison (constant-time)
+        return hash_equals($storedPassword, $plain);
     }
 
     /**

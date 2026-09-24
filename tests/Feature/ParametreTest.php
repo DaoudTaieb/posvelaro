@@ -17,7 +17,7 @@ class ParametreTest extends TestCase
     {
         parent::setUp();
 
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->user = new User();
             $this->user->userid = $dbUser->userid;
@@ -39,7 +39,8 @@ class ParametreTest extends TestCase
         $response->assertViewIs('parametre.caisse.index');
 
         // Récupérer un site, une agence, un client et une station existants pour l'insertion
-        $site = DB::table('sites')->first();
+        // Les caisses sont limitées au site de l'utilisateur connecté
+        $site = DB::table('sites')->where('siteid', $this->user->siteid)->first();
         $this->assertNotNull($site, 'Il doit y avoir au moins un site.');
 
         $agence = DB::table('agencebs')->first();
@@ -169,7 +170,7 @@ class ParametreTest extends TestCase
         $response->assertViewIs('parametre.configuration.general');
 
         // S'assurer qu'au moins une config existe pour 'Général'
-        $configId = DB::table('retailconfigs')->where('pagelibelle', 'Général')->value('retailconfigid');
+        $configId = DB::table('retailconfigs')->where('pagelibelle', 'Général')->where('typevalueid', '<>', 2)->value('retailconfigid');
         if (!$configId) {
             $configId = (DB::table('retailconfigs')->max('retailconfigid') ?? 0) + 1;
             DB::table('retailconfigs')->insert([

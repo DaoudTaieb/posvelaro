@@ -24,16 +24,6 @@
         </div>
     </div>
 
-    @if(session('success'))
-        <div style="background: var(--success); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
-            {{ session('success') }}
-        </div>
-    @endif
-
     <div style="display: flex; gap: 20px; height: calc(100vh - 190px);">
         
         <!-- Colonne de gauche : Rôles -->
@@ -54,7 +44,7 @@
                                 <form id="addForm" action="{{ route('parametre.droit.role.store') }}" method="POST" style="margin: 0; display: flex; gap: 8px;">
                                     @csrf
                                     <input type="text" name="libelle" class="form-control" placeholder="Nom du niveau" required style="flex: 1;">
-                                    <button type="button" class="btn btn-primary" style="padding: 6px; height: auto;" onclick="document.getElementById('addForm').submit()">
+                                    <button type="button" class="btn btn-primary" style="padding: 6px; height: auto;" onclick="document.getElementById('addForm').requestSubmit()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                                     </button>
                                     <button type="button" class="btn btn-outline" style="padding: 6px; height: auto;" onclick="hideAddForm()">
@@ -77,7 +67,7 @@
                                     <button class="btn btn-outline" style="padding: 4px; height: auto;" onclick="showEditForm('{{ $role->userdroitid }}'); event.stopPropagation();">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                                     </button>
-                                    <form action="{{ route('parametre.droit.role.destroy', $role->userdroitid) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Êtes-vous sûr ?');">
+                                    <form action="{{ route('parametre.droit.role.destroy', $role->userdroitid) }}" method="POST" style="margin: 0;" onsubmit="return confirmerFormulaire(event, this, 'Êtes-vous sûr ?')">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-outline" style="padding: 4px; height: auto; color: #dc2626; border-color: #fecaca; background: #fef2f2;" onclick="event.stopPropagation();">
@@ -94,7 +84,7 @@
                                     @csrf
                                     @method('PUT')
                                     <input type="text" name="libelle" class="form-control" value="{{ $role->libelle }}" required style="flex: 1;">
-                                    <button type="button" class="btn btn-primary" style="padding: 6px; height: auto;" onclick="document.getElementById('editForm-{{ $role->userdroitid }}').submit()">
+                                    <button type="button" class="btn btn-primary" style="padding: 6px; height: auto;" onclick="document.getElementById('editForm-{{ $role->userdroitid }}').requestSubmit()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                                     </button>
                                     <button type="button" class="btn btn-outline" style="padding: 6px; height: auto;" onclick="hideEditForm('{{ $role->userdroitid }}')">

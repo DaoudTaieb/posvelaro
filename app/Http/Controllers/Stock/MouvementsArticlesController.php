@@ -14,8 +14,8 @@ class MouvementsArticlesController extends Controller
         $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
 
         // Valeurs par défaut pour les dates (Aujourd'hui)
-        $dateDu = $request->input('date_du', Carbon::today()->format('Y-m-d'));
-        $dateAu = $request->input('date_au', Carbon::today()->format('Y-m-d'));
+        $dateDu = $request->input('date_du') ?: Carbon::today()->format('Y-m-d');
+        $dateAu = $request->input('date_au') ?: Carbon::today()->format('Y-m-d');
 
         // Données pour le filtre
         $familles = DB::table('familles')->orderBy('famillelibelle')->get();

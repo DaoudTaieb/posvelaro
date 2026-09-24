@@ -17,6 +17,8 @@ class CommissionController extends Controller
         $query = DB::table('ctickets')
             ->join('employees as vendeurs', 'ctickets.employeeid', '=', 'vendeurs.employeeid')
             ->where('vendeurs.isvendeur', true)
+            ->where('ctickets.siteid', auth()->user()->siteid ?? 102)
+            ->where('ctickets.enattente', false)
             ->select(
                 'ctickets.cticketdate',
                 'ctickets.numerointerne',
@@ -34,7 +36,7 @@ class CommissionController extends Controller
             $q = $request->q;
             $query->where(function($qBuilder) use ($q) {
                 $qBuilder->where('ctickets.numerointerne', 'ILIKE', "%{$q}%")
-                         ->orWhere('ctickets.cticketnumero', 'ILIKE', "%{$q}%")
+                         ->orWhereRaw('CAST(ctickets.cticketnumero AS TEXT) ILIKE ?', ["%{$q}%"])
                          ->orWhere('vendeurs.nom', 'ILIKE', "%{$q}%")
                          ->orWhere('vendeurs.prenom', 'ILIKE', "%{$q}%");
             });
@@ -62,7 +64,7 @@ class CommissionController extends Controller
                     $val = $request->{$reqKey};
                     $query->where(function($qBuilder) use ($val) {
                         $qBuilder->where('ctickets.numerointerne', 'ILIKE', "%{$val}%")
-                                 ->orWhere('ctickets.cticketnumero', 'ILIKE', "%{$val}%");
+                                 ->orWhereRaw('CAST(ctickets.cticketnumero AS TEXT) ILIKE ?', ["%{$val}%"]);
                     });
                 } elseif ($reqKey == 'f_vendeur') {
                     $val = $request->{$reqKey};
@@ -74,7 +76,7 @@ class CommissionController extends Controller
                     $val = $request->{$reqKey};
                     $query->whereRaw('CAST((ctickets.totalnetht * vendeurs.tauxcommission / 100) AS TEXT) ILIKE ?', ['%'.$val.'%']);
                 } else {
-                    $query->where($dbCol, 'ILIKE', '%' . $request->{$reqKey} . '%');
+                    $query->whereRaw('CAST(' . $dbCol . ' AS TEXT) ILIKE ?', ['%' . $request->{$reqKey} . '%']);
                 }
             }
         }

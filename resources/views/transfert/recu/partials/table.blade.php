@@ -7,7 +7,7 @@
     </td>
     <td>{{ \Carbon\Carbon::parse($bon->date)->format('d/m/Y') }}</td>
     <td>{{ $bon->emetteur }}</td>
-    <td style="text-align: center; font-weight: 600;">{{ $bon->qte }}</td>
+    <td style="text-align: center; font-weight: 600;">{{ (float) $bon->qte + 0 }}</td>
     <td>{{ $bon->trajet }}</td>
     <td>{{ $bon->vehicule }} {{ $bon->matricule ? '('.$bon->matricule.')' : '' }}</td>
     <td>{{ $bon->description }}</td>

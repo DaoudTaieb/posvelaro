@@ -17,7 +17,7 @@ class TicketEtCommissionTest extends TestCase
     {
         parent::setUp();
 
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->user = new User();
             $this->user->userid = $dbUser->userid;
@@ -62,9 +62,15 @@ class TicketEtCommissionTest extends TestCase
     public function test_tickets_show()
     {
         // Récupérer un ticket de caisse existant pour le test
-        $ticket = DB::table('ctickets')->first();
+        $ticket = DB::table('ctickets')->where('siteid', $this->user->siteid)->first();
         if (!$ticket) {
             $this->markTestSkipped('Pas de ticket en base pour tester show.');
+        }
+
+        // Un ticket d'un autre site n'est pas accessible
+        $autreTicket = DB::table('ctickets')->where('siteid', '!=', $this->user->siteid)->first();
+        if ($autreTicket) {
+            $this->get('/vente/tickets/' . $autreTicket->cticketid)->assertStatus(404);
         }
 
         // 1. Consultation via AJAX

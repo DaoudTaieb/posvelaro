@@ -44,7 +44,7 @@
 
     {{-- Caisse / Caissier / Vendeur / Client --}}
     <div style="text-align: center; margin: 4px 0; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 6px 0;">
-        <div style="font-size: 11px;">Caisse {{ $caisse->siteid ?? '' }} - Caissier {{ $caissier_nom }} - Vendeur {{ $vendeur_nom }}</div>
+        <div style="font-size: 11px;">Caisse {{ $caisse->libelle ?? ($caisse->numero ?? '') }} - Caissier {{ $caissier_nom }} - Vendeur {{ $vendeur_nom }}</div>
         <div style="font-weight: 700;">Client: {{ $client_nom }}</div>
         <div style="font-size: 10px; color: #555;">Editée le, {{ \Carbon\Carbon::now()->locale('fr')->translatedFormat('l d F Y') }} A {{ \Carbon\Carbon::now()->format('H:i:s') }}</div>
     </div>

@@ -826,7 +826,7 @@
                 });
 
                 if (rows.length === 0) {
-                    alert('Aucune donnée à exporter.');
+                    notifier('Aucune donnée à exporter.');
                     return;
                 }
 

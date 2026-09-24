@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Http;
 
 class PosController extends Controller
 {
-    private function getLoyaltyTier($client)
+    public function getLoyaltyTier($client)
     {
         if (!$client || empty($client->fidelite) || $client->clientid == 1 || strtoupper($client->nom) === 'PASSAGER') {
             return 0;
@@ -18,9 +18,10 @@ class PosController extends Controller
         
         if ($ventes > 0 && $client->date_premiere_vente) {
             $firstSaleDate = \Carbon\Carbon::parse($client->date_premiere_vente);
-            if ($firstSaleDate->diffInYears(now()) > 0) {
+            if ($firstSaleDate->lt(now()->subYear())) {
                 $salesLastYear = DB::table('ctickets')
                     ->where('clientid', $client->clientid)
+                    ->where('enattente', false)
                     ->where('cticketdate', '>=', now()->subYear())
                     ->count();
                 if ($salesLastYear < 2) {
@@ -95,8 +96,8 @@ class PosController extends Controller
         $siteName = $site ? $site->libelle : 'VELARO';
 
         // Générer un numéro de ticket provisoire (ou afficher le prochain numéro)
-        $lastTicket = DB::table('ctickets')->orderBy('cticketid', 'desc')->first();
-        $draftId = $lastTicket && $lastTicket->cticketnumero ? (intval($lastTicket->cticketnumero) + 1) : date('y') . '000001';
+        $maxNumero = DB::table('ctickets')->max('cticketnumero');
+        $draftId = $maxNumero ? (intval($maxNumero) + 1) : date('y') . '000001';
 
         $typeChequeCadeaus = DB::table('typechequecadeaus')->orderBy('priorite')->get();
 
@@ -193,7 +194,7 @@ class PosController extends Controller
                   ->orWhereRaw('LOWER(familles.famillelibelle) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(sousfamilles.sousfamillelibelle) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(fournisseurs.nom) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('CAST(produits.ttc_vente AS CHAR) LIKE ?', [$searchTerm]);
+                  ->orWhereRaw('CAST(produits.ttc_vente AS TEXT) LIKE ?', [$searchTerm]);
             });
         }
 
@@ -240,11 +241,27 @@ class PosController extends Controller
                 'produits.familleid',
                 'couleurs.couleurlibelle as couleur',
                 'tailles.taillelibelle as taille',
+                'couleurs.couleurlibelle',
+                'tailles.taillelibelle',
                 'produits.ttc_vente',
                 DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock'),
                 'sousfamilles.is_loyalty_enabled'
             )
+            ->orderByRaw('CASE WHEN produit2s.barcode2 = ? OR produit2s.produit2code = ? THEN 0 ELSE 1 END', [$code, $code])
             ->first();
+
+        // Code commun à toutes les variantes (référence / code article) : laisser le caissier choisir
+        if ($product && $product->produit2id) {
+            $variantExact = DB::table('produit2s')
+                ->where('produit2id', $product->produit2id)
+                ->where(function ($q) use ($code) {
+                    $q->where('barcode2', $code)->orWhere('produit2code', $code);
+                })
+                ->exists();
+            if (!$variantExact && DB::table('produit2s')->where('produitid', $product->produitid)->count() > 1) {
+                $product->choisir_variante = true;
+            }
+        }
 
         return response()->json($product);
     }
@@ -412,6 +429,7 @@ class PosController extends Controller
     {
         $tickets = DB::table('ctickets')
             ->where('clientid', $id)
+            ->where('enattente', false)
             ->select('cticketid', 'cticketnumero', 'cticketdate', 'totalqte', 'totalttc')
             ->orderBy('cticketdate', 'desc')
             ->take(50)
@@ -447,8 +465,9 @@ class PosController extends Controller
                 'tailles.taillelibelle as taille',
                 'detctickets.qte',
                 'detctickets.ttc',
-                'detctickets.totalttc'
-            );
+                'detctickets.totalttcnet as totalttc'
+            )
+            ->where('ctickets.enattente', false);
 
         if ($request->filled('q')) {
             $search = '%' . strtolower($request->q) . '%';
@@ -473,8 +492,8 @@ class PosController extends Controller
     public function sendSms(Request $request)
     {
         $request->validate([
-            'telephone' => 'required|string',
-            'message' => 'required|string'
+            'telephone' => ['required', 'string', 'regex:/^\+?[0-9 ]{8,15}$/'],
+            'message' => 'required|string|max:480'
         ]);
 
         // Clean phone number: remove '+' and spaces (API expects international format without +)
@@ -483,7 +502,10 @@ class PosController extends Controller
 
         // Nouvelle intégration Bip SMS (bulksms.bipsms.tn)
         // Endpoint: http://bulksms.bipsms.tn/Api/Api.aspx?fct=sms&key=KEY&mobile=PHONE&sms=MSG&sender=SENDER
-        $key = DB::table('retailconfigs')->where('libelle', 'bipsms_key')->value('value') ?? 'MpO6X7VWWi1z7wTK/-/h0WMFPBUGfvvmzfY8w7qO/-/Z7a0s4X8V0fs0PbMk3EPzyw82fRuKnu3nJbHAsJN/-/q2kxKsyGWBRuhIeoeHQWUAb01V4=';
+        $key = DB::table('retailconfigs')->where('libelle', 'bipsms_key')->value('value') ?? config('services.bipsms.key');
+        if (!$key) {
+            return response()->json(['success' => false, 'message' => "Service SMS non configuré (clé API manquante)."]);
+        }
         $sender = DB::table('retailconfigs')->where('libelle', 'bipsms_sender')->value('value') ?? 'VELARO';
         $apiUrl = DB::table('retailconfigs')->where('libelle', 'bipsms_url')->value('value') ?? 'http://bulksms.bipsms.tn/Api/Api.aspx';
 
@@ -592,8 +614,12 @@ class PosController extends Controller
 
         // Search in cavoirs table
         $avoir = DB::table('cavoirs')
-            ->where('numerointerne', $code)
-            ->orWhere('cavoirnumero', $code)
+            ->where(function ($q) use ($code) {
+                $q->where('numerointerne', $code);
+                if (ctype_digit((string) $code)) {
+                    $q->orWhere('cavoirnumero', $code);
+                }
+            })
             ->first();
 
         if (!$avoir) {

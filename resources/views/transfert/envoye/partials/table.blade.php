@@ -31,13 +31,17 @@
                 </svg>
             </button>
             <div class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10; min-width: 120px;">
+                @if($bon->etatbontransfertid == 1)
                 <a href="{{ route('transfert.envoye.edit', $bon->bontransfertid) }}" style="display: block; padding: 8px 12px; text-decoration: none; color: var(--text-main); font-size: 13px; text-align: left;">Modifier</a>
-                
-                <form action="{{ route('transfert.envoye.destroy', $bon->bontransfertid) }}" method="POST" style="display: block; margin: 0; padding: 0;" onsubmit="return confirm('Voulez-vous vraiment supprimer ce bon de transfert ?');">
+
+                <form action="{{ route('transfert.envoye.destroy', $bon->bontransfertid) }}" method="POST" style="display: block; margin: 0; padding: 0;" onsubmit="return confirmerFormulaire(event, this, 'Voulez-vous vraiment supprimer ce bon de transfert ?')">
                     @csrf
                     @method('DELETE')
                     <button type="submit" style="width: 100%; display: block; padding: 8px 12px; background: none; border: none; text-decoration: none; color: var(--danger); font-size: 13px; text-align: left; cursor: pointer;">Supprimer</button>
                 </form>
+                @else
+                <span style="display: block; padding: 8px 12px; color: var(--text-muted); font-size: 13px; text-align: left;">Aucune action</span>
+                @endif
             </div>
         </div>
     </td>

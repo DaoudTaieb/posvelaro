@@ -11,16 +11,6 @@
         </div>
     </div>
 
-    @if(session('success'))
-        <div style="background: var(--success); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
-            {{ session('success') }}
-        </div>
-    @endif
-
     <div class="content-card">
         <div class="table-responsive">
             <table class="data-table">
@@ -52,7 +42,7 @@
                             @endif
                         </td>
                         <td style="text-align: center;">
-                            <form action="{{ route('parametre.caisse.liberer', $caisse->caisseid) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Êtes-vous sûr de vouloir libérer cette caisse ?');">
+                            <form action="{{ route('parametre.caisse.liberer', $caisse->caisseid) }}" method="POST" style="margin: 0;" onsubmit="return confirmerFormulaire(event, this, 'Êtes-vous sûr de vouloir libérer cette caisse ?')">
                                 @csrf
                                 <button type="submit" class="btn btn-outline" style="padding: 4px 12px; height: auto; {{ !$caisse->machineid ? 'opacity: 0.5; cursor: not-allowed;' : 'color: #dc2626; border-color: #fca5a5; background: #fef2f2;' }}" {{ !$caisse->machineid ? 'disabled' : '' }}>
                                     Libérer

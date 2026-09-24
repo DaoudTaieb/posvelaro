@@ -19,7 +19,7 @@ class DemandeTransfertTest extends TestCase
     {
         parent::setUp();
 
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->userExpediteur = new User();
             $this->userExpediteur->userid = $dbUser->userid;
@@ -253,6 +253,8 @@ class DemandeTransfertTest extends TestCase
 
         // 2. Pointer/Valider la demande
         $payload = [
+            // Seules les lignes cochées sont pointées
+            'selected_demandes' => [$detId],
             'pointage' => [
                 $detId => [
                     'qte_validee' => 8,

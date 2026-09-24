@@ -54,7 +54,7 @@ class User extends Authenticatable
      */
     public function getAuthPassword(): string
     {
-        return $this->password;
+        return (string) ($this->password ?? '');
     }
 
     /**

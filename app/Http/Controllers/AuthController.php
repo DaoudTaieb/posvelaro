@@ -36,13 +36,32 @@ class AuthController extends Controller
         ];
 
         if (Auth::attempt($credentials)) {
-            $request->session()->regenerate();
-            
             if ($request->filled('siteid')) {
                 $user = Auth::user();
-                $user->siteid = $request->input('siteid');
+
+                // Le site doit exister, ne pas être bloqué et appartenir au même client que l'utilisateur
+                $siteAutorise = $user->clientid
+                    && \Illuminate\Support\Facades\DB::table('sites')
+                        ->where('siteid', (int) $request->input('siteid'))
+                        ->where('clientid', $user->clientid)
+                        ->where('bloque', false)
+                        ->exists();
+
+                if (!$siteAutorise) {
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+
+                    return back()->withErrors([
+                        'siteid' => 'Site invalide ou non autorisé pour cet utilisateur.',
+                    ])->onlyInput('login');
+                }
+
+                $user->siteid = (int) $request->input('siteid');
                 $user->save();
             }
+
+            $request->session()->regenerate();
 
             return redirect()->intended(route('dashboard'));
         }

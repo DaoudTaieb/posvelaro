@@ -6,9 +6,22 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class JourneeController extends Controller
 {
+    /**
+     * Valide un identifiant numérique (404 sinon).
+     */
+    private function validId($id): int
+    {
+        $value = filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($value === false) {
+            abort(404);
+        }
+        return $value;
+    }
+
     /**
      * Affiche la liste des journées de caisse.
      */
@@ -50,6 +63,8 @@ class JourneeController extends Controller
      */
     public function show($id)
     {
+        $id = $this->validId($id);
+
         $journee = DB::table('journalcaisses')
             ->leftJoin('users', 'journalcaisses.userid', '=', 'users.userid')
             ->leftJoin('caisses', 'journalcaisses.caisseid', '=', 'caisses.caisseid')
@@ -79,6 +94,8 @@ class JourneeController extends Controller
      */
     public function details($id)
     {
+        $id = $this->validId($id);
+
         $journee = DB::table('journalcaisses')
             ->leftJoin('sites', 'journalcaisses.siteid', '=', 'sites.siteid')
             ->leftJoin('caisses', 'journalcaisses.caisseid', '=', 'caisses.caisseid')
@@ -111,6 +128,7 @@ class JourneeController extends Controller
             ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
             ->leftJoin('users', 'ctickets.userid', '=', 'users.userid')
             ->where('ctickets.journalcaisseid', $id)
+            ->where('ctickets.enattente', false) // Exclure les tickets en attente (non payés)
             ->where('detctickets.qte', '!=', 0) // Ignorer les lignes vides
             ->select(
                 'detctickets.qte',
@@ -124,7 +142,15 @@ class JourneeController extends Controller
             ->get();
 
         $totalQte = $lines->sum('qte');
-        $chiffre = $journee->recettebrut ?? 0;
+        // recettebrut n'est renseigné qu'à la clôture : pour une journée ouverte, calcul depuis les tickets
+        if ($journee->isclosed) {
+            $chiffre = (float) ($journee->recettebrut ?? 0);
+        } else {
+            $chiffre = (float) DB::table('ctickets')
+                ->where('journalcaisseid', $id)
+                ->where('enattente', false)
+                ->sum('totalttc');
+        }
 
         // 1. Agrégation par Famille > SousFamille > Produit
         $groupedByFamille = [];
@@ -201,43 +227,90 @@ class JourneeController extends Controller
      */
     public function storeOuverture(Request $request)
     {
+        $user = Auth::user();
+
         $request->validate([
-            'caisseid' => 'required|integer',
+            'caisseid' => [
+                'required',
+                'integer',
+                // La caisse doit appartenir au site de l'utilisateur
+                Rule::exists('caisses', 'caisseid')->where(function ($q) use ($user) {
+                    if ($user->siteid) {
+                        $q->where('siteid', $user->siteid);
+                    }
+                }),
+            ],
             'fondcaisse' => 'required|numeric|min:0',
+        ], [
+            'caisseid.exists' => 'Cette caisse n\'existe pas ou n\'appartient pas à votre site.',
         ]);
 
-        $user = Auth::user();
-        
-        // Vérifier si une journée est déjà ouverte pour cette caisse
-        $isAlreadyOpen = DB::table('journalcaisses')
-            ->where('caisseid', $request->caisseid)
-            ->where(function ($q) {
-                $q->where('isclosed', false)
-                  ->orWhereNull('isclosed');
-            })
-            ->exists();
-
-        if ($isAlreadyOpen) {
-            return back()->with('error', 'Une journée est déjà ouverte pour cette caisse. Veuillez la clôturer d\'abord.');
+        // journalcaisses.employeeid est NOT NULL avec FK vers employees : pas de valeur de repli
+        if (empty($user->employeeid)) {
+            return back()->with('error', 'Aucun employé n\'est associé à votre compte utilisateur. Impossible d\'ouvrir la journée.');
         }
 
-        $caisse = DB::table('caisses')->where('caisseid', $request->caisseid)->first();
+        $error = DB::transaction(function () use ($request, $user) {
+            // Verrouiller la caisse pour sérialiser les ouvertures concurrentes
+            $caisse = DB::table('caisses')
+                ->where('caisseid', $request->caisseid)
+                ->lockForUpdate()
+                ->first();
 
-        // Créer l'entrée dans journalcaisses avec tous les champs requis (NOT NULL)
-        DB::table('journalcaisses')->insert([
-            'caisseid' => $request->caisseid,
-            'fondcaisse' => $request->fondcaisse,
-            'dateouverture' => now(),
-            'userid' => $user->userid,
-            'employeeid' => $user->employeeid ?? 0,
-            'caissierclotureid' => 0,
-            'siteid' => $caisse->siteid ?? ($user->siteid ?? 0),
-            'isclosed' => false,
-            'montantcloture' => 0,
-            'montanttheorique' => 0,
-            'envoyee' => false,
-            'agencebid' => $caisse->agencebid ?? ($user->agencebid ?? 0),
-        ]);
+            // Vérifier si une journée est déjà ouverte pour cette caisse
+            $isAlreadyOpen = DB::table('journalcaisses')
+                ->where('caisseid', $caisse->caisseid)
+                ->where(function ($q) {
+                    $q->where('isclosed', false)
+                      ->orWhereNull('isclosed');
+                })
+                ->exists();
+
+            if ($isAlreadyOpen) {
+                return 'Une journée est déjà ouverte pour cette caisse. Veuillez la clôturer d\'abord.';
+            }
+
+            // Vérifier si l'utilisateur a déjà une journée ouverte (sur une autre caisse)
+            $userHasOpen = DB::table('journalcaisses')
+                ->where('userid', $user->userid)
+                ->where(function ($q) {
+                    $q->where('isclosed', false)
+                      ->orWhereNull('isclosed');
+                })
+                ->exists();
+
+            if ($userHasOpen) {
+                return 'Vous avez déjà une journée ouverte. Veuillez la clôturer d\'abord.';
+            }
+
+            // Numéro de journée séquentiel par caisse
+            $numero = (int) DB::table('journalcaisses')
+                ->where('caisseid', $caisse->caisseid)
+                ->max('journalcaissenumero') + 1;
+
+            // Créer l'entrée dans journalcaisses avec tous les champs requis (NOT NULL)
+            DB::table('journalcaisses')->insert([
+                'caisseid' => $caisse->caisseid,
+                'journalcaissenumero' => $numero,
+                'fondcaisse' => $request->fondcaisse,
+                'dateouverture' => now(),
+                'userid' => $user->userid,
+                'employeeid' => $user->employeeid,
+                'caissierclotureid' => 0,
+                'siteid' => $caisse->siteid ?? ($user->siteid ?? 0),
+                'isclosed' => false,
+                'montantcloture' => 0,
+                'montanttheorique' => 0,
+                'envoyee' => false,
+                'agencebid' => $caisse->agencebid ?? ($user->agencebid ?? 0),
+            ]);
+
+            return null;
+        });
+
+        if ($error) {
+            return back()->with('error', $error);
+        }
 
         return back()->with('success', 'La journée a été ouverte avec succès pour cette caisse !');
     }
@@ -251,9 +324,16 @@ class JourneeController extends Controller
 
         // Si un journalcaisseid est passé en paramètre (via le filtre), on l'utilise
         if ($request->has('journalcaisseid')) {
+            $journalCaisseId = $this->validId($request->input('journalcaisseid'));
+
             $journalCaisse = DB::table('journalcaisses')
-                ->where('journalcaisseid', $request->journalcaisseid)
+                ->where('journalcaisseid', $journalCaisseId)
                 ->first();
+
+            // Restriction site
+            if ($journalCaisse && $user->siteid && $journalCaisse->siteid != $user->siteid) {
+                abort(403, 'Accès non autorisé.');
+            }
         } else {
             // Recherche de la session de caisse ouverte
             $journalCaisse = DB::table('journalcaisses')
@@ -262,6 +342,7 @@ class JourneeController extends Controller
                       ->orWhereNull('isclosed');
                 })
                 ->where('userid', $user->userid ?? $user->id)
+                ->when($user->siteid, fn ($q) => $q->where('siteid', $user->siteid))
                 ->orderBy('journalcaisseid', 'desc')
                 ->first();
 
@@ -275,7 +356,7 @@ class JourneeController extends Controller
                     ->where('siteid', $user->siteid)
                     ->orderBy('journalcaisseid', 'desc')
                     ->first();
-                    
+
                 // Si toujours pas trouvé, chercher dans les caisses du site de l'utilisateur
                 if (!$journalCaisse) {
                     $caissesSite = DB::table('caisses')->where('siteid', $user->siteid)->pluck('caisseid');
@@ -309,6 +390,7 @@ class JourneeController extends Controller
             ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
             ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
             ->where('ctickets.journalcaisseid', $journalCaisse->journalcaisseid)
+            ->where('ctickets.enattente', false)
             ->select(
                 'produits.produitcode as code',
                 'produits.reference',
@@ -317,26 +399,26 @@ class JourneeController extends Controller
                 'tailles.taillelibelle as taille',
                 'detctickets.ttc as pv_u_ttc',
                 DB::raw('SUM(detctickets.qte) as qtes'),
-                DB::raw('SUM(detctickets.remise) as remise'),
-                DB::raw('SUM(detctickets.totalttc) as montant')
+                // detctickets.remise est un pourcentage : remise en montant = brut - net
+                DB::raw('SUM(detctickets.totalttc - detctickets.totalttcnet) as remise'),
+                DB::raw('SUM(detctickets.totalttcnet) as montant'),
+                // Ventes et retours séparés ligne par ligne (un produit vendu puis retourné ne s'annule pas)
+                DB::raw('SUM(CASE WHEN detctickets.qte > 0 THEN detctickets.qte ELSE 0 END) as qte_vente'),
+                DB::raw('SUM(CASE WHEN detctickets.qte > 0 THEN detctickets.totalttcnet ELSE 0 END) as montant_vente'),
+                DB::raw('SUM(CASE WHEN detctickets.qte < 0 THEN detctickets.qte ELSE 0 END) as qte_retour'),
+                DB::raw('SUM(CASE WHEN detctickets.qte < 0 THEN detctickets.totalttcnet ELSE 0 END) as montant_retour'),
+                DB::raw('SUM(CASE WHEN detctickets.qte > 0 THEN detctickets.totalttc - detctickets.totalttcnet ELSE 0 END) as remise_vente'),
+                DB::raw('SUM(CASE WHEN detctickets.qte < 0 THEN detctickets.totalttc - detctickets.totalttcnet ELSE 0 END) as remise_retour')
             )
             ->groupBy('produits.produitcode', 'produits.reference', 'produits.produitlibelle', 'couleurs.couleurlibelle', 'tailles.taillelibelle', 'detctickets.ttc')
             ->get();
 
-        $totalVentesQte = 0;
-        $totalVentesMontant = 0;
-        $totalRetourQte = 0;
-        $totalRetourMontant = 0;
-
-        foreach($ventesRaw as $v) {
-            if ($v->qtes >= 0) {
-                $totalVentesQte += $v->qtes;
-                $totalVentesMontant += $v->montant;
-            } else {
-                $totalRetourQte += $v->qtes;
-                $totalRetourMontant += $v->montant;
-            }
-        }
+        $totalVentesQte = $ventesRaw->sum('qte_vente');
+        $totalVentesMontant = $ventesRaw->sum('montant_vente');
+        $totalRetourQte = $ventesRaw->sum('qte_retour');
+        $totalRetourMontant = $ventesRaw->sum('montant_retour');
+        $totalVentesRemise = $ventesRaw->sum('remise_vente');
+        $totalRetourRemise = $ventesRaw->sum('remise_retour');
 
         // 2. Chiffre d'Affaire / Sous Familles
         $caSousFamilles = DB::table('detctickets')
@@ -344,13 +426,20 @@ class JourneeController extends Controller
             ->join('produits', 'detctickets.produitid', '=', 'produits.produitid')
             ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
             ->where('ctickets.journalcaisseid', $journalCaisse->journalcaisseid)
+            ->where('ctickets.enattente', false)
             ->select(
                 'sousfamilles.sousfamilleid as code',
                 'sousfamilles.sousfamillelibelle as libelle',
                 DB::raw('MAX(detctickets.ttc) as pv_u_ttc'),
                 DB::raw('SUM(detctickets.qte) as qtes'),
-                DB::raw('SUM(detctickets.remise) as remise'),
-                DB::raw('SUM(detctickets.totalttc) as montant')
+                DB::raw('SUM(detctickets.totalttc - detctickets.totalttcnet) as remise'),
+                DB::raw('SUM(detctickets.totalttcnet) as montant'),
+                DB::raw('SUM(CASE WHEN detctickets.qte > 0 THEN detctickets.qte ELSE 0 END) as qte_vente'),
+                DB::raw('SUM(CASE WHEN detctickets.qte > 0 THEN detctickets.totalttcnet ELSE 0 END) as montant_vente'),
+                DB::raw('SUM(CASE WHEN detctickets.qte > 0 THEN detctickets.totalttc - detctickets.totalttcnet ELSE 0 END) as remise_vente'),
+                DB::raw('SUM(CASE WHEN detctickets.qte < 0 THEN detctickets.qte ELSE 0 END) as qte_retour'),
+                DB::raw('SUM(CASE WHEN detctickets.qte < 0 THEN detctickets.totalttcnet ELSE 0 END) as montant_retour'),
+                DB::raw('SUM(CASE WHEN detctickets.qte < 0 THEN detctickets.totalttc - detctickets.totalttcnet ELSE 0 END) as remise_retour')
             )
             ->groupBy('sousfamilles.sousfamilleid', 'sousfamilles.sousfamillelibelle')
             ->get();
@@ -359,6 +448,7 @@ class JourneeController extends Controller
         $caVendeur = DB::table('ctickets')
             ->leftJoin('employees', 'ctickets.employeeid', '=', 'employees.employeeid')
             ->where('ctickets.journalcaisseid', $journalCaisse->journalcaisseid)
+            ->where('ctickets.enattente', false)
             ->select(
                 'employees.nom',
                 'employees.prenom',
@@ -378,30 +468,47 @@ class JourneeController extends Controller
             ->get()
             ->keyBy('modereglementid');
 
+        $mode = fn (int $id) => (float) ($reglements->get($id)->total ?? 0);
+
+        // Total de tous les règlements de la journée, tous modes confondus
+        $totalRecettesDetails = (float) $reglements->sum('total');
+
         $recettes = [
-            'espece' => (float) ($reglements->get(1)->total ?? 0),
+            'espece' => $mode(1),
             'depense' => (float) ($journalCaisse->montantdepense ?? 0),
-            'espece_net' => (float) ($reglements->get(1)->total ?? 0) - (float) ($journalCaisse->montantdepense ?? 0),
-            'cheque' => (float) ($reglements->get(2)->total ?? 0),
-            'carte_credit' => (float) ($reglements->get(4)->total ?? 0),
-            'bon_achats' => (float) ($reglements->get(8)->total ?? 0), // Convention or Achat
-            'cheque_cadeau' => (float) ($reglements->get(5)->total ?? 0),
-            'autres' => (float) ($reglements->get(12)->total ?? 0),
+            'espece_net' => $mode(1) - (float) ($journalCaisse->montantdepense ?? 0),
+            'cheque' => $mode(2),
+            'traite' => $mode(3),
+            'carte_credit' => $mode(4),
+            'cheque_cadeau' => $mode(5),
+            'ticket_resto' => $mode(6),
+            'offre' => $mode(7),
+            'bon_convention' => $mode(8),
+            'avoir' => $mode(9),
+            'bon_achats' => $mode(10),
+            'virement' => $mode(11),
+            'coupon' => $mode(13),
         ];
-        
-        $totalRecettesDetails = $recettes['espece'] + $recettes['cheque'] + $recettes['carte_credit'] + $recettes['bon_achats'] + $recettes['cheque_cadeau'] + $recettes['autres'];
-        
+        // "Autres" = mode 12 + tout mode non listé ci-dessus, pour que le détail égale le total
+        $recettes['autres'] = $totalRecettesDetails
+            - array_sum(array_diff_key($recettes, array_flip(['depense', 'espece_net'])));
+
+        // Les règlements de complément d'acompte (creglements.iscomplement) sont déjà inclus
+        // dans $totalRecettesDetails : ils sont seulement ventilés, pas ajoutés une seconde fois.
         $acomptes_nv = (float) ($journalCaisse->acomptenewticket ?? 0);
-        $acomptes_av = (float) ($journalCaisse->complementacompte ?? 0);
+        $acomptes_av = (float) DB::table('creglements')
+            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
+            ->where('iscomplement', true)
+            ->sum('montant');
         $acomptes_personnels = (float) ($journalCaisse->acomptepersonnel ?? 0);
         $commissions = (float) ($journalCaisse->totalcommission ?? 0);
 
         // Recette Brute & Nette calculations
-        $recetteBrute = $totalRecettesDetails + $acomptes_nv + $acomptes_av;
+        $recetteBrute = $totalRecettesDetails;
         $recetteNette = $recetteBrute - $recettes['depense'] - $acomptes_personnels - $commissions;
-        
+
         $caisseTotaux = [
-            'ventes_reglees' => $totalRecettesDetails,
+            'ventes_reglees' => $totalRecettesDetails - $acomptes_nv - $acomptes_av,
             'acomptes_nv' => $acomptes_nv,
             'acomptes_av' => $acomptes_av,
             'recette_brute' => $recetteBrute,
@@ -413,7 +520,7 @@ class JourneeController extends Controller
 
         return view('vente.journee.etat', compact(
             'journalCaisse', 'caisse', 'adminName',
-            'ventesRaw', 'totalVentesQte', 'totalVentesMontant', 'totalRetourQte', 'totalRetourMontant',
+            'ventesRaw', 'totalVentesQte', 'totalVentesMontant', 'totalRetourQte', 'totalRetourMontant', 'totalVentesRemise', 'totalRetourRemise',
             'caSousFamilles', 'caVendeur', 'totalVendeurMontant',
             'recettes', 'caisseTotaux', 'totalRecettesDetails'
         ));
@@ -441,6 +548,12 @@ class JourneeController extends Controller
             )
             ->orderBy('journalcaisses.dateouverture', 'desc');
 
+        // Restriction au site de l'utilisateur
+        $user = Auth::user();
+        if ($user->siteid) {
+            $query->where('journalcaisses.siteid', $user->siteid);
+        }
+
         if ($du) {
             $query->whereDate('journalcaisses.dateouverture', '>=', $du);
         }
@@ -467,6 +580,7 @@ class JourneeController extends Controller
                   ->orWhereNull('isclosed');
             })
             ->where('userid', $user->userid ?? $user->id)
+            ->when($user->siteid, fn ($q) => $q->where('siteid', $user->siteid))
             ->orderBy('journalcaisseid', 'desc')
             ->first();
 
@@ -507,36 +621,9 @@ class JourneeController extends Controller
             ->where('caisseid', $journalCaisse->caisseid)
             ->first();
 
-        // Calculer les totaux théoriques depuis les règlements de cette session
-        $reglements = DB::table('creglements')
-            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
-            ->select('modereglementid', DB::raw('SUM(montant) as total'))
-            ->groupBy('modereglementid')
-            ->get()
-            ->keyBy('modereglementid');
-
-        // Calculer les totaux depuis les tickets de cette session
-        $ticketsTotals = DB::table('ctickets')
-            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
-            ->select(
-                DB::raw('COUNT(*) as nbreticket'),
-                DB::raw('SUM(totalttc) as recettebrut'),
-                DB::raw('SUM(totalqte) as totalqtevente'),
-                DB::raw('SUM(acompte) as ventereglee'),
-                DB::raw('SUM(remise) as vtotalremise')
-            )
-            ->first();
-
-        // Construire les totaux théoriques par mode de paiement
-        $theoriques = [
-            'fondcaisse'       => (float) $journalCaisse->fondcaisse,
-            'espece'           => (float) ($reglements->get(1)->total ?? 0),
-            'cheque'           => (float) ($reglements->get(2)->total ?? 0),
-            'carte_bancaire'   => (float) ($reglements->get(4)->total ?? 0),
-            'cheque_cadeaux'   => (float) ($reglements->get(5)->total ?? 0),
-            'bon_convention'   => (float) ($reglements->get(8)->total ?? 0),
-            'avoir'            => (float) ($reglements->get(9)->total ?? 0),
-        ];
+        // Totaux théoriques (règlements) et totaux des tickets de cette session
+        $theoriques = $this->clotureTheoriques($journalCaisse);
+        $ticketsTotals = $this->clotureTicketsTotals($journalCaisse->journalcaisseid);
 
         return view('vente.journee.cloture', compact(
             'journalCaisse',
@@ -544,6 +631,70 @@ class JourneeController extends Controller
             'theoriques',
             'ticketsTotals'
         ));
+    }
+
+    /**
+     * Totaux théoriques par mode de paiement pour la clôture.
+     *
+     * Modes comptés (théorique ET physique) : 1 Espèce, 2 Chèque, 4 Carte Bancaire,
+     * 5 Chèque Cadeaux, 6 Ticket Resto, 8 Bon de convention, 9 Avoir, 13 Coupon,
+     * et "Autres" = 3 Traite, 10 Bon d'achat, 11 Virement, 12 Autre (+ tout mode inconnu).
+     * 7 Offre n'est pas un moyen de paiement physique : affiché et stocké (totaloffre)
+     * mais exclu des deux côtés de l'écart.
+     */
+    private function clotureTheoriques($journalCaisse): array
+    {
+        $reglements = DB::table('creglements')
+            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
+            ->select('modereglementid', DB::raw('SUM(montant) as total'))
+            ->groupBy('modereglementid')
+            ->get()
+            ->keyBy('modereglementid');
+
+        $mode = fn (int $id) => (float) ($reglements->get($id)->total ?? 0);
+
+        $theoriques = [
+            'fondcaisse'     => (float) $journalCaisse->fondcaisse,
+            'espece'         => $mode(1),
+            'cheque'         => $mode(2),
+            'carte_bancaire' => $mode(4),
+            'cheque_cadeaux' => $mode(5),
+            'ticket_resto'   => $mode(6),
+            'offre'          => $mode(7),
+            'bon_convention' => $mode(8),
+            'avoir'          => $mode(9),
+            'coupon'         => $mode(13),
+        ];
+
+        // Autres = tout ce qui n'est pas ventilé ci-dessus (3, 10, 11, 12, modes inconnus)
+        $theoriques['autre'] = (float) $reglements->sum('total')
+            - array_sum(array_diff_key($theoriques, ['fondcaisse' => true]));
+
+        // Dépenses payées en espèces depuis la caisse (dont retours d'argent aux clients) : sorties du tiroir
+        $theoriques['espece'] -= (float) DB::table('depenses')
+            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
+            ->where('modereglementid', 1)
+            ->sum('montant');
+
+        return $theoriques;
+    }
+
+    /**
+     * Totaux des tickets (hors tickets en attente) pour la clôture.
+     */
+    private function clotureTicketsTotals($journalCaisseId)
+    {
+        return DB::table('ctickets')
+            ->where('journalcaisseid', $journalCaisseId)
+            ->where('enattente', false)
+            ->select(
+                DB::raw('COUNT(*) as nbreticket'),
+                DB::raw('SUM(totalttc) as recettebrut'),
+                DB::raw('SUM(totalqte) as totalqtevente'),
+                DB::raw('SUM(acompte) as ventereglee'),
+                DB::raw('SUM(vremise) as vtotalremise')
+            )
+            ->first();
     }
 
     /**
@@ -557,117 +708,135 @@ class JourneeController extends Controller
             'totalchequephys' => 'nullable|numeric|min:0',
             'totaltpephys' => 'nullable|numeric|min:0',
             'totalcontrebonphys' => 'nullable|numeric|min:0',
+            'totaltkrestophys' => 'nullable|numeric|min:0',
             'totalbonconventionphys' => 'nullable|numeric|min:0',
             'totalregavoirphys' => 'nullable|numeric|min:0',
+            'totalcouponphys' => 'nullable|numeric|min:0',
+            'totalregautrephys' => 'nullable|numeric|min:0',
         ]);
 
         $user = Auth::user();
 
-        // Vérifier que la session existe et est bien ouverte
-        $journalCaisse = DB::table('journalcaisses')
-            ->where('journalcaisseid', $request->journalcaisseid)
-            ->where(function ($q) {
-                $q->where('isclosed', false)
-                  ->orWhereNull('isclosed');
-            })
-            ->first();
+        $closed = DB::transaction(function () use ($request, $user) {
+            // Verrouiller la session pour éviter une double clôture concurrente
+            $journalCaisse = DB::table('journalcaisses')
+                ->where('journalcaisseid', $request->journalcaisseid)
+                ->where(function ($q) {
+                    $q->where('isclosed', false)
+                      ->orWhereNull('isclosed');
+                })
+                ->lockForUpdate()
+                ->first();
 
-        if (!$journalCaisse) {
+            if (!$journalCaisse) {
+                return false;
+            }
+
+            // Seul un utilisateur du site de la journée peut la clôturer
+            if ($journalCaisse->siteid != $user->siteid) {
+                abort(403, 'Vous ne pouvez pas clôturer une journée d\'un autre site.');
+            }
+
+            // Recalculer les totaux théoriques et les totaux des tickets
+            $theoriques    = $this->clotureTheoriques($journalCaisse);
+            $ticketsTotals = $this->clotureTicketsTotals($journalCaisse->journalcaisseid);
+
+            // Valeurs théoriques
+            $fondCaisse     = $theoriques['fondcaisse'];
+            $totalEspece    = $theoriques['espece'];
+            $totalCheque    = $theoriques['cheque'];
+            $totalTpe       = $theoriques['carte_bancaire'];
+            $totalContrebon = $theoriques['cheque_cadeaux'];
+            $totalTkResto   = $theoriques['ticket_resto'];
+            $totalOffre     = $theoriques['offre'];
+            $totalBonConv   = $theoriques['bon_convention'];
+            $totalAvoir     = $theoriques['avoir'];
+            $totalCoupon    = $theoriques['coupon'];
+            $totalAutre     = $theoriques['autre'];
+
+            // Valeurs physiques (saisies par le caissier). L'espèce saisie est hors fond de caisse :
+            // la vue affiche le fond sur une ligne séparée dont le montant physique est le fond lui-même.
+            $especePhys    = (float) ($request->totalespecephys ?? 0);
+            $chequePhys    = (float) ($request->totalchequephys ?? 0);
+            $tpePhys       = (float) ($request->totaltpephys ?? 0);
+            $contrebonPhys = (float) ($request->totalcontrebonphys ?? 0);
+            $tkRestoPhys   = (float) ($request->totaltkrestophys ?? 0);
+            $bonConvPhys   = (float) ($request->totalbonconventionphys ?? 0);
+            $avoirPhys     = (float) ($request->totalregavoirphys ?? 0);
+            $couponPhys    = (float) ($request->totalcouponphys ?? 0);
+            $autrePhys     = (float) ($request->totalregautrephys ?? 0);
+
+            // Calculs agrégés : le fond de caisse est inclus des deux côtés (théorique et physique)
+            $recettebrut      = (float) ($ticketsTotals->recettebrut ?? 0);
+            $recettenet       = $recettebrut;
+            $ventereglee      = (float) ($ticketsTotals->ventereglee ?? 0);
+            $montanttheorique = $totalEspece + $fondCaisse;
+            $montantcloture   = $especePhys + $fondCaisse;
+            $totalTheoriqueTousModes = $montanttheorique + $totalCheque + $totalTpe + $totalContrebon
+                + $totalTkResto + $totalBonConv + $totalAvoir + $totalCoupon + $totalAutre;
+            $recettephysique = $montantcloture + $chequePhys + $tpePhys + $contrebonPhys
+                + $tkRestoPhys + $bonConvPhys + $avoirPhys + $couponPhys + $autrePhys;
+            $ecart      = $recettephysique - $totalTheoriqueTousModes;
+            $totalecart = $montantcloture - $montanttheorique;
+
+            // Mise à jour de l'enregistrement journalcaisses
+            DB::table('journalcaisses')
+                ->where('journalcaisseid', $journalCaisse->journalcaisseid)
+                ->update([
+                    'isclosed'         => true,
+                    'datecloture'      => now(),
+                    'caissierclotureid' => $user->userid,
+
+                    // Totaux théoriques (depuis les règlements)
+                    'totalespece'           => $totalEspece,
+                    'totalcheque'           => $totalCheque,
+                    'totaltpe'              => $totalTpe,
+                    'totalcontrebon'        => $totalContrebon,
+                    'totaltkresto'          => $totalTkResto,
+                    'totaloffre'            => $totalOffre,
+                    'totalbonconvention'    => $totalBonConv,
+                    'totalregavoir'         => $totalAvoir,
+                    'totalcoupon'           => $totalCoupon,
+                    'totalregautre'         => $totalAutre,
+                    'totalespecenet'        => $totalEspece,
+
+                    // Totaux physiques (comptés par le caissier)
+                    'totalespecephys'       => $especePhys,
+                    'totalchequephys'       => $chequePhys,
+                    'totaltpephys'          => $tpePhys,
+                    'totalcontrebonphys'    => $contrebonPhys,
+                    'totaltkrestophys'      => $tkRestoPhys,
+                    'totalbonconventionphys' => $bonConvPhys,
+                    'totalregavoirphys'     => $avoirPhys,
+                    'totalregautrephys'     => $autrePhys,
+
+                    // Écarts par mode (pas de colonne "phys" pour le coupon : l'écart est conservé)
+                    'totalecartchequecadeau'  => $contrebonPhys - $totalContrebon,
+                    'totalecartbonconvention' => $bonConvPhys - $totalBonConv,
+                    'totalecartcoupon'        => $couponPhys - $totalCoupon,
+
+                    // Agrégats
+                    'montantcloture'    => $montantcloture,
+                    'montanttheorique'  => $montanttheorique,
+                    'recettebrut'       => $recettebrut,
+                    'recettenet'        => $recettenet,
+                    'recettephysique'   => $recettephysique,
+                    'ventereglee'       => $ventereglee,
+                    'ecart'             => $ecart,
+                    'totalecart'        => $totalecart,
+
+                    // Tickets
+                    'nbreticket'        => (float) ($ticketsTotals->nbreticket ?? 0),
+                    'totalqtevente'     => (float) ($ticketsTotals->totalqtevente ?? 0),
+                    'vtotalremise'      => (float) ($ticketsTotals->vtotalremise ?? 0),
+                ]);
+
+            return true;
+        });
+
+        if (!$closed) {
             return back()->with('error', 'Session de caisse introuvable ou déjà clôturée.');
         }
-
-        // Recalculer les totaux théoriques depuis les règlements
-        $reglements = DB::table('creglements')
-            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
-            ->select('modereglementid', DB::raw('SUM(montant) as total'))
-            ->groupBy('modereglementid')
-            ->get()
-            ->keyBy('modereglementid');
-
-        // Recalculer les totaux depuis les tickets
-        $ticketsTotals = DB::table('ctickets')
-            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
-            ->select(
-                DB::raw('COUNT(*) as nbreticket'),
-                DB::raw('SUM(totalttc) as recettebrut'),
-                DB::raw('SUM(totalqte) as totalqtevente'),
-                DB::raw('SUM(acompte) as ventereglee'),
-                DB::raw('SUM(remise) as vtotalremise')
-            )
-            ->first();
-
-        // Valeurs théoriques
-        $totalEspece       = (float) ($reglements->get(1)->total ?? 0);
-        $totalCheque       = (float) ($reglements->get(2)->total ?? 0);
-        $totalTpe          = (float) ($reglements->get(4)->total ?? 0);
-        $totalContrebon    = (float) ($reglements->get(5)->total ?? 0);
-        $totalBonConv      = (float) ($reglements->get(8)->total ?? 0);
-        $totalAvoir        = (float) ($reglements->get(9)->total ?? 0);
-        $totalAutre        = (float) ($reglements->get(12)->total ?? 0);
-
-        // Valeurs physiques (saisies par le caissier)
-        $especePhys     = (float) ($request->totalespecephys ?? 0);
-        $chequePhys     = (float) ($request->totalchequephys ?? 0);
-        $tpePhys        = (float) ($request->totaltpephys ?? 0);
-        $contrebonPhys  = (float) ($request->totalcontrebonphys ?? 0);
-        $bonConvPhys    = (float) ($request->totalbonconventionphys ?? 0);
-        $avoirPhys      = (float) ($request->totalregavoirphys ?? 0);
-        $autrePhys      = (float) ($request->totalregautrephys ?? 0);
-
-        // Calculs agrégés
-        $fondCaisse      = (float) $journalCaisse->fondcaisse;
-        $recettebrut     = (float) ($ticketsTotals->recettebrut ?? 0);
-        $recettenet      = $recettebrut;
-        $ventereglee     = (float) ($ticketsTotals->ventereglee ?? 0);
-        $montanttheorique = $totalEspece + $fondCaisse;
-        $totalTheoriqueTousModes = $montanttheorique + $totalCheque + $totalTpe + $totalContrebon + $totalBonConv + $totalAvoir + $totalAutre;
-        $recettephysique = $especePhys + $chequePhys + $tpePhys + $contrebonPhys + $bonConvPhys + $avoirPhys + $autrePhys;
-        $montantcloture  = $especePhys;
-        $ecart           = $recettephysique - $totalTheoriqueTousModes;
-        $totalecart      = $especePhys - $montanttheorique;
-
-        // Mise à jour de l'enregistrement journalcaisses
-        DB::table('journalcaisses')
-            ->where('journalcaisseid', $journalCaisse->journalcaisseid)
-            ->update([
-                'isclosed'         => true,
-                'datecloture'      => now(),
-                'caissierclotureid' => $user->userid,
-
-                // Totaux théoriques (depuis les règlements)
-                'totalespece'           => $totalEspece,
-                'totalcheque'           => $totalCheque,
-                'totaltpe'              => $totalTpe,
-                'totalcontrebon'        => $totalContrebon,
-                'totalbonconvention'    => $totalBonConv,
-                'totalregavoir'         => $totalAvoir,
-                'totalregautre'         => $totalAutre,
-                'totalespecenet'        => $totalEspece,
-
-                // Totaux physiques (comptés par le caissier)
-                'totalespecephys'       => $especePhys,
-                'totalchequephys'       => $chequePhys,
-                'totaltpephys'          => $tpePhys,
-                'totalcontrebonphys'    => $contrebonPhys,
-                'totalbonconventionphys' => $bonConvPhys,
-                'totalregavoirphys'     => $avoirPhys,
-                'totalregautrephys'     => $autrePhys,
-
-                // Agrégats
-                'montantcloture'    => $montantcloture,
-                'montanttheorique'  => $montanttheorique,
-                'recettebrut'       => $recettebrut,
-                'recettenet'        => $recettenet,
-                'recettephysique'   => $recettephysique,
-                'ventereglee'       => $ventereglee,
-                'ecart'             => $ecart,
-                'totalecart'        => $totalecart,
-
-                // Tickets
-                'nbreticket'        => (float) ($ticketsTotals->nbreticket ?? 0),
-                'totalqtevente'     => (float) ($ticketsTotals->totalqtevente ?? 0),
-                'vtotalremise'      => (float) ($ticketsTotals->vtotalremise ?? 0),
-            ]);
 
         return redirect()->route('vente.journee.cloture')
             ->with('success', 'La journée a été clôturée avec succès !');

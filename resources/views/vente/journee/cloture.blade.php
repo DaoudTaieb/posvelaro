@@ -197,7 +197,7 @@
                                         <circle cx="12" cy="12" r="2"></circle>
                                         <path d="M6 12h.01M18 12h.01"></path>
                                     </svg>
-                                    Espèce
+                                    Espèce <span style="font-size: 11px; font-weight: 500; color: var(--text-muted);">(hors fond de caisse)</span>
                                 </div>
                             </td>
                             <td class="amount-cell font-bold" style="padding: 14px 24px; font-size: 14px; color: var(--text-main); border-bottom: 1px solid var(--border);">
@@ -391,13 +391,76 @@
                                 </button>
                             </td>
                         </tr>
+
+                        @php
+                            // Autres modes comptés (même présentation que les lignes ci-dessus)
+                            $autresModes = [
+                                ['key' => 'ticket_resto', 'input' => 'totaltkrestophys', 'label' => 'Ticket Resto'],
+                                ['key' => 'coupon', 'input' => 'totalcouponphys', 'label' => 'Coupon Manuella'],
+                                ['key' => 'autre', 'input' => 'totalregautrephys', 'label' => 'Autres (Traite, Bon d\'achat, Virement, Autre)'],
+                            ];
+                        @endphp
+                        @foreach($autresModes as $m)
+                        <tr style="transition: background-color 0.15s;">
+                            <td style="padding: 14px 24px; font-weight: 600; border-bottom: 1px solid var(--border);">
+                                <div style="display: flex; align-items: center; gap: 12px; color: var(--text-main);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                    </svg>
+                                    {{ $m['label'] }}
+                                </div>
+                            </td>
+                            <td class="amount-cell font-bold" style="padding: 14px 24px; font-size: 14px; color: var(--text-main); border-bottom: 1px solid var(--border);">
+                                {{ number_format($theoriques[$m['key']], 3, '.', ' ') }} <span style="font-size: 11px; font-weight: 500; color: var(--text-muted);">TND</span>
+                            </td>
+                            <td style="padding: 10px 24px 10px 12px; border-bottom: 1px solid var(--border);">
+                                <div style="position: relative; display: flex; align-items: center;">
+                                    <input type="number" step="0.001" min="0" name="{{ $m['input'] }}" id="{{ $m['input'] }}"
+                                           class="form-control cloture-input amount-cell" value=""
+                                           placeholder="0.000"
+                                           style="height: 40px; font-weight: 700; font-size: 15px; padding-right: 52px; border-radius: var(--radius-md); background: #fafafa;">
+                                    <span style="position: absolute; right: 14px; font-size: 11px; font-weight: 700; color: var(--text-muted);">TND</span>
+                                </div>
+                            </td>
+                            <td class="text-center" style="padding-right: 16px; border-bottom: 1px solid var(--border);">
+                                <button type="button" class="btn btn-outline copy-btn" onclick="copyTheorique(this, '{{ $m['input'] }}', {{ $theoriques[$m['key']] }})" title="Copier la valeur théorique">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <polyline points="19 12 12 19 5 12"></polyline>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                        @endforeach
+
+                        <!-- Offre (non comptée : exclue de l'écart) -->
+                        @if($theoriques['offre'] != 0)
+                        <tr style="transition: background-color 0.15s;">
+                            <td style="padding: 14px 24px; font-weight: 600; border-bottom: 1px solid var(--border);">
+                                <div style="display: flex; align-items: center; gap: 12px; color: var(--text-muted);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                                        <rect x="2" y="7" width="20" height="5"></rect>
+                                        <line x1="12" y1="22" x2="12" y2="7"></line>
+                                    </svg>
+                                    Offre <span style="font-size: 11px; font-weight: 500;">(non comptée)</span>
+                                </div>
+                            </td>
+                            <td class="amount-cell font-bold" style="padding: 14px 24px; font-size: 14px; color: var(--text-muted); border-bottom: 1px solid var(--border);">
+                                {{ number_format($theoriques['offre'], 3, '.', ' ') }} <span style="font-size: 11px; font-weight: 500; color: var(--text-muted);">TND</span>
+                            </td>
+                            <td class="amount-cell text-muted" style="padding: 14px 24px; font-size: 14px; border-bottom: 1px solid var(--border);">—</td>
+                            <td style="border-bottom: 1px solid var(--border);"></td>
+                        </tr>
+                        @endif
                     </tbody>
                 </table>
             </div>
 
             <!-- Pied de page avec bouton clôturer -->
             <div style="padding: 24px 32px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; align-items: center; background: #fdfdfe; gap: 16px;">
-                <button type="submit" id="submitCloture" class="btn btn-primary" onclick="return confirm('Êtes-vous sûr de vouloir clôturer cette journée de vente ?')" style="height: 46px; padding: 0 36px; font-size: 15px; font-weight: 700; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); display: inline-flex; align-items: center; gap: 10px;">
+                <button type="submit" id="submitCloture" class="btn btn-primary" onclick="return confirmerFormulaire(event, this.form, 'Êtes-vous sûr de vouloir clôturer cette journée de vente ?', { titre: 'Clôture de journée', okLabel: 'Clôturer' })" style="height: 46px; padding: 0 36px; font-size: 15px; font-weight: 700; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); display: inline-flex; align-items: center; gap: 10px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>

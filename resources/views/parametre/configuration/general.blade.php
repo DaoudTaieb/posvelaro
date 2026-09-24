@@ -30,16 +30,6 @@
         </div>
     </div>
 
-    @if(session('success'))
-        <div style="background: var(--success); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
-            {{ session('success') }}
-        </div>
-    @endif
-
     <div class="content-card">
         <form id="configForm" action="{{ route('parametre.configuration.general.update') }}" method="POST" style="padding: 24px;">
             @csrf
@@ -56,7 +46,8 @@
                     @foreach($col1 as $config)
                         <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
                             <label class="form-label" style="margin: 0; font-weight: 500; font-size: 13px;">{{ $config->caption }}</label>
-                            @if($config->typevalueid == 2)
+                            {{-- Interrupteur seulement si la valeur est vraiment un booléen (ex. tauxacompte = 99 est typé booléen) --}}
+                            @if($config->typevalueid == 2 && in_array(strtolower(trim((string) $config->value)), ['true', 'false'], true))
                                 <div class="toggle-wrapper" style="display: flex; align-items: center; gap: 8px;">
                                     <span style="font-size: 12px; color: var(--text-muted);">Non</span>
                                     <label class="switch">
@@ -78,7 +69,8 @@
                     @foreach($col2 as $config)
                         <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
                             <label class="form-label" style="margin: 0; font-weight: 500; font-size: 13px;">{{ $config->caption }}</label>
-                            @if($config->typevalueid == 2)
+                            {{-- Interrupteur seulement si la valeur est vraiment un booléen (ex. tauxacompte = 99 est typé booléen) --}}
+                            @if($config->typevalueid == 2 && in_array(strtolower(trim((string) $config->value)), ['true', 'false'], true))
                                 <div class="toggle-wrapper" style="display: flex; align-items: center; gap: 8px;">
                                     <span style="font-size: 12px; color: var(--text-muted);">Non</span>
                                     <label class="switch">

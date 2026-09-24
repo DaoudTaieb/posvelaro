@@ -284,11 +284,11 @@
         });
         
         if (selected.length === 0) {
-            alert('Veuillez sélectionner au moins un bon de transfert.');
+            notifier('Veuillez sélectionner au moins un bon de transfert.');
             return;
         }
         
-        alert('Impression de ' + selected.length + ' bon(s) de transfert sélectionné(s).');
+        notifier('Impression de ' + selected.length + ' bon(s) de transfert sélectionné(s).');
         // TODO: Implement actual print logic
     }
 </script>

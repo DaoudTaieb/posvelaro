@@ -21,7 +21,7 @@ class JourneeManagerTest extends TestCase
         $employee = DB::table('employees')->first();
         $agence = DB::table('agencebs')->first();
         
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->user = new User();
             $this->user->userid = $dbUser->userid;
@@ -33,8 +33,25 @@ class JourneeManagerTest extends TestCase
             $this->actingAs($this->user);
         }
 
-        // Trouver une caisse
-        $this->caisse = DB::table('caisses')->first();
+        // Trouver une caisse du site de l'utilisateur (l'ouverture est limitée aux caisses de son site)
+        $this->caisse = DB::table('caisses')->where('siteid', $this->user->siteid)->first();
+        if (!$this->caisse) {
+            // Caisse temporaire pour le site de l'utilisateur (annulée par la transaction du test)
+            $modele = DB::table('caisses')->first();
+            $caisseid = DB::table('caisses')->insertGetId([
+                'compteur' => 0,
+                'libelle' => 'Caisse Test',
+                'facturation' => true,
+                'agencebid' => $modele->agencebid ?? ($agence->agencebid ?? 1),
+                'bloque' => false,
+                'clientid' => $modele->clientid ?? null,
+                'employeeid' => $this->user->employeeid,
+                'siteid' => $this->user->siteid,
+                'numero' => 0,
+                'machineid' => $modele->machineid ?? null,
+            ], 'caisseid');
+            $this->caisse = DB::table('caisses')->where('caisseid', $caisseid)->first();
+        }
         
         // S'assurer qu'aucune journée n'est ouverte pour cette caisse avant le test (pour éviter les conflits)
         DB::table('journalcaisses')
@@ -157,7 +174,12 @@ class JourneeManagerTest extends TestCase
         ]);
         
         $journee = DB::table('journalcaisses')->where('journalcaisseid', $nextId)->first();
-        // L'écart total doit être 250 (physique) - 200 (théorique fond de caisse) = 50
-        $this->assertEquals(50, $journee->totalecart);
+        // L'espèce saisie est hors fond de caisse (le fond a sa propre ligne dans la vue) :
+        // montant clôture = 250 + 200 (fond) = 450 ; théorique = 0 (ventes espèce) + 200 (fond) = 200
+        $this->assertEquals(450, $journee->montantcloture);
+        $this->assertEquals(200, $journee->montanttheorique);
+        // Écart espèce = 450 - 200 = 250 ; aucun autre mode => écart global identique
+        $this->assertEquals(250, $journee->totalecart);
+        $this->assertEquals(250, $journee->ecart);
     }
 }

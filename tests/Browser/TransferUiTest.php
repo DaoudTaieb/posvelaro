@@ -18,7 +18,7 @@ class TransferUiTest extends DuskTestCase
         parent::setUp();
 
         // Retrieve a real user and sites from the DB
-        $dbUser = DB::table('users')->first();
+        $dbUser = DB::table('users')->orderBy('userid')->first();
         if ($dbUser) {
             $this->testUser = User::find($dbUser->userid);
         }

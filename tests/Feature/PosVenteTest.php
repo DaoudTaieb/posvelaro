@@ -17,7 +17,7 @@ class PosVenteTest extends TestCase
         parent::setUp();
         
         // Simuler la connexion d'un caissier
-        $userRecord = DB::table('users')->first();
+        $userRecord = DB::table('users')->orderBy('userid')->first();
         if ($userRecord) {
             $user = User::find($userRecord->userid) ?? new User((array) $userRecord);
             $user->userid = $userRecord->userid;
@@ -114,8 +114,12 @@ class PosVenteTest extends TestCase
         $this->assertEquals(100, $ticket->totalttc, 'Le total TTC doit être égal à 100');
         $this->assertEquals(2, $ticket->totalqte, 'La quantité totale doit être de 2');
         
-        // La TVA est configurée à 19% en dur dans le contrôleur (HT = TTC / 1.19)
-        $expectedHt = 100 / 1.19;
+        // La TVA utilisée est celle de la famille de taxe de l'article (HT = TTC / (1 + TVA))
+        $tva = (float) DB::table('produits')
+            ->join('taxefamilles', 'produits.taxefamilleid', '=', 'taxefamilles.taxefamilleid')
+            ->where('produits.produitid', $produit2->produitid)
+            ->value('taxefamilles.tvavente');
+        $expectedHt = 100 / (1 + $tva / 100);
         $this->assertEqualsWithDelta($expectedHt, $ticket->totalnetht, 0.01, 'Le calcul du HT est incorrect');
 
         // Vérifier que le règlement a été créé

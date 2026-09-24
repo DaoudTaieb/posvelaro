@@ -187,7 +187,7 @@
 
                 <div class="form-group" style="flex: 2; min-width: 300px; margin: 0;">
                     <label class="form-label">Observation</label>
-                    <input type="text" name="description" class="form-control" placeholder="Observation optionnelle..." value="{{ $demande->description ?? '' }}" {{ isset($demande) ? 'disabled' : '' }}>
+                    <input type="text" name="description" class="form-control" placeholder="Observation optionnelle..." value="{{ $demande->description ?? '' }}" {{ isset($demande) ? 'readonly' : '' }}>
                 </div>
 
                 <div style="margin: 0;">
@@ -264,7 +264,7 @@
                                     <td>{{ $ligne->taillelibelle }}</td>
                                     <td>{{ $ligne->couleurlibelle }}</td>
                                     <td style="text-align: center; font-weight: 600;">{{ $ligne->qte }}</td>
-                                    <td style="text-align: right;">{{ number_format($ligne->ttc, 2, ',', ' ') }} MAD</td>
+                                    <td style="text-align: right;">{{ number_format($ligne->ttc, 3, '.', ' ') }} DT</td>
                                     <td style="text-align: center;">
                                         <button type="button" class="action-btn-small delete" onclick="this.closest('tr').remove(); updateFooter();" {{ isset($demande) && $demande->etatdemandetransfertid != 1 ? 'disabled' : '' }}>
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -312,6 +312,16 @@
 
 @section('scripts')
 <script>
+    // Échappe les valeurs insérées dans innerHTML (texte et attributs)
+    function escHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function submitForm(actionType) {
         let form = document.getElementById('headerForm');
         let input = document.createElement('input');
@@ -384,15 +394,15 @@
                     const stockColor = stock > 0 ? '#16a34a' : '#dc2626';
 
                     tr.innerHTML = `
-                        <td style="${cellStyle} font-weight: 600;">${p.produitcode || ''}</td>
-                        <td style="${cellStyle}">${p.reference || ''}</td>
-                        <td style="${cellStyle} font-size: 11px; color: #64748b;">${p.barcode2 || ''}</td>
-                        <td style="${cellStyle} white-space: normal;">${p.produitlibelle || ''}</td>
-                        <td style="${cellStyle}">${p.famillelibelle || ''}</td>
-                        <td style="${cellStyle}">${p.sousfamillelibelle || ''}</td>
+                        <td style="${cellStyle} font-weight: 600;">${escHtml(p.produitcode)}</td>
+                        <td style="${cellStyle}">${escHtml(p.reference)}</td>
+                        <td style="${cellStyle} font-size: 11px; color: #64748b;">${escHtml(p.barcode2)}</td>
+                        <td style="${cellStyle} white-space: normal;">${escHtml(p.produitlibelle)}</td>
+                        <td style="${cellStyle}">${escHtml(p.famillelibelle)}</td>
+                        <td style="${cellStyle}">${escHtml(p.sousfamillelibelle)}</td>
                         <td style="${cellStyle} text-align: right; font-weight: 600; color: #16a34a;">${p.ttc_vente ? parseFloat(p.ttc_vente).toFixed(3) : ''}</td>
                         <td style="${cellStyle} text-align: center; font-weight: 700; color: ${stockColor};">${stock}</td>
-                        <td style="${cellStyle}">${p.fournisseur || ''}</td>
+                        <td style="${cellStyle}">${escHtml(p.fournisseur)}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -433,7 +443,7 @@
         document.getElementById('input-des').value = product.produitlibelle || '';
         document.getElementById('input-taille').value = product.taillelibelle || '';
         document.getElementById('input-couleur').value = product.couleurlibelle || '';
-        document.getElementById('input-prix').value = product.ttc_vente ? parseFloat(product.ttc_vente).toFixed(2) + ' MAD' : '';
+        document.getElementById('input-prix').value = product.ttc_vente ? parseFloat(product.ttc_vente).toFixed(3) + ' DT' : '';
         document.getElementById('input-qte').value = 1;
         document.getElementById('input-qte').focus();
     }
@@ -452,13 +462,13 @@
     function addLine(e) {
         if(e) e.preventDefault();
         if(!currentSelectedProduct) {
-            alert('Veuillez d\'abord sélectionner un produit.');
+            notifier('Veuillez d\'abord sélectionner un produit.');
             return;
         }
 
         const qte = document.getElementById('input-qte').value;
         if(qte <= 0) {
-            alert('Quantité invalide.');
+            notifier('Quantité invalide.');
             return;
         }
 
@@ -469,20 +479,20 @@
         const tr = document.createElement('tr');
         tr.classList.add('existing-row', 'hover-row');
         tr.innerHTML = `
-            <td>${currentSelectedProduct.reference || currentSelectedProduct.produitcode}</td>
-            <td>${currentSelectedProduct.produitlibelle || ''}</td>
-            <td>${currentSelectedProduct.taillelibelle || ''}</td>
-            <td>${currentSelectedProduct.couleurlibelle || ''}</td>
-            <td style="text-align: center; font-weight: 600;">${qte}</td>
-            <td style="text-align: right;">${currentSelectedProduct.ttc_vente ? parseFloat(currentSelectedProduct.ttc_vente).toFixed(2) + ' MAD' : ''}</td>
+            <td>${escHtml(currentSelectedProduct.reference || currentSelectedProduct.produitcode)}</td>
+            <td>${escHtml(currentSelectedProduct.produitlibelle)}</td>
+            <td>${escHtml(currentSelectedProduct.taillelibelle)}</td>
+            <td>${escHtml(currentSelectedProduct.couleurlibelle)}</td>
+            <td style="text-align: center; font-weight: 600;">${escHtml(qte)}</td>
+            <td style="text-align: right;">${currentSelectedProduct.ttc_vente ? parseFloat(currentSelectedProduct.ttc_vente).toFixed(3) + ' DT' : ''}</td>
             <td style="text-align: center;">
                 <button type="button" class="action-btn-small delete" onclick="this.closest('tr').remove(); updateFooter();">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
-                <input type="hidden" name="lignes[${lineIndex}][produitid]" value="${currentSelectedProduct.produitid}">
-                <input type="hidden" name="lignes[${lineIndex}][produit2id]" value="${currentSelectedProduct.produit2id}">
-                <input type="hidden" name="lignes[${lineIndex}][qte]" value="${qte}">
-                <input type="hidden" name="lignes[${lineIndex}][prix]" value="${currentSelectedProduct.ttc_vente || 0}">
+                <input type="hidden" name="lignes[${lineIndex}][produitid]" value="${escHtml(currentSelectedProduct.produitid)}">
+                <input type="hidden" name="lignes[${lineIndex}][produit2id]" value="${escHtml(currentSelectedProduct.produit2id)}">
+                <input type="hidden" name="lignes[${lineIndex}][qte]" value="${escHtml(qte)}">
+                <input type="hidden" name="lignes[${lineIndex}][prix]" value="${escHtml(currentSelectedProduct.ttc_vente || 0)}">
             </td>
         `;
 

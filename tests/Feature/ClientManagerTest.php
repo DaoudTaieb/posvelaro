@@ -15,7 +15,7 @@ class ClientManagerTest extends TestCase
     {
         parent::setUp();
         
-        $userRecord = DB::table('users')->first();
+        $userRecord = DB::table('users')->orderBy('userid')->first();
         if ($userRecord) {
             $user = User::find($userRecord->userid) ?? new User((array) $userRecord);
             $user->userid = $userRecord->userid;

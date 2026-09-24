@@ -53,7 +53,7 @@
         <div class="kpi-card" style="padding: 16px;">
             <div class="kpi-info">
                 <span class="kpi-label" style="font-size: 12px;">Quantité Totale</span>
-                <span class="kpi-value text-primary" style="font-size: 16px;">{{ $bon->qte }} articles</span>
+                <span class="kpi-value text-primary" style="font-size: 16px;">{{ (float) $bon->qte + 0 }} articles</span>
             </div>
         </div>
     </div>
@@ -96,15 +96,15 @@
                                         {{ $ligne->couleur }}
                                     </span>
                                 </td>
-                                <td style="text-align: center; font-weight: 600;">{{ $ligne->qte }}</td>
+                                <td style="text-align: center; font-weight: 600;">{{ (float) $ligne->qteenvoi }}</td>
                                 <td style="text-align: center;">
                                     <input type="number" 
                                            name="reception[{{ $ligne->detbontransfertid }}][qte_recue]" 
                                            class="form-control" 
                                            style="width: 80px; text-align: center; display: inline-block; padding: 4px;"
-                                           value="{{ $ligne->qterecu > 0 ? $ligne->qterecu : $ligne->qte }}" 
+                                           value="{{ (float) ($ligne->qterecu > 0 ? $ligne->qterecu : $ligne->qteenvoi) }}" 
                                            min="0"
-                                           max="{{ $ligne->qte }}">
+                                           max="{{ (float) $ligne->qteenvoi }}">
                                 </td>
                                 <td>
                                     <input type="text" 
@@ -126,7 +126,7 @@
                 </table>
             </div>
             
-            @if(count($lignes) > 0)
+            @if(count($lignes) > 0 && $bon->etatbontransfertid == 2)
             <div style="padding: 20px; border-top: 1px solid var(--border); background-color: var(--background); text-align: right; border-radius: 0 0 12px 12px;">
                 <button type="submit" class="btn btn-primary">
                     Valider la réception
@@ -152,10 +152,8 @@
 @section('scripts')
 <script>
     document.getElementById('formReception').addEventListener('submit', function(e) {
-        // Confirmation optionnelle avant la validation
-        if(!confirm('Êtes-vous sûr de vouloir valider cette réception ? Toute validation est définitive.')) {
-            e.preventDefault();
-        }
+        // Confirmation avant la validation (définitive)
+        confirmerFormulaire(e, this, 'Êtes-vous sûr de vouloir valider cette réception ? Toute validation est définitive.', { titre: 'Valider la réception', okLabel: 'Valider' });
     });
 
     // Local filtering

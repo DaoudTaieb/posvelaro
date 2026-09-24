@@ -97,6 +97,8 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Même fuseau que l'application pour les now()/CURRENT_DATE des triggers
+            'timezone' => env('DB_TIMEZONE', 'Africa/Tunis'),
         ],
 
         'sqlsrv' => [

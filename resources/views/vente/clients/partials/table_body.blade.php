@@ -44,7 +44,7 @@
     <td>{{ $client->mf ?? '' }}</td>
     <td class="amount-cell">{{ (float)($client->solde ?? 0) == 0 ? '0' : number_format($client->solde, 3, ',', ' ') }}</td>
     <td class="amount-cell">{{ (float)($client->soldeinitial ?? 0) == 0 ? '0' : number_format($client->soldeinitial, 3, ',', ' ') }}</td>
-    <td>{{ isset($client->datesoldeinitial) ? \Carbon\Carbon::parse($client->datesoldeinitial)->format('d/m/Y') : '' }}</td>
+    <td>{{ isset($client->datesoldeinitial) && !str_contains($client->datesoldeinitial, 'infinity') ? \Carbon\Carbon::parse($client->datesoldeinitial)->format('d/m/Y') : '' }}</td>
     <td>{{ $client->ville ?? '' }}</td>
     <td><div class="truncate-text" style="max-width: 150px;" title="{{ $client->adressefacturation ?? '' }}">{{ $client->adressefacturation ?? '' }}</div></td>
     <td><div class="truncate-text" style="max-width: 150px;" title="{{ $client->adresselivraison ?? '' }}">{{ $client->adresselivraison ?? '' }}</div></td>

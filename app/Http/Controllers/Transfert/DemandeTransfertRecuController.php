@@ -54,19 +54,18 @@ class DemandeTransfertRecuController extends Controller
         if ($request->filled('search')) {
             $search = '%' . strtolower($request->search) . '%';
             $query->where(function ($q) use ($search) {
-                $q->whereRaw('LOWER(d.demandetransfertnumero) LIKE ?', [$search])
+                $q->whereRaw('CAST(d.demandetransfertnumero AS TEXT) ILIKE ?', [$search])
                   ->orWhereRaw('LOWER(demandeur.libelle) LIKE ?', [$search])
                   ->orWhereRaw('LOWER(p.reference) LIKE ?', [$search]);
             });
         }
 
-        // Advanced Filters
-        if ($request->filled('datedebut') && $request->filled('datefin')) {
-            $query->whereBetween('d.demandetransfertdate', [$request->datedebut, $request->datefin]);
-        } elseif ($request->filled('datedebut')) {
-            $query->where('d.demandetransfertdate', '>=', $request->datedebut);
-        } elseif ($request->filled('datefin')) {
-            $query->where('d.demandetransfertdate', '<=', $request->datefin);
+        // Advanced Filters (whereDate pour inclure toute la journée de fin)
+        if ($request->filled('datedebut')) {
+            $query->whereDate('d.demandetransfertdate', '>=', $request->datedebut);
+        }
+        if ($request->filled('datefin')) {
+            $query->whereDate('d.demandetransfertdate', '<=', $request->datefin);
         }
 
         if ($request->filled('etatid') && $request->etatid !== 'tous') {
@@ -120,29 +119,58 @@ class DemandeTransfertRecuController extends Controller
 
     public function pointer(Request $request)
     {
-        $pointages = $request->input('pointage', []);
-        $demandetransfertid = null;
+        $siteid = auth()->user()->siteid ?? 102;
+        $pointages = (array) $request->input('pointage', []);
 
-        foreach ($pointages as $id => $data) {
-            DB::table('detdemandetransferts')
-                ->where('detdemandetransfertid', $id)
-                ->update([
-                    'qteenvoi' => $data['qte_validee'] ?? 0,
-                    'description' => $data['cause'] ?? null,
-                    'pointer' => true,
-                    'etatdemandetransfertid' => 3 // Validé / Pointé
-                ]);
-                
-            if (!$demandetransfertid) {
-                $demandetransfertid = DB::table('detdemandetransferts')->where('detdemandetransfertid', $id)->value('demandetransfertid');
-            }
+        // Seules les lignes cochées (selected_demandes[] = detdemandetransfertid) sont pointées
+        $selection = array_values(array_filter(array_map('intval', (array) $request->input('selected_demandes', []))));
+
+        if (count($selection) === 0) {
+            return redirect()->back()->with('error', 'Veuillez sélectionner au moins une ligne à pointer.');
         }
-        
-        if ($demandetransfertid) {
-            // Optionnel : on met aussi à jour l'en-tête global à Validé
-            DB::table('demandetransferts')
-                ->where('demandetransfertid', $demandetransfertid)
-                ->update(['etatdemandetransfertid' => 3]);
+
+        $nbLignes = DB::transaction(function () use ($siteid, $pointages, $selection) {
+            // Lignes envoyées (2) de demandes adressées à notre site et non annulées
+            $lignes = DB::table('detdemandetransferts as det')
+                ->join('demandetransferts as d', 'd.demandetransfertid', '=', 'det.demandetransfertid')
+                ->whereIn('det.detdemandetransfertid', $selection)
+                ->where('d.siterecepteurid', $siteid)
+                ->where('d.etatdemandetransfertid', '!=', 4)
+                ->where('det.etatdemandetransfertid', 2)
+                ->select('det.detdemandetransfertid', 'det.demandetransfertid', 'det.qte')
+                ->lockForUpdate()
+                ->get();
+
+            $demandesTouchees = [];
+
+            foreach ($lignes as $ligne) {
+                $data = $pointages[$ligne->detdemandetransfertid] ?? [];
+                $qteValidee = max(0, min((float) ($data['qte_validee'] ?? 0), (float) $ligne->qte));
+
+                DB::table('detdemandetransferts')
+                    ->where('detdemandetransfertid', $ligne->detdemandetransfertid)
+                    ->update([
+                        'qteenvoi' => $qteValidee,
+                        'description' => $data['cause'] ?? null,
+                        'pointer' => true,
+                        'etatdemandetransfertid' => 3 // Validé / Pointé
+                    ]);
+
+                $demandesTouchees[$ligne->demandetransfertid] = true;
+            }
+
+            if (count($demandesTouchees) > 0) {
+                // On met aussi à jour l'en-tête de chaque demande concernée à Validé
+                DB::table('demandetransferts')
+                    ->whereIn('demandetransfertid', array_keys($demandesTouchees))
+                    ->update(['etatdemandetransfertid' => 3]);
+            }
+
+            return count($lignes);
+        });
+
+        if ($nbLignes === 0) {
+            return redirect()->back()->with('error', 'Aucune ligne pointable : seules les lignes envoyées des demandes adressées à votre site peuvent être pointées.');
         }
 
         return redirect()->back()->with('success', 'Pointage enregistré avec succès ! La demande est maintenant validée.');

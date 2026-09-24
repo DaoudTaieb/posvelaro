@@ -28,6 +28,10 @@ class TicketController extends Controller
                 'statutdocuments.libelle as statut_libelle',
                 'statutdocuments.couleurcode as statut_couleur'
             )
+            ->where('ctickets.siteid', auth()->user()->siteid ?? 102)
+            ->where('ctickets.enattente', false)
+            // Rôle limité à ses propres tickets (droit "consulter tous les tickets" bloqué)
+            ->when(\App\Support\Droits::bloque('cons.allticket'), fn ($q) => $q->where('ctickets.caissierid', auth()->user()->userid))
             ->orderBy('ctickets.cticketdate', 'desc');
 
         // Apply filters
@@ -134,7 +138,7 @@ class TicketController extends Controller
                 } elseif ($reqKey == 'f_numero') {
                     $query->where(function($q) use ($term) {
                         $q->where('ctickets.numerointerne', 'ilike', '%' . $term . '%')
-                          ->orWhere('ctickets.cticketnumero', 'ilike', '%' . $term . '%');
+                          ->orWhereRaw('CAST(ctickets.cticketnumero AS TEXT) ILIKE ?', ['%' . $term . '%']);
                     });
                 } elseif ($reqKey == 'f_statut') {
                     $query->where(function($q) use ($term) {
@@ -205,7 +209,7 @@ class TicketController extends Controller
             $searchTerm = '%' . $request->q . '%';
             $query->where(function($q) use ($searchTerm) {
                 $q->where('ctickets.numerointerne', 'ilike', $searchTerm)
-                  ->orWhere('ctickets.cticketnumero', 'ilike', $searchTerm)
+                  ->orWhereRaw('CAST(ctickets.cticketnumero AS TEXT) ILIKE ?', [$searchTerm])
                   ->orWhere('clients.nom', 'ilike', $searchTerm)
                   ->orWhere('clients.prenom', 'ilike', $searchTerm)
                   ->orWhere('clients.clientcode', 'ilike', $searchTerm)
@@ -312,9 +316,13 @@ class TicketController extends Controller
      */
     public function show($id)
     {
-        $ticket = \Illuminate\Support\Facades\DB::table('ctickets')
-            ->where('cticketid', $id)
-            ->first();
+        $ticket = ctype_digit((string) $id)
+            ? \Illuminate\Support\Facades\DB::table('ctickets')
+                ->where('cticketid', $id)
+                ->where('siteid', auth()->user()->siteid ?? 102)
+                ->when(\App\Support\Droits::bloque('cons.allticket'), fn ($q) => $q->where('caissierid', auth()->user()->userid))
+                ->first()
+            : null;
 
         if (!$ticket) {
             abort(404, 'Ticket non trouvé');
@@ -385,6 +393,17 @@ class TicketController extends Controller
         // Remise = Total TTC avant remise - Total TTC payé
         $remise_montant = (float)($ticket->totalavremise ?? 0) - (float)($ticket->totalttc ?? 0);
 
+        $reglementsDirects = \Illuminate\Support\Facades\DB::table('creglements')
+            ->leftJoin('modereglements', 'creglements.modereglementid', '=', 'modereglements.modereglementid')
+            ->where('creglements.documentid', $id)
+            ->where('creglements.typeid', 1)
+            ->where('creglements.statusreglementid', '!=', 4)
+            ->select(
+                'creglements.montant',
+                'creglements.date',
+                'modereglements.libelle as mode_libelle'
+            );
+
         $reglements = \Illuminate\Support\Facades\DB::table('creglementdets')
             ->leftJoin('creglements', 'creglementdets.creglementid', '=', 'creglements.creglementid')
             ->leftJoin('modereglements', 'creglements.modereglementid', '=', 'modereglements.modereglementid')
@@ -395,6 +414,7 @@ class TicketController extends Controller
                 'creglements.date',
                 'modereglements.libelle as mode_libelle'
             )
+            ->unionAll($reglementsDirects)
             ->get();
             
         // Fetch Bons d'Achat generated from this ticket

@@ -529,10 +529,10 @@
         new Chart(ctxSales, {
             type: 'line',
             data: {
-                labels: {!! json_encode($chartLabels) !!},
+                labels: @json($chartLabels),
                 datasets: [{
                     label: 'Chiffre d\'Affaires (DT)',
-                    data: {!! json_encode($chartData) !!},
+                    data: @json($chartData),
                     borderColor: '#6366f1',
                     backgroundColor: gradientSales,
                     borderWidth: 3,
@@ -558,9 +558,9 @@
         new Chart(ctxCat, {
             type: 'doughnut',
             data: {
-                labels: {!! json_encode($categorySales->pluck('famille')) !!},
+                labels: @json($categorySales->pluck('famille')),
                 datasets: [{
-                    data: {!! json_encode($categorySales->pluck('total_ca')) !!},
+                    data: @json($categorySales->pluck('total_ca')),
                     backgroundColor: ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
                     borderWidth: 0,
                     hoverOffset: 4
@@ -577,14 +577,15 @@
         });
 
         // --- 3. Peak Hours Bar Chart ---
+        @php($peakHourLabels = $peakHours->map(fn ($h) => str_pad($h->hour, 2, '0', STR_PAD_LEFT) . 'h'))
         const ctxPeak = document.getElementById('peakHoursChart').getContext('2d');
         new Chart(ctxPeak, {
             type: 'bar',
             data: {
-                labels: {!! json_encode($peakHours->map(function($h){ return str_pad($h->hour, 2, '0', STR_PAD_LEFT).'h'; })) !!},
+                labels: @json($peakHourLabels),
                 datasets: [{
                     label: 'CA par heure',
-                    data: {!! json_encode($peakHours->pluck('total_ca')) !!},
+                    data: @json($peakHours->pluck('total_ca')),
                     backgroundColor: '#0ea5e9',
                     borderRadius: 4,
                 }]

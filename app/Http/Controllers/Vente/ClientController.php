@@ -12,66 +12,78 @@ class ClientController extends Controller
      */
     public function index(Request $request)
     {
-        $query = \Illuminate\Support\Facades\DB::table('clients');
+        // Le libellé du tarif provient de la table tarifs (clients.tarifid)
+        $query = \Illuminate\Support\Facades\DB::table('clients')
+            ->leftJoin('tarifs', 'clients.tarifid', '=', 'tarifs.tarifid')
+            ->select('clients.*', 'tarifs.libelle as tarif');
 
-        // Global search
+        // Global search (code est un entier : cast en texte pour ILIKE)
         if ($request->filled('q')) {
             $q = $request->q;
             $query->where(function($w) use ($q) {
-                $w->where('nom', 'ilike', '%' . $q . '%')
-                  ->orWhere('clientcode', 'ilike', '%' . $q . '%')
-                  ->orWhere('code', 'ilike', '%' . $q . '%')
-                  ->orWhere('tel', 'ilike', '%' . $q . '%')
-                  ->orWhere('ville', 'ilike', '%' . $q . '%')
-                  ->orWhere('mf', 'ilike', '%' . $q . '%');
+                $w->where('clients.nom', 'ilike', '%' . $q . '%')
+                  ->orWhere('clients.clientcode', 'ilike', '%' . $q . '%')
+                  ->orWhereRaw('CAST(clients.code AS TEXT) ILIKE ?', ['%' . $q . '%'])
+                  ->orWhere('clients.tel', 'ilike', '%' . $q . '%')
+                  ->orWhere('clients.ville', 'ilike', '%' . $q . '%')
+                  ->orWhere('clients.mf', 'ilike', '%' . $q . '%');
             });
         }
 
-        // Column searches mapping
+        // Column searches mapping (colonnes numériques castées en texte pour ILIKE)
         $colMap = [
-            'f_code' => 'clientcode',
-            'f_nom' => 'nom',
-            'f_tarif' => 'tarif',
-            'f_remise' => 'remise',
-            'f_tva' => 'mf',
-            'f_solde' => 'solde',
-            'f_soldedep' => 'soldeinitial',
-            'f_ville' => 'ville',
-            'f_adrfact' => 'adressefacturation',
-            'f_adrliv' => 'adresselivraison',
-            'f_tel' => 'tel',
-            'f_rc' => 'rc',
-            'f_fax' => 'fax',
-            'f_email' => 'email',
-            'f_id' => 'clientid',
-            'f_soldefid' => 'soldefidelite',
-            'f_cumulfid' => 'cumulfidelite',
-            'f_pointfid' => 'pointfidelite'
+            'f_code' => 'clients.clientcode',
+            'f_nom' => 'clients.nom',
+            'f_tarif' => 'tarifs.libelle',
+            'f_remise' => 'clients.remise',
+            'f_tva' => 'clients.mf',
+            'f_solde' => 'clients.solde',
+            'f_soldedep' => 'clients.soldeinitial',
+            'f_ville' => 'clients.ville',
+            'f_adrfact' => 'clients.adressefacturation',
+            'f_adrliv' => 'clients.adresselivraison',
+            'f_tel' => 'clients.tel',
+            'f_rc' => 'clients.rc',
+            'f_fax' => 'clients.fax',
+            'f_email' => 'clients.email',
+            'f_id' => 'clients.clientid',
+            'f_soldefid' => 'clients.soldefidelite',
+            'f_cumulfid' => 'clients.cumulfidelite',
+            'f_pointfid' => 'clients.pointfidelite'
         ];
 
         foreach ($colMap as $reqKey => $dbCol) {
             if ($request->filled($reqKey)) {
-                $query->where($dbCol, 'ilike', '%' . $request->{$reqKey} . '%');
+                $query->whereRaw('CAST(' . $dbCol . ' AS TEXT) ILIKE ?', ['%' . $request->input($reqKey) . '%']);
             }
         }
-        
+
+        // Filtre date solde de départ
+        if ($request->filled('f_datesd')) {
+            try {
+                $query->whereDate('clients.datesoldeinitial', \Carbon\Carbon::parse($request->input('f_datesd'))->format('Y-m-d'));
+            } catch (\Exception $e) {
+                // Date invalide : filtre ignoré
+            }
+        }
+
         // Specialized boolean filters
         if ($request->filled('f_credit')) {
             $val = strtolower($request->f_credit);
-            if ($val == 'bloqué' || $val == 'bloque') $query->where('credit', false);
-            elseif ($val == 'actif') $query->where('credit', true);
+            if ($val == 'bloqué' || $val == 'bloque') $query->where('clients.credit', false);
+            elseif ($val == 'actif') $query->where('clients.credit', true);
         }
         if ($request->filled('f_fidelite')) {
             $val = strtolower($request->f_fidelite);
-            if ($val == 'oui') $query->where('fidelite', true);
-            elseif ($val == 'non') $query->where('fidelite', false);
+            if ($val == 'oui') $query->where('clients.fidelite', true);
+            elseif ($val == 'non') $query->where('clients.fidelite', false);
         }
 
         if ($request->ajax()) {
             $totalClients = (clone $query)->count();
-            $totalSolde = (clone $query)->sum('solde');
+            $totalSolde = (clone $query)->sum('clients.solde');
             
-            $clients = $query->orderBy('clientcode', 'desc')->paginate(15);
+            $clients = $query->orderBy('clients.clientcode', 'desc')->paginate(15);
             $html = view('vente.clients.partials.table_body', compact('clients'))->render();
 
             return response()->json([
@@ -85,14 +97,14 @@ class ClientController extends Controller
         }
         
         $totalClients = (clone $query)->count();
-        $totalSolde = (clone $query)->sum('solde');
+        $totalSolde = (clone $query)->sum('clients.solde');
 
         $kpis = [
             'nb_clients' => number_format((float)($totalClients ?? 0), 0, ',', ' '),
             'total_solde' => number_format((float)($totalSolde ?? 0), 3, ',', ' ')
         ];
 
-        $clients = $query->orderBy('clientcode', 'desc')->paginate(15);
+        $clients = $query->orderBy('clients.clientcode', 'desc')->paginate(15);
         return view('vente.clients.index', compact('clients', 'kpis'));
     }
 
@@ -123,6 +135,13 @@ class ClientController extends Controller
                 'ville' => $request->ville,
                 'adressefacturation' => $request->adresse,
                 'adresselivraison' => $request->adresse,
+                // Colonnes NOT NULL sans valeur par défaut (mêmes valeurs que PosController::storeClient)
+                'bloque' => 0,
+                'clientfamilleid' => \Illuminate\Support\Facades\DB::table('clientfamilles')->value('clientfamilleid') ?? \Illuminate\Support\Facades\DB::table('clientfamilles')->insertGetId(['libelle' => 'Général', 'bloque' => 0], 'clientfamilleid'),
+                'echeance' => 0,
+                'impaye' => 0,
+                'plafonecheance' => 0,
+                'plafonsolde' => 0,
                 // defaults for required numeric fields
                 'solde' => 0,
                 'soldeinitial' => 0,
@@ -179,6 +198,26 @@ class ClientController extends Controller
      */
     public function destroy($id)
     {
+        if (!ctype_digit((string) $id)) {
+            return response()->json(['success' => false, 'message' => 'Client introuvable.'], 404);
+        }
+
+        // Le client PASSAGER (clientid 1) ne peut jamais être supprimé
+        if ((int) $id === 1) {
+            return response()->json(['success' => false, 'message' => 'Le client PASSAGER ne peut pas être supprimé.'], 422);
+        }
+
+        // Les FK ctickets/creglements -> clients sont en ON DELETE CASCADE :
+        // refuser la suppression d'un client ayant des tickets ou des règlements
+        $hasTickets = \Illuminate\Support\Facades\DB::table('ctickets')->where('clientid', $id)->exists();
+        $hasReglements = \Illuminate\Support\Facades\DB::table('creglements')->where('clientid', $id)->exists();
+        if ($hasTickets || $hasReglements) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de supprimer ce client : il possède des tickets ou des règlements.',
+            ], 422);
+        }
+
         try {
             \Illuminate\Support\Facades\DB::table('clients')->where('clientid', $id)->delete();
             return response()->json(['success' => true, 'message' => 'Client supprimé avec succès.']);

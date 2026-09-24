@@ -18,8 +18,13 @@ class ConsultationStockController extends Controller
             'reserve' => 'Réservé'
         ];
 
-        // Type de stock sélectionné par défaut
+        $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
+
+        // Type de stock sélectionné par défaut (valeur inconnue => 'reel')
         $selectedType = $request->input('type_stock', 'reel');
+        if (!is_string($selectedType) || !array_key_exists($selectedType, $typesStock)) {
+            $selectedType = 'reel';
+        }
 
         // Requête principale
         $query = DB::table('stock2s')
@@ -38,7 +43,8 @@ class ConsultationStockController extends Controller
                 'stock2s.qtestock',
                 'stock2s.stockvirtuel',
                 'stock2s.stockreserve'
-            );
+            )
+            ->where('stock2s.siteid', $siteid);
 
         // Filtres
         if ($request->filled('reference')) {

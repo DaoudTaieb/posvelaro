@@ -1073,12 +1073,12 @@
                             if(confirmDeleteModal) confirmDeleteModal.classList.remove('show');
                             fetchFilteredData(); // reload table
                         } else {
-                            alert(data.message || 'Erreur lors de la suppression.');
+                            notifier(data.message || 'Erreur lors de la suppression.');
                         }
                     })
                     .catch(err => {
                         console.error(err);
-                        alert('Erreur serveur.');
+                        notifier('Erreur serveur.');
                     });
                 }
             });
