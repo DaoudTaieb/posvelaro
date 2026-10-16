@@ -137,14 +137,13 @@ return new class extends Migration
     private function ajouterParametres(): void
     {
         $existants = DB::table('retailconfigs')->pluck('libelle')->flip();
-        $nextId = (int) (DB::table('retailconfigs')->max('retailconfigid') ?? 0) + 1;
 
         foreach ($this->parametres() as $libelle => [$caption, $type, $valeur, $ordre]) {
             if ($existants->has($libelle)) {
                 continue;
             }
             DB::table('retailconfigs')->insert([
-                'retailconfigid' => $nextId++,
+                'retailconfigid' => \App\Support\Identifiants::prochain('retailconfigs', 'retailconfigid'),
                 'libelle' => $libelle,
                 'caption' => $caption,
                 'value' => $valeur,

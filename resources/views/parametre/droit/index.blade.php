@@ -123,6 +123,19 @@
                             <span style="font-size: 15px; font-weight: 500;">Sélectionnez un niveau d'accès pour configurer ses permissions</span>
                         </div>
                     @else
+                        @php $roleChoisi = $roles->firstWhere('userdroitid', $selectedRoleId); @endphp
+                        {{-- Accès généraux du rôle (colonnes notcaisse / notbackoffice de userdroits, partagées avec le bureau) --}}
+                        <input type="hidden" name="indicateurs_section" value="1">
+                        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 28px; flex-wrap: wrap; background: #fff;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                <input type="checkbox" name="acces_caisse" value="1" {{ $roleChoisi && !$roleChoisi->notcaisse ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: var(--primary);">
+                                Accès à la caisse
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                <input type="checkbox" name="acces_backoffice" value="1" {{ $roleChoisi && !$roleChoisi->notbackoffice ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: var(--primary);">
+                                Accès au back-office (stock, transferts, paramètres, consultations)
+                            </label>
+                        </div>
                         <table class="data-table" id="permissionsTable">
                             <thead style="position: sticky; top: 0; z-index: 2;">
                                 <tr>

@@ -43,6 +43,35 @@ class ConfigurationController extends Controller
             ->get(['retailconfigid', 'typevalueid', 'value'])
             ->keyBy('retailconfigid');
 
+        // Valeurs typées : le logiciel de bureau lit ces paramètres comme des nombres.
+        // typevalueid 1 = entier, 3 = décimal (virgule acceptée) ; un booléen écrit en chiffre (tauxacompte = 99) reste entier.
+        $erreurs = [];
+        $captions = DB::table('retailconfigs')->where('pagelibelle', 'Général')->pluck('caption', 'retailconfigid');
+        foreach ($configsData as $id => $value) {
+            if (!$configs->has($id) || !is_scalar($value)) {
+                continue;
+            }
+            $type = (int) $configs[$id]->typevalueid;
+            $actuelle = (string) $configs[$id]->value;
+            $texte = trim((string) $value);
+            $entierAttendu = $type === 1 || ($type === self::TYPE_BOOLEAN && is_numeric($actuelle));
+            if ($entierAttendu && !preg_match('/^-?\d+$/', $texte)) {
+                $erreurs["config.$id"] = '« ' . trim((string) ($captions[$id] ?? $id)) . ' » doit être un nombre entier.';
+            } elseif ($type === 3) {
+                $normalise = str_replace([' ', ','], ['', '.'], $texte);
+                if (!is_numeric($normalise)) {
+                    $erreurs["config.$id"] = '« ' . trim((string) ($captions[$id] ?? $id)) . ' » doit être un nombre (ex. 10,5).';
+                } elseif ((float) $normalise !== (float) $actuelle) {
+                    $configsData[$id] = $normalise;
+                } else {
+                    $configsData[$id] = $actuelle; // même valeur : on garde l'écriture du bureau (10.000000)
+                }
+            }
+        }
+        if ($erreurs) {
+            return redirect()->route('parametre.configuration.general')->withErrors($erreurs)->withInput();
+        }
+
         // Sous-familles fidélité : cases cochées = fidélité active (le champ n'est envoyé que si la section est affichée)
         $fideliteIds = null;
         if ($request->has('fidelite_section')) {

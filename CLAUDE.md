@@ -28,7 +28,7 @@ applications écrivent dans les mêmes tables : la base n'appartient pas à Lara
 | Règlements ticket | `creglements.documentid = 0`, `typeid = 1`, `statusreglementid = 2`, `montantav = -montant` + une ligne `creglementdets` (documentid = ticket). Voir `ReglementService`. |
 | Totaux ticket | `cticket_calc` recalcule l'entête à partir des lignes ; `creglement_calc` recalcule acompte / reste. |
 | Numéro de ticket | `max(cticketnumero) + 1`, sous `pg_advisory_xact_lock` (`NumerotationService`). |
-| Identifiants | Plusieurs tables sans séquence utilisable : `max()+1` sous verrou consultatif (`ParametreHelpers`). |
+| Identifiants | Toujours `App\Support\Identifiants::prochain()` (ou `plage()`) : plus grand de `max()+1` et `nextval()`, puis séquence réalignée. Jamais de `max()+1` seul : le bureau insère par la séquence et heurterait l'identifiant. |
 | Retour d'argent | Dépense famille 10 « Retour Argent » liée au ticket (`depenses.cticketid`). |
 | `retailconfigs` | Paramètres partagés ; booléens écrits « True » / « False » (casse conservée). |
 | `prodid` | Colonne `integer` alors que `produitid` est un `bigint` à 13 chiffres : écrire 0. |

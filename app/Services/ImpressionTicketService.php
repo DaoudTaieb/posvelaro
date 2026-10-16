@@ -289,7 +289,7 @@ class ImpressionTicketService
         $caption ??= $captionDefaut;
         $type ??= $typeDefaut;
         DB::table('caisseconfigs')->insert([
-            'caisseconfigid' => (int) DB::table('caisseconfigs')->max('caisseconfigid') + 1,
+            'caisseconfigid' => \App\Support\Identifiants::prochain('caisseconfigs', 'caisseconfigid'),
             'libelle' => $libelle,
             'caption' => $caption,
             'caisseid' => $caisseid,

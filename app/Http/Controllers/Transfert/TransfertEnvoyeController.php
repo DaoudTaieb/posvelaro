@@ -218,8 +218,8 @@ class TransfertEnvoyeController extends Controller
 
             [$lignes, $demandetransfertid] = $this->lierDemandes($lignes, $siteid, $siterecepteurid, $request->input('demandetransfertid'));
 
-            // Récupérer le prochain ID
-            $id = (DB::table('bontransferts')->max('bontransfertid') ?? 0) + 1;
+            // Identifiant sûr pour le logiciel de bureau (max()+1 et séquence, séquence réalignée)
+            $id = \App\Support\Identifiants::prochain('bontransferts', 'bontransfertid');
 
             // Numéro de séquence
             $numero = (DB::table('bontransferts')->max('bontransfertnumero') ?? 0) + 1;

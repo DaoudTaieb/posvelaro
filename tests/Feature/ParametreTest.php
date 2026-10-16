@@ -45,7 +45,8 @@ class ParametreTest extends TestCase
 
         $agence = DB::table('agencebs')->first();
         $client = DB::table('clients')->first();
-        $station = DB::table('stations')->first();
+        // Un poste n'est lié qu'à une seule caisse : prendre un poste libre
+        $station = DB::table('stations')->whereNotIn('stationid', DB::table('caisses')->whereNotNull('machineid')->pluck('machineid'))->first();
 
         $siteId = $site->siteid;
         $agenceId = $agence ? $agence->agencebid : null;
@@ -170,7 +171,8 @@ class ParametreTest extends TestCase
         $response->assertViewIs('parametre.configuration.general');
 
         // S'assurer qu'au moins une config existe pour 'Général'
-        $configId = DB::table('retailconfigs')->where('pagelibelle', 'Général')->where('typevalueid', '<>', 2)->value('retailconfigid');
+        // Paramètre texte (typevalueid 0) : les paramètres numériques refusent du texte
+        $configId = DB::table('retailconfigs')->where('pagelibelle', 'Général')->where('typevalueid', 0)->value('retailconfigid');
         if (!$configId) {
             $configId = (DB::table('retailconfigs')->max('retailconfigid') ?? 0) + 1;
             DB::table('retailconfigs')->insert([

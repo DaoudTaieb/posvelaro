@@ -16,6 +16,7 @@ class UtilisateurController extends Controller
         'login.unique' => 'Ce login est déjà utilisé.',
         'userdroitid.exists' => 'Le niveau d\'accès sélectionné n\'existe pas.',
         'password.min' => 'Le mot de passe doit contenir au moins 6 caractères.',
+        'employeeid.exists' => 'Le vendeur choisi n\'appartient pas à votre site.',
     ];
 
     public function index()
@@ -25,13 +26,16 @@ class UtilisateurController extends Controller
         $utilisateurs = DB::table('users as u')
             ->leftJoin('userdroits as d', 'u.userdroitid', '=', 'd.userdroitid')
             ->where('u.siteid', $siteid)
-            ->select('u.userid', 'u.login', 'u.userdroitid', 'd.libelle as droit_libelle')
+            ->leftJoin('employees as e', 'u.employeeid', '=', 'e.employeeid')
+            ->select('u.userid', 'u.login', 'u.userdroitid', 'u.employeeid', 'd.libelle as droit_libelle', 'e.nom as vendeur_nom')
             ->orderBy('u.userid')
             ->get();
 
         $droits = DB::table('userdroits')->orderBy('userdroitid')->get();
+        // Vendeur (employé) associé au compte : nécessaire pour ouvrir une journée et vendre
+        $vendeurs = DB::table('employees')->where('siteid', $siteid)->orderBy('nom')->get(['employeeid', 'nom', 'bloque']);
 
-        return view('parametre.utilisateur.index', compact('utilisateurs', 'droits'));
+        return view('parametre.utilisateur.index', compact('utilisateurs', 'droits', 'vendeurs'));
     }
 
     public function store(Request $request)
@@ -39,15 +43,16 @@ class UtilisateurController extends Controller
         $request->validate([
             'login' => 'required|string|max:255|unique:users,login',
             'password' => 'required|string|min:' . \App\Http\Controllers\MonCompteController::LONGUEUR_MIN,
-            'userdroitid' => 'required|integer|exists:userdroits,userdroitid'
+            'userdroitid' => 'required|integer|exists:userdroits,userdroitid',
+            'employeeid' => ['nullable', 'integer', Rule::exists('employees', 'employeeid')->where('siteid', $this->userSiteId())],
         ], self::MESSAGES);
 
         $siteid = $this->userSiteId();
-        $societeid = auth()->user()->societeid ?? 1;
+        $createur = auth()->user();
+        $societeid = $createur->societeid ?? 1;
 
-        DB::transaction(function () use ($request, $siteid, $societeid) {
-            $this->lockIds(self::LOCK_USERS);
-            $nextId = (DB::table('users')->max('userid') ?? 0) + 1;
+        DB::transaction(function () use ($request, $siteid, $societeid, $createur) {
+            $nextId = \App\Support\Identifiants::prochain('users', 'userid');
 
             // Mot de passe stocké en clair : partagé avec l'application desktop historique
             DB::table('users')->insert([
@@ -56,7 +61,11 @@ class UtilisateurController extends Controller
                 'password' => $request->password,
                 'userdroitid' => $request->userdroitid,
                 'siteid' => $siteid,
-                'societeid' => $societeid
+                'societeid' => $societeid,
+                // Même rattachement que le créateur (client = société cliente du logiciel, agence de caisse du site)
+                'clientid' => $createur->clientid,
+                'agencebid' => DB::table('caisses')->where('siteid', $siteid)->value('agencebid') ?? $createur->agencebid,
+                'employeeid' => $request->employeeid ?: null,
             ]);
         });
 
@@ -70,12 +79,19 @@ class UtilisateurController extends Controller
         $request->validate([
             'login' => ['required', 'string', 'max:255', Rule::unique('users', 'login')->ignore($id, 'userid')],
             'password' => 'nullable|string|min:' . \App\Http\Controllers\MonCompteController::LONGUEUR_MIN,
-            'userdroitid' => 'required|integer|exists:userdroits,userdroitid'
+            'userdroitid' => 'required|integer|exists:userdroits,userdroitid',
+            'employeeid' => ['nullable', 'integer', Rule::exists('employees', 'employeeid')->where('siteid', $this->userSiteId())],
         ], self::MESSAGES);
+
+        // Son propre compte : ne pas se retirer l'accès à la gestion des utilisateurs par erreur
+        if ($id === (int) auth()->id() && !\App\Support\Droits::roleAutorise((int) $request->userdroitid, 'gestion.users')) {
+            return redirect()->route('parametre.utilisateur.index')->with('error', 'Vous ne pouvez pas donner à votre propre compte un rôle sans accès à la gestion des utilisateurs.');
+        }
 
         $data = [
             'login' => $request->login,
-            'userdroitid' => $request->userdroitid
+            'userdroitid' => $request->userdroitid,
+            'employeeid' => $request->employeeid ?: null,
         ];
 
         if ($request->filled('password')) {

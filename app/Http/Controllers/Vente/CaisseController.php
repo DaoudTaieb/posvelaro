@@ -56,6 +56,14 @@ class CaisseController extends Controller
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Veuillez sélectionner un vendeur (aucun employé n\'est associé à votre compte).']);
             }
+            // Un autre vendeur que celui du compte doit être actif, du site, et le rôle doit pouvoir choisir le vendeur
+            if ((int) $employeeid !== (int) $user->employeeid) {
+                $vendeurValide = DB::table('employees')->where('employeeid', $employeeid)->where('siteid', $siteid)->where('bloque', false)->exists();
+                if (!$vendeurValide || Droits::bloque('choix.vendeur')) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => $vendeurValide ? Droits::message('choix.vendeur') : 'Ce vendeur est bloqué ou n\'appartient pas à votre site.']);
+                }
+            }
 
             $journal = $this->journees->journeeOuverte($user);
             if (!$journal) {

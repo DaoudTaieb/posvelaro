@@ -22,15 +22,16 @@
             <table class="data-table" id="utilisateursTable">
                 <thead>
                     <tr>
-                        <th style="width: 45%;">Login</th>
-                        <th style="width: 45%;">Droit (Rôle)</th>
+                        <th style="width: 35%;">Login</th>
+                        <th style="width: 30%;">Droit (Rôle)</th>
+                        <th style="width: 25%;">Vendeur associé</th>
                         <th style="width: 10%; text-align: center;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <!-- Ligne d'ajout cachée -->
                     <tr id="addUtilisateurRow" style="display: none; background: #f8fafc;">
-                        <td colspan="3" style="padding: 10px;">
+                        <td colspan="4" style="padding: 10px;">
                             <form id="addForm" action="{{ route('parametre.utilisateur.store') }}" method="POST" style="margin: 0; display: flex; width: 100%; gap: 10px; align-items: center;">
                                 @csrf
                                 <div style="flex: 1;">
@@ -44,6 +45,14 @@
                                         <option value="">-- Sélectionnez un droit --</option>
                                         @foreach($droits as $droit)
                                             <option value="{{ $droit->userdroitid }}">{{ $droit->libelle }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div style="flex: 1;">
+                                    <select name="employeeid" class="form-control" title="Vendeur associé (nécessaire pour vendre et ouvrir une journée)">
+                                        <option value="">-- Vendeur associé --</option>
+                                        @foreach($vendeurs as $v)
+                                            <option value="{{ $v->employeeid }}">{{ $v->nom }}{{ $v->bloque ? ' (bloqué)' : '' }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -72,6 +81,13 @@
                         <td>
                             <span class="status-badge status-pending" style="background: #e0e7ff; color: #4338ca; border-color: #c7d2fe;">{{ $user->droit_libelle }}</span>
                         </td>
+                        <td>
+                            @if($user->vendeur_nom)
+                                {{ $user->vendeur_nom }}
+                            @else
+                                <span style="color: #b45309; font-size: 12px;" title="Sans vendeur associé, ce compte ne peut ni vendre ni ouvrir une journée">Aucun (ne peut pas vendre)</span>
+                            @endif
+                        </td>
                         <td style="text-align: center;">
                             <div style="display: flex; gap: 4px; justify-content: center;">
                                 <button class="btn btn-outline" style="padding: 4px 8px; height: auto;" onclick="showEditForm('{{ $user->userid }}')" title="Modifier">
@@ -90,7 +106,7 @@
                     
                     <!-- Formulaire d'édition caché -->
                     <tr id="editRow-{{ $user->userid }}" style="display: none; background: #f8fafc;">
-                        <td colspan="3" style="padding: 10px;">
+                        <td colspan="4" style="padding: 10px;">
                             <form id="editForm-{{ $user->userid }}" action="{{ route('parametre.utilisateur.update', $user->userid) }}" method="POST" style="margin: 0; display: flex; width: 100%; gap: 10px; align-items: center;">
                                 @csrf
                                 @method('PUT')
@@ -109,6 +125,14 @@
                                         @endforeach
                                     </select>
                                 </div>
+                                <div style="flex: 1;">
+                                    <select name="employeeid" class="form-control" title="Vendeur associé (nécessaire pour vendre et ouvrir une journée)">
+                                        <option value="">-- Vendeur associé --</option>
+                                        @foreach($vendeurs as $v)
+                                            <option value="{{ $v->employeeid }}" {{ $user->employeeid == $v->employeeid ? 'selected' : '' }}>{{ $v->nom }}{{ $v->bloque ? ' (bloqué)' : '' }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
                                 <div style="width: 10%; display: flex; gap: 4px; justify-content: center;">
                                     <button type="button" class="btn btn-primary" style="padding: 6px; height: auto;" onclick="document.getElementById('editForm-{{ $user->userid }}').requestSubmit()" title="Enregistrer">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -122,7 +146,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="3" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                        <td colspan="4" style="padding: 40px; text-align: center; color: var(--text-muted);">
                             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; opacity: 0.5;">
                                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                 <circle cx="9" cy="7" r="4"></circle>

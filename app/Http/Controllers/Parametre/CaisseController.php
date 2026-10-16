@@ -42,18 +42,24 @@ class CaisseController extends Controller
     /**
      * Règles de validation communes (le site doit être celui de l'utilisateur).
      */
-    private function validateCaisse(Request $request): void
+    private function validateCaisse(Request $request, ?int $caisseid = null): void
     {
         $request->validate([
-            'libelle' => 'required|string',
-            'compteur' => 'required|integer',
-            'numero' => 'required|integer',
+            'libelle' => 'required|string|max:100',
+            'compteur' => 'required|integer|min:0',
+            'numero' => 'required|integer|min:0',
             'siteid' => 'required|integer|in:' . $this->userSiteId(),
-            'agencebid' => 'nullable|integer',
-            'clientid' => 'nullable|integer',
-            'machineid' => 'nullable|integer',
+            'agencebid' => 'nullable|integer|exists:agencebs,agencebid',
+            'clientid' => 'nullable|integer|exists:clients,clientid',
+            // Un poste (station) n'est lié qu'à une seule caisse : le bureau identifie la caisse par le poste
+            'machineid' => ['nullable', 'integer', 'exists:stations,stationid',
+                \Illuminate\Validation\Rule::unique('caisses', 'machineid')->ignore($caisseid, 'caisseid')],
         ], [
             'siteid.in' => 'Le site doit être celui de l\'utilisateur connecté.',
+            'machineid.unique' => 'Ce poste est déjà lié à une autre caisse : libérez-la d\'abord (Libération de caisse).',
+            'machineid.exists' => 'Poste introuvable.',
+            'agencebid.exists' => 'Agence introuvable.',
+            'clientid.exists' => 'Client introuvable.',
         ]);
     }
 
@@ -64,8 +70,8 @@ class CaisseController extends Controller
         $agencebid = $request->agencebid ?? auth()->user()->agencebid ?? DB::table('agencebs')->value('agencebid') ?? 1;
 
         DB::transaction(function () use ($request, $agencebid) {
-            $this->lockIds(self::LOCK_CAISSES);
-            $nextId = (DB::table('caisses')->max('caisseid') ?? 0) + 1;
+            // Identifiant sûr pour le logiciel de bureau (max()+1 et séquence, séquence réalignée)
+            $nextId = \App\Support\Identifiants::prochain('caisses', 'caisseid');
 
             DB::table('caisses')->insert([
                 'caisseid' => $nextId,
@@ -87,7 +93,7 @@ class CaisseController extends Controller
     public function update(Request $request, $id)
     {
         $id = $this->routeId($id);
-        $this->validateCaisse($request);
+        $this->validateCaisse($request, $id);
 
         $agencebid = $request->agencebid ?? auth()->user()->agencebid ?? DB::table('agencebs')->value('agencebid') ?? 1;
 

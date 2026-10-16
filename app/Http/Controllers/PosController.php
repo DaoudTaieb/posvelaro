@@ -759,9 +759,15 @@ class PosController extends Controller
     {
         $userEmployeeId = auth()->user()->employeeid ?? null;
 
-        // On affiche seulement l'Admin (ID 1) et l'utilisateur connecté
+        // Vendeurs actifs du site (gérés dans Paramètres > Gestion des Vendeurs).
+        // Rôle avec le droit « choix.vendeur » bloqué : uniquement le vendeur lié au compte.
         $query = DB::table('employees')
-            ->whereIn('employeeid', array_filter([1, $userEmployeeId]));
+            ->where('siteid', \App\Support\SiteCourant::id())
+            ->where('isvendeur', true)
+            ->where('bloque', false);
+        if (\App\Support\Droits::bloque('choix.vendeur')) {
+            $query->where('employeeid', $userEmployeeId ?: 0);
+        }
 
         if ($request->filled('q')) {
             $search = '%' . strtolower($request->q) . '%';

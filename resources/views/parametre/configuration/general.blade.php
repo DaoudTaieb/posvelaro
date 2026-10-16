@@ -58,7 +58,7 @@
                                     <span style="font-size: 12px; color: var(--text-main); font-weight: 500;">Oui</span>
                                 </div>
                             @else
-                                <input type="text" name="config[{{ $config->retailconfigid }}]" value="{{ $config->value }}" class="form-control" style="width: 200px;">
+                                <input type="text" name="config[{{ $config->retailconfigid }}]" value="{{ old('config.' . $config->retailconfigid, $config->value) }}" class="form-control {{ $errors->has('config.' . $config->retailconfigid) ? 'is-invalid' : '' }}" style="width: 200px;">
                             @endif
                         </div>
                     @endforeach
@@ -81,7 +81,7 @@
                                     <span style="font-size: 12px; color: var(--text-main); font-weight: 500;">Oui</span>
                                 </div>
                             @else
-                                <input type="text" name="config[{{ $config->retailconfigid }}]" value="{{ $config->value }}" class="form-control" style="width: 200px;">
+                                <input type="text" name="config[{{ $config->retailconfigid }}]" value="{{ old('config.' . $config->retailconfigid, $config->value) }}" class="form-control {{ $errors->has('config.' . $config->retailconfigid) ? 'is-invalid' : '' }}" style="width: 200px;">
                             @endif
                         </div>
                     @endforeach

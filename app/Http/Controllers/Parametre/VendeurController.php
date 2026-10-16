@@ -33,10 +33,7 @@ class VendeurController extends Controller
         $siteid = $this->userSiteId(); // Site de l'utilisateur connecté
 
         DB::transaction(function () use ($request, $siteid) {
-            $this->lockIds(self::LOCK_EMPLOYEES);
-
-            // next ID
-            $nextId = (DB::table('employees')->max('employeeid') ?? 0) + 1;
+            $nextId = \App\Support\Identifiants::prochain('employees', 'employeeid');
             $code = str_pad($nextId, 3, '0', STR_PAD_LEFT);
 
             DB::table('employees')->insert([

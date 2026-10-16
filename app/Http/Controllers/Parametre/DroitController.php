@@ -35,8 +35,7 @@ class DroitController extends Controller
         $request->validate(['libelle' => 'required|string|max:255']);
 
         $nextId = DB::transaction(function () use ($request) {
-            $this->lockIds(self::LOCK_USERDROITS);
-            $nextId = (DB::table('userdroits')->max('userdroitid') ?? 0) + 1;
+            $nextId = \App\Support\Identifiants::prochain('userdroits', 'userdroitid');
 
             DB::table('userdroits')->insert([
                 'userdroitid' => $nextId,
@@ -106,14 +105,35 @@ class DroitController extends Controller
         // Ne garder que les types de droits existants
         $typeIds = DB::table('typedroits')->pluck('typedroitid')->flip();
 
-        DB::transaction(function () use ($id, $permissions, $typeIds) {
-            $this->lockIds(self::LOCK_USERDROITDETS);
+        // Accès généraux du rôle (cases « Accès à la caisse » / « Accès au back-office »)
+        $indicateurs = null;
+        if ($request->has('indicateurs_section')) {
+            $indicateurs = [
+                'notcaisse' => !$request->boolean('acces_caisse'),
+                'notbackoffice' => !$request->boolean('acces_backoffice'),
+            ];
+        }
+
+        // Anti-blocage : l'administrateur ne peut pas retirer à son propre rôle l'accès à cet écran
+        if ((int) (auth()->user()->userdroitid ?? 0) === $id) {
+            $typeGestionDroits = DB::table('typedroits')->where('abreviation', 'gestion.droits')->value('typedroitid');
+            $seBloque = ($typeGestionDroits && isset($permissions[$typeGestionDroits]['bloque']))
+                || ($indicateurs !== null && $indicateurs['notbackoffice']);
+            if ($seBloque) {
+                return redirect()->route('parametre.droit.index', ['id' => $id])
+                    ->with('error', 'Impossible : ce rôle est le vôtre. Vous perdriez l\'accès à la gestion des droits (retirez ce droit depuis un autre compte administrateur).');
+            }
+        }
+
+        DB::transaction(function () use ($id, $permissions, $typeIds, $indicateurs) {
+            if ($indicateurs !== null) {
+                DB::table('userdroits')->where('userdroitid', $id)->update($indicateurs);
+            }
 
             // Delete all existing permissions for this role first
             DB::table('userdroitdets')->where('userdroitid', $id)->delete();
 
             $inserts = [];
-            $nextDetId = (DB::table('userdroitdets')->max('userdroitdetid') ?? 0) + 1;
 
             foreach ($permissions as $typeId => $values) {
                 if (!$typeIds->has($typeId) || !is_array($values)) {
@@ -125,7 +145,6 @@ class DroitController extends Controller
 
                 if ($bloque || $badge) {
                     $inserts[] = [
-                        'userdroitdetid' => $nextDetId++,
                         'userdroitid' => $id,
                         'typedroitid' => (int) $typeId,
                         'bloque' => $bloque,
@@ -135,6 +154,12 @@ class DroitController extends Controller
             }
 
             if (!empty($inserts)) {
+                // Identifiants réservés en bloc, séquence du bureau réalignée
+                $premier = \App\Support\Identifiants::plage('userdroitdets', 'userdroitdetid', count($inserts));
+                foreach ($inserts as $i => &$ligne) {
+                    $ligne['userdroitdetid'] = $premier + $i;
+                }
+                unset($ligne);
                 DB::table('userdroitdets')->insert($inserts);
             }
         });
