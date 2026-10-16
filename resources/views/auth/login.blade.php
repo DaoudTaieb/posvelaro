@@ -556,7 +556,8 @@
             clearTimeout(fetchTimeout);
             fetchTimeout = setTimeout(() => {
                 const login = loginInput.value.trim();
-                if (login.toLowerCase() === 'admin') {
+                // La liste n'est renvoyée que si le rôle a le droit de changer de site (contrôlé par le serveur)
+                if (login.length >= 2) {
                     fetch(`/login/sites?login=${encodeURIComponent(login)}`)
                         .then(res => res.json())
                         .then(sites => {
@@ -566,6 +567,7 @@
                                     const option = document.createElement('option');
                                     option.value = site.siteid;
                                     option.textContent = site.libelle;
+                                    if (site.actuel) option.selected = true;
                                     siteSelect.appendChild(option);
                                 });
                                 siteGroup.style.display = 'block';

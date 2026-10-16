@@ -949,10 +949,10 @@
         </a>
 
         <div class="topbar-user">
-            <div class="user-info">
+            <a href="{{ route('compte.mot_de_passe') }}" class="user-info" style="text-decoration: none; color: inherit;" title="Changer mon mot de passe">
                 <div class="user-name">{{ Auth::user()->login ?? 'Utilisateur' }}</div>
-                <div class="user-site">Site #{{ Auth::user()->siteid ?? '0' }}</div>
-            </div>
+                <div class="user-site">{{ optional(Auth::user()->siteRecord())->libelle ?? ('Site #' . (Auth::user()->siteid ?? '0')) }}</div>
+            </a>
             <div class="user-avatar">
                 {{ strtoupper(substr(Auth::user()->login ?? 'U', 0, 1)) }}
             </div>
@@ -1053,6 +1053,9 @@
                     <li>
                         <a href="{{ route('stock.etat.index') }}" class="menu-item {{ request()->routeIs('stock.etat.*') ? 'active' : '' }}">Etat de Stock</a>
                     </li>
+                    <li>
+                        <a href="{{ route('stock.negatifs.index') }}" class="menu-item {{ request()->routeIs('stock.negatifs.*') ? 'active' : '' }}">Stocks négatifs</a>
+                    </li>
                 </ul>
             </div>
             @endpeut
@@ -1097,6 +1100,7 @@
                 </div>
                 <ul class="menu-list">
                     @peut('config')<li><a href="{{ route('parametre.configuration.general') }}" class="menu-item {{ request()->routeIs('parametre.configuration.general') ? 'active' : '' }}">General</a></li>@endpeut
+                    @peut('config')<li><a href="{{ route('parametre.controle.index') }}" class="menu-item {{ request()->routeIs('parametre.controle.*') ? 'active' : '' }}">Contrôle des données</a></li>@endpeut
                     @peut('config.caisses')<li><a href="{{ route('parametre.caisse.index') }}" class="menu-item {{ request()->routeIs('parametre.caisse.index') ? 'active' : '' }}">Caisse</a></li>@endpeut
                     @peut('gestion.users')<li><a href="{{ route('parametre.utilisateur.index') }}" class="menu-item {{ request()->routeIs('parametre.utilisateur.*') ? 'active' : '' }}">Gestion des utilisateur</a></li>@endpeut
                     @peut('gestion.droits')<li><a href="{{ route('parametre.droit.index') }}" class="menu-item {{ request()->routeIs('parametre.droit.*') ? 'active' : '' }}">Gestion des Droits</a></li>@endpeut

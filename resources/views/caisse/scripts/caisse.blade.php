@@ -231,7 +231,18 @@
         } else {
             ticketLines.push(product);
         }
-        
+
+        // Alerte stock : quantité vendue dans le ticket supérieure au stock du site
+        if (qteVal > 0 && productData.total_stock !== undefined && productData.total_stock !== null) {
+            const dejaVendu = ticketLines
+                .filter(l => String(l.produit2id) === String(product.produit2id) && parseFloat(l.qte) > 0)
+                .reduce((s, l) => s + parseFloat(l.qte), 0);
+            const stockSite = parseFloat(productData.total_stock) || 0;
+            if (dejaVendu > stockSite) {
+                notifier(`Stock insuffisant pour ${product.ref || ''} ${product.taille || ''} ${product.couleur || ''} : ${stockSite} en stock, ${dejaVendu} dans le ticket. Le stock deviendra négatif.`, 'warning', 7000);
+            }
+        }
+
         isRetourMode = false; // Reset
         renderTable();
     }

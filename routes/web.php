@@ -22,6 +22,10 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // Les droits ('droit:...') correspondent aux abréviations de la table typedroits,
 // plus 'caisse' (userdroits.notcaisse) et 'backoffice' (userdroits.notbackoffice).
 Route::middleware(['auth'])->group(function () {
+    // Mon compte : accessible à tout utilisateur connecté
+    Route::get('/mon-compte/mot-de-passe', [\App\Http\Controllers\MonCompteController::class, 'motDePasse'])->name('compte.mot_de_passe');
+    Route::post('/mon-compte/mot-de-passe', [\App\Http\Controllers\MonCompteController::class, 'updateMotDePasse'])->middleware('throttle:10,1')->name('compte.mot_de_passe.update');
+
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
 
     // -- Section STOCK --
@@ -31,6 +35,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/detaille', [\App\Http\Controllers\Stock\StockDetailleController::class, 'index'])->name('detaille.index');
         Route::get('/mouvements', [\App\Http\Controllers\Stock\MouvementsArticlesController::class, 'index'])->name('mouvements.index');
         Route::get('/etat', [\App\Http\Controllers\Stock\EtatStockController::class, 'index'])->name('etat.index');
+        Route::get('/negatifs', [\App\Http\Controllers\Stock\StockNegatifController::class, 'index'])->name('negatifs.index');
     });
 
     // -- Section TRANSFERT --
@@ -92,6 +97,7 @@ Route::middleware(['auth'])->group(function () {
         });
 
         Route::middleware('droit:config')->group(function () {
+            Route::get('/controle-donnees', [\App\Http\Controllers\Parametre\ControleDonneesController::class, 'index'])->name('controle.index');
             Route::get('/configuration/general', [\App\Http\Controllers\Parametre\ConfigurationController::class, 'general'])->name('configuration.general');
             Route::post('/configuration/general', [\App\Http\Controllers\Parametre\ConfigurationController::class, 'updateGeneral'])->name('configuration.general.update');
         });

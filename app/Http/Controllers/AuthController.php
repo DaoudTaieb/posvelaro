@@ -36,11 +36,13 @@ class AuthController extends Controller
         ];
 
         if (Auth::attempt($credentials)) {
-            if ($request->filled('siteid')) {
+            if ($request->filled('siteid') && (int) $request->input('siteid') !== (int) Auth::user()->siteid) {
                 $user = Auth::user();
 
-                // Le site doit exister, ne pas être bloqué et appartenir au même client que l'utilisateur
-                $siteAutorise = $user->clientid
+                // Changer de site demande le droit « Modifier Site doc vente » (updatesitevente) du rôle ;
+                // le site doit exister, ne pas être bloqué et appartenir au même client que l'utilisateur.
+                $siteAutorise = self::peutChoisirSite($user)
+                    && $user->clientid
                     && \Illuminate\Support\Facades\DB::table('sites')
                         ->where('siteid', (int) $request->input('siteid'))
                         ->where('clientid', $user->clientid)
@@ -83,7 +85,16 @@ class AuthController extends Controller
     }
 
     /**
-     * Get sites for a specific login
+     * Un utilisateur peut choisir son site à la connexion si son rôle n'a pas le droit
+     * « Modifier Site doc vente » (updatesitevente) bloqué. Réglable dans Gestion des Droits.
+     */
+    private static function peutChoisirSite($user): bool
+    {
+        return \App\Support\Droits::roleAutorise($user->userdroitid ? (int) $user->userdroitid : null, 'updatesitevente');
+    }
+
+    /**
+     * Sites proposés à la connexion (uniquement pour un rôle autorisé à changer de site)
      */
     public function getSites(Request $request)
     {
@@ -93,7 +104,7 @@ class AuthController extends Controller
         }
 
         $user = \App\Models\User::where('login', $login)->first();
-        if (!$user || !$user->clientid) {
+        if (!$user || !$user->clientid || !self::peutChoisirSite($user)) {
             return response()->json([]);
         }
 
@@ -102,7 +113,9 @@ class AuthController extends Controller
             ->where('bloque', false)
             ->select('siteid', 'libelle')
             ->orderBy('libelle')
-            ->get();
+            ->get()
+            // Site habituel de l'utilisateur présélectionné dans la liste
+            ->map(fn ($site) => (object) ((array) $site + ['actuel' => (int) $site->siteid === (int) $user->siteid]));
 
         return response()->json($sites);
     }

@@ -50,14 +50,16 @@ Date : 16 octobre 2026. Base analysée : PostgreSQL 17, base `velaro` (127.0.0.1
 - ✅ **Tests** : décision du 16/10/2026, tout reste sur la base `velaro` (pas de base de test séparée) ; les tests s'exécutent en transactions annulées. Pas de CI externe (la base n'est accessible que sur le poste).
 - ✅ **Performance** : tableau de bord en 11 requêtes au lieu de 22, indicateurs vérifiés identiques. Pas d'index ajouté : volumes faibles (795 tickets) et base partagée avec le bureau.
 
-## 5. Phase 3 — Fonctionnel et expérience utilisateur (en continu)
+## 5. Phase 3 — Fonctionnel et expérience utilisateur
 
-- Sélecteur de site au login pour tout utilisateur multi-sites (aujourd'hui limité au login « admin » côté JavaScript).
-- Impression thermique via l'API `stations.urlapilbtprint` déjà prévue par le bureau, au lieu de `window.print()`.
-- Écran « Stock négatifs » et alerte à la vente, puisque 77 lignes sont déjà négatives.
-- Écran de rapprochement bureau/web : tickets dont l'entête diffère des lignes (19 cas), journées non envoyées (`envoyee = false` sur les 183).
-- Compléter la gestion des demandes de transfert (jamais utilisée : 0 lignes) ou la masquer tant que le site 101 ne l'utilise pas.
-- Gestion des mots de passe : impossible de hacher tant que le bureau lit en clair ; prévoir au minimum une longueur minimale et une page « changer mon mot de passe ».
+État au 16/10/2026 : **fait**, sauf l'impression thermique. 105 tests Feature au vert, smoke test sans erreur.
+
+- ✅ **Choix du site à la connexion** : proposé à tout rôle qui a le droit « Modifier Site doc vente » (`updatesitevente`, réglable dans Gestion des Droits), et plus seulement au login « admin ». Le contrôle est fait côté serveur : un rôle bloqué ne peut plus forcer un autre site en envoyant le formulaire à la main. Le site habituel est présélectionné.
+- ✅ **Stocks négatifs** : écran Stock > Stocks négatifs (quantité, dernière vente de la variante, recherche) et alerte en caisse quand la quantité du ticket dépasse le stock du site.
+- ✅ **Contrôle des données** : Paramètres > Contrôle des données (droit `config`), en lecture seule : tickets dont l'entête diffère des lignes, tickets sans ligne, tickets sur-payés, restes à payer, journées ouvertes depuis plus d'un jour, tickets en attente de plus de 7 jours, bons d'achat expirés, stocks négatifs.
+- ✅ **Mots de passe** : page « Changer mon mot de passe » (clic sur le nom en haut à droite), contrôle de l'ancien mot de passe, 6 caractères minimum pour tout nouveau mot de passe (aussi en Gestion des utilisateurs). Stockage inchangé (le logiciel de bureau lit en clair).
+- ✅ **Demandes de transfert** : conservées (fonctionnelles et testées), même si le magasin ne les utilise pas encore.
+- ⏳ **Impression thermique** : `stations.urlapilbtprint` est vide sur les 3 postes ; à brancher quand l'API d'impression du bureau sera configurée. L'impression navigateur (`window.print()`) reste en place.
 
 ## 6. Phase 4 — Déploiement et exploitation
 

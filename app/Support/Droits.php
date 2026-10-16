@@ -59,6 +59,28 @@ class Droits
         return !self::autorise($regle);
     }
 
+    /**
+     * Droit d'un rôle donné, sans utilisateur connecté (ex. écran de connexion).
+     * Même règle que autorise() : permis sauf si bloqué dans userdroitdets.
+     */
+    public static function roleAutorise(?int $userdroitid, string $regle): bool
+    {
+        if (!$userdroitid) {
+            return false;
+        }
+        if (isset(self::INDICATEURS[$regle])) {
+            $role = DB::table('userdroits')->where('userdroitid', $userdroitid)->first();
+            return $role !== null && !($role->{self::INDICATEURS[$regle]} ?? false);
+        }
+
+        return !DB::table('userdroitdets as d')
+            ->join('typedroits as t', 't.typedroitid', '=', 'd.typedroitid')
+            ->where('d.userdroitid', $userdroitid)
+            ->where('d.bloque', true)
+            ->where('t.abreviation', $regle)
+            ->exists();
+    }
+
     /** Message affiché à l'utilisateur quand une règle le bloque. */
     public static function message(string $regle): string
     {

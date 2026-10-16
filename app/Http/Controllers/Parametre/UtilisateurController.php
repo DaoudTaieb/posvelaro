@@ -15,6 +15,7 @@ class UtilisateurController extends Controller
     private const MESSAGES = [
         'login.unique' => 'Ce login est déjà utilisé.',
         'userdroitid.exists' => 'Le niveau d\'accès sélectionné n\'existe pas.',
+        'password.min' => 'Le mot de passe doit contenir au moins 6 caractères.',
     ];
 
     public function index()
@@ -37,7 +38,7 @@ class UtilisateurController extends Controller
     {
         $request->validate([
             'login' => 'required|string|max:255|unique:users,login',
-            'password' => 'required|string',
+            'password' => 'required|string|min:' . \App\Http\Controllers\MonCompteController::LONGUEUR_MIN,
             'userdroitid' => 'required|integer|exists:userdroits,userdroitid'
         ], self::MESSAGES);
 
@@ -68,6 +69,7 @@ class UtilisateurController extends Controller
 
         $request->validate([
             'login' => ['required', 'string', 'max:255', Rule::unique('users', 'login')->ignore($id, 'userid')],
+            'password' => 'nullable|string|min:' . \App\Http\Controllers\MonCompteController::LONGUEUR_MIN,
             'userdroitid' => 'required|integer|exists:userdroits,userdroitid'
         ], self::MESSAGES);
 
