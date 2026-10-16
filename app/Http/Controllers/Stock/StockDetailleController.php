@@ -11,10 +11,13 @@ class StockDetailleController extends Controller
     public function index(Request $request)
     {
         // Données pour le filtre
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $rayons = DB::table('categories')->orderBy('categorylibelle')->get();
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 4)
+        ['familles' => $familles, 'sousFamilles' => $sousFamilles, 'rayons' => $rayons, 'saisons' => $saisons] = \App\Support\LectureGroupee::listes([
+            'familles' => DB::table('familles')->select('familleid', 'famillelibelle')->orderBy('famillelibelle'),
+            'sousFamilles' => DB::table('sousfamilles')->select('sousfamilleid', 'sousfamillelibelle', 'familleid', 'is_loyalty_enabled')->orderBy('sousfamillelibelle'),
+            'rayons' => DB::table('categories')->orderBy('categorylibelle'),
+            'saisons' => DB::table('categories4')->orderBy('category4libelle'),
+        ]);
 
         $siteid = \App\Support\SiteCourant::id();
 
@@ -120,7 +123,7 @@ class StockDetailleController extends Controller
         }
 
         // Pagination
-        $articles = $query->orderBy('produits.produitcode')->paginate(20);
+        $articles = $query->orderBy('produits.produitcode')->paginerVite(20);
 
         return view('stock.detaille.index', compact('articles', 'familles', 'sousFamilles', 'rayons', 'saisons'));
     }

@@ -18,10 +18,13 @@ class MouvementsArticlesController extends Controller
         $dateAu = $request->input('date_au') ?: Carbon::today()->format('Y-m-d');
 
         // Données pour le filtre
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $rayons = DB::table('categories')->orderBy('categorylibelle')->get();
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 4)
+        ['familles' => $familles, 'sousFamilles' => $sousFamilles, 'rayons' => $rayons, 'saisons' => $saisons] = \App\Support\LectureGroupee::listes([
+            'familles' => DB::table('familles')->select('familleid', 'famillelibelle')->orderBy('famillelibelle'),
+            'sousFamilles' => DB::table('sousfamilles')->select('sousfamilleid', 'sousfamillelibelle', 'familleid', 'is_loyalty_enabled')->orderBy('sousfamillelibelle'),
+            'rayons' => DB::table('categories')->orderBy('categorylibelle'),
+            'saisons' => DB::table('categories4')->orderBy('category4libelle'),
+        ]);
 
         $query = DB::table('vdetmvtstcs')
             ->join('produits', 'vdetmvtstcs.produitid', '=', 'produits.produitid')
@@ -120,7 +123,7 @@ class MouvementsArticlesController extends Controller
         )->first();
         [$sumAchat, $sumVente, $sumEntrer, $sumSortie] = [(float) $t->achat, (float) $t->vente, (float) $t->entrer, (float) $t->sortie];
 
-        $mouvements = $query->orderBy('vdetmvtstcs.dateoperation', 'desc')->paginate(50);
+        $mouvements = $query->orderBy('vdetmvtstcs.dateoperation', 'desc')->paginerVite(50);
 
         if ($request->ajax()) {
             $html = view('stock.mouvements.partials.table_body', compact('mouvements'))->render();

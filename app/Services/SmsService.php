@@ -123,7 +123,7 @@ class SmsService
 
     public function nomMagasin(): string
     {
-        $societe = DB::table('societes')->orderBy('societeid')->first();
+        $societe = \App\Support\Societe::courante();
 
         return trim((string) ($societe->raison ?? $societe->libelle ?? '')) ?: (string) config('app.name', 'Golden Pos');
     }

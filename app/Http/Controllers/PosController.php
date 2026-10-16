@@ -53,52 +53,54 @@ class PosController extends Controller
                 ->with('warning', 'Veuillez ouvrir une journée de caisse avant de commencer les ventes.');
         }
 
-        $client = DB::table('clients')->where('nom', 'PASSAGER')->first();
-
-        // Données pour le modal de sélection produit
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get();
-        $categories = DB::table('categories')->orderBy('categorylibelle')->get();
-        $marques = DB::table('categories2')->orderBy('category2libelle')->get();
-
-        // Vendeur par défaut = employé lié au compte connecté
-        $defaultVendeur = null;
-        $user = auth()->user();
-        if ($user && $user->employeeid) {
-            $defaultVendeur = DB::table('employees')->where('employeeid', $user->employeeid)->first();
-        }
-
-        // Récupérer le nom du site de l'utilisateur connecté
-        $site = null;
-        if ($user && $user->siteid) {
-            $site = DB::table('sites')->where('siteid', $user->siteid)->first();
-        }
-        $siteName = $site ? $site->libelle : 'VELARO';
-
-        // Générer un numéro de ticket provisoire (ou afficher le prochain numéro)
-        $maxNumero = DB::table('ctickets')->max('cticketnumero');
-        $draftId = $maxNumero ? (intval($maxNumero) + 1) : date('y') . '000001';
-
-        $typeChequeCadeaus = DB::table('typechequecadeaus')->orderBy('priorite')->get();
-
-        // Récupérer le nombre de demandes et bons de transfert actifs pour ce site
+        // Tout ce qu'affiche l'écran de caisse en UNE requête (base distante : un seul aller-retour) :
+        // client passager, vendeur du compte, prochain numéro, listes de la fenêtre de choix d'article
+        // (familles, sous-familles, saisons, catégories, marques), types de chèques cadeaux et
+        // compteurs de transferts du site.
         $siteId = \App\Support\SiteCourant::id();
-        $demandeTransfCount = DB::table('demandetransferts')
-            ->where(function ($q) use ($siteId) {
-                $q->where('siterecepteurid', $siteId)
-                  ->orWhere('siteid', $siteId);
-            })
-            ->whereIn('etatdemandetransfertid', [1, 2, 5]) // En cours, Envoyé, En attente
-            ->count();
+        $d = DB::selectOne(<<<'SQL'
+            SELECT
+              (SELECT row_to_json(c)::text FROM (
+                  SELECT clientid, clientcode, nom, solde, soldefidelite, pointfidelite
+                    FROM clients WHERE nom = 'PASSAGER' ORDER BY clientid LIMIT 1) c) AS client,
+              (SELECT row_to_json(e)::text FROM (
+                  SELECT employeeid, nom, prenom FROM employees WHERE employeeid = ?::int) e) AS vendeur,
+              (SELECT max(cticketnumero) FROM ctickets) AS max_numero,
+              (SELECT COALESCE(json_agg(c ORDER BY c.categorylibelle), '[]')::text FROM (
+                  SELECT categoryid, categorylibelle FROM categories) c) AS categories,
+              (SELECT COALESCE(json_agg(f ORDER BY f.famillelibelle), '[]')::text FROM (
+                  SELECT familleid, famillelibelle FROM familles) f) AS familles,
+              (SELECT COALESCE(json_agg(f ORDER BY f.sousfamillelibelle), '[]')::text FROM (
+                  SELECT sousfamilleid, sousfamillelibelle, familleid FROM sousfamilles) f) AS sous_familles,
+              (SELECT COALESCE(json_agg(c ORDER BY c.category4libelle), '[]')::text FROM (
+                  SELECT category4id, category4libelle FROM categories4) c) AS saisons,
+              (SELECT COALESCE(json_agg(c ORDER BY c.category2libelle), '[]')::text FROM (
+                  SELECT category2id, category2libelle FROM categories2) c) AS marques,
+              (SELECT COALESCE(json_agg(t ORDER BY t.priorite), '[]')::text FROM (
+                  SELECT typechequecadeauid, libelle, priorite FROM typechequecadeaus) t) AS types_cheques,
+              (SELECT count(*) FROM demandetransferts
+                WHERE (siterecepteurid = ?::int OR siteid = ?::int) AND etatdemandetransfertid IN (1, 2, 5)) AS demandes,
+              (SELECT count(*) FROM bontransferts
+                WHERE (siterecepteurid = ?::int OR siteid = ?::int) AND confirmer = false) AS bons
+            SQL, [(int) ($user->employeeid ?? 0), $siteId, $siteId, $siteId, $siteId]);
 
-        $bonTransfCount = DB::table('bontransferts')
-            ->where(function ($q) use ($siteId) {
-                $q->where('siterecepteurid', $siteId)
-                  ->orWhere('siteid', $siteId);
-            })
-            ->where('confirmer', false)
-            ->count();
+        $client = json_decode($d->client ?? 'null');
+        // Vendeur par défaut = employé lié au compte connecté
+        $defaultVendeur = $user->employeeid ? json_decode($d->vendeur ?? 'null') : null;
+        $categories = collect(json_decode($d->categories, false) ?: []);
+        $familles = collect(json_decode($d->familles, false) ?: []);
+        $sousFamilles = collect(json_decode($d->sous_familles, false) ?: []);
+        $saisons = collect(json_decode($d->saisons, false) ?: []);
+        $marques = collect(json_decode($d->marques, false) ?: []);
+        $typeChequeCadeaus = collect(json_decode($d->types_cheques, false) ?: []);
+        $demandeTransfCount = (int) $d->demandes; // demandes en cours, envoyées ou en attente
+        $bonTransfCount = (int) $d->bons;         // bons non confirmés
+
+        // Numéro de ticket provisoire affiché (le vrai numéro est attribué à la validation)
+        $draftId = $d->max_numero ? ((int) $d->max_numero + 1) : date('y') . '000001';
+
+        // Nom du site : déjà chargé avec l'utilisateur
+        $siteName = optional($user->siteRecord())->libelle ?? 'VELARO';
 
         // Mode d'impression de la caisse de la journée (affiché dans la caisse ; l'impression elle-même est faite par le serveur)
         $configImpression = app(\App\Services\ImpressionTicketService::class)->configuration((int) $journalCaisse->caisseid);
@@ -183,7 +185,7 @@ class PosController extends Controller
             });
         }
 
-        $products = $query->paginate(20);
+        $products = $query->paginerVite(20);
 
         return response()->json($products);
     }
@@ -232,20 +234,18 @@ class PosController extends Controller
                 DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock'),
                 'sousfamilles.is_loyalty_enabled'
             )
+            // Variante exacte et nombre de variantes lus dans la même requête (un seul aller-retour par scan)
+            ->selectRaw('COALESCE(produit2s.barcode2 = ? OR produit2s.produit2code = ?, false) AS gp_variante_exacte', [$code, $code])
+            ->selectRaw('(SELECT count(*) FROM produit2s v WHERE v.produitid = produits.produitid) AS gp_nb_variantes')
             ->orderByRaw('CASE WHEN produit2s.barcode2 = ? OR produit2s.produit2code = ? THEN 0 ELSE 1 END', [$code, $code])
             ->first();
 
         // Code commun à toutes les variantes (référence / code article) : laisser le caissier choisir
-        if ($product && $product->produit2id) {
-            $variantExact = DB::table('produit2s')
-                ->where('produit2id', $product->produit2id)
-                ->where(function ($q) use ($code) {
-                    $q->where('barcode2', $code)->orWhere('produit2code', $code);
-                })
-                ->exists();
-            if (!$variantExact && DB::table('produit2s')->where('produitid', $product->produitid)->count() > 1) {
+        if ($product) {
+            if ($product->produit2id && !$product->gp_variante_exacte && (int) $product->gp_nb_variantes > 1) {
                 $product->choisir_variante = true;
             }
+            unset($product->gp_variante_exacte, $product->gp_nb_variantes);
         }
 
         return response()->json($product);
@@ -733,7 +733,7 @@ class PosController extends Controller
 
         $clients = $query->select('clientid', 'clientcode', 'nom', 'prenom', 'tel', 'adressefacturation', 'mf', 'remise', 'plafonremise', 'solde', 'ville', 'soldefidelite', 'pointfidelite', 'fidelite', 'barcode', 'fidelite_debut')
             ->orderBy('nom')
-            ->paginate(15);
+            ->paginerVite(15);
 
         // Palier de remise et bons d'achat disponibles : calcul groupé pour toute la page (2 requêtes)
         $etats = $this->fidelite->etatsEnLot($clients->getCollection());

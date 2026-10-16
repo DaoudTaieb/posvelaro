@@ -14,7 +14,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Connecteur PostgreSQL sans requêtes SET à l'ouverture (base distante : moins d'allers-retours)
+        $this->app->bind('db.connector.pgsql', \App\Database\PostgresConnecteur::class);
     }
 
     /**
@@ -23,6 +24,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Paginator::useBootstrapFive();
+
+        // ->paginerVite() : total et page en une seule requête (base distante)
+        \App\Support\PaginationRapide::installer();
 
         // @peut('cons.stock') ... @endpeut : masque un élément si le rôle n'a pas le droit
         Blade::if('peut', fn (string $regle) => \App\Support\Droits::autorise($regle));

@@ -80,10 +80,9 @@ class ClientController extends Controller
         }
 
         if ($request->ajax()) {
-            $totalClients = (clone $query)->count();
             $totalSolde = (clone $query)->sum('clients.solde');
-            
-            $clients = $query->orderBy('clients.clientcode', 'desc')->paginate(15);
+            $clients = $query->orderBy('clients.clientcode', 'desc')->paginerVite(15);
+            $totalClients = $clients->total(); // compté avec la page (même requête)
             $html = view('vente.clients.partials.table_body', compact('clients'))->render();
 
             return response()->json([
@@ -96,15 +95,14 @@ class ClientController extends Controller
             ]);
         }
         
-        $totalClients = (clone $query)->count();
         $totalSolde = (clone $query)->sum('clients.solde');
+        $clients = $query->orderBy('clients.clientcode', 'desc')->paginerVite(15);
+        $totalClients = $clients->total(); // compté avec la page (même requête)
 
         $kpis = [
             'nb_clients' => number_format((float)($totalClients ?? 0), 0, ',', ' '),
             'total_solde' => number_format((float)($totalSolde ?? 0), 3, ',', ' ')
         ];
-
-        $clients = $query->orderBy('clients.clientcode', 'desc')->paginate(15);
         return view('vente.clients.index', compact('clients', 'kpis'));
     }
 

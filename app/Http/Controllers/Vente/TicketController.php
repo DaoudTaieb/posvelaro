@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Vente;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TicketController extends Controller
 {
@@ -225,7 +226,7 @@ class TicketController extends Controller
             [$totalQte, $totalBrutHt, $totalRemise, $totalNetHt, $totalTva, $totalTtc, $totalAcompte, $totalReste, $nbTickets, $kpiTotalPaye] = $this->totaux($query);
             $kpiTotalNonPaye = $totalReste;
 
-            $tickets = $query->paginate(15);
+            $tickets = $query->paginerVite(15);
             $html = view('vente.tickets.partials.table_body', compact('tickets'))->render();
 
             return response()->json([
@@ -251,10 +252,18 @@ class TicketController extends Controller
         }
 
         // Initial Load (Non-AJAX) -> Just load tickets, no empty paginator logic.
-        $tickets = $query->paginate(15);
+        $tickets = $query->paginerVite(15);
         
         // Calculate initial totals to pass to the view to avoid layout flickers
-        [$totalQte, $totalBrutHt, $totalRemise, $totalNetHt, $totalTva, $totalTtc, $totalAcompte, $totalReste, $nbTickets, $kpiTotalPaye] = $this->totaux($query);
+        // Totaux et listes des filtres lus en une seule requête (base distante : un aller-retour au lieu de 5)
+        ['totaux' => $ligneTotaux, 'clients' => $clients, 'statuts' => $statuts, 'caissiers' => $caissiers, 'vendeurs' => $vendeurs] = \App\Support\LectureGroupee::listes([
+            'totaux' => $this->requeteTotaux($query),
+            'clients' => DB::table('clients')->select('clientid', 'nom', 'code')->orderBy('nom'),
+            'statuts' => DB::table('statutdocuments')->select('statutdocumentid', 'libelle')->where('statutdocumentid', '>', 0),
+            'caissiers' => DB::table('users')->select('userid', 'login'),
+            'vendeurs' => DB::table('employees')->select('employeeid', 'nom', 'prenom')->where('isvendeur', true),
+        ]);
+        [$totalQte, $totalBrutHt, $totalRemise, $totalNetHt, $totalTva, $totalTtc, $totalAcompte, $totalReste, $nbTickets, $kpiTotalPaye] = $this->totaux($query, $ligneTotaux->first());
         $kpiTotalNonPaye = $totalReste;
 
         $totals = [
@@ -274,14 +283,6 @@ class TicketController extends Controller
             'total_paye' => number_format((float)($kpiTotalPaye ?? 0), 3, ',', ' '),
             'total_non_paye' => number_format((float)($kpiTotalNonPaye ?? 0), 3, ',', ' ')
         ];
-        $clients = \Illuminate\Support\Facades\DB::table('clients')->select('clientid', 'nom', 'code')->orderBy('nom')->get();
-        $statuts = \Illuminate\Support\Facades\DB::table('statutdocuments')
-            ->select('statutdocumentid', 'libelle')
-            ->where('statutdocumentid', '>', 0)
-            ->get();
-        $caissiers = \Illuminate\Support\Facades\DB::table('users')->select('userid', 'login')->get();
-        $vendeurs = \Illuminate\Support\Facades\DB::table('employees')->select('employeeid', 'nom', 'prenom')->where('isvendeur', true)->get();
-
         return view('vente.tickets.index', compact('tickets', 'clients', 'statuts', 'caissiers', 'vendeurs', 'totals', 'kpis'));
     }
 
@@ -303,7 +304,7 @@ class TicketController extends Controller
         }
 
         // Get company info
-        $societe = \Illuminate\Support\Facades\DB::table('societes')->first();
+        $societe = \App\Support\Societe::courante();
 
         // Get caisse
         $caisse = \Illuminate\Support\Facades\DB::table('caisses')
@@ -423,9 +424,18 @@ class TicketController extends Controller
      *
      * @return array{0: float, 1: float, 2: float, 3: float, 4: float, 5: float, 6: float, 7: float, 8: int, 9: float}
      */
-    private function totaux($query): array
+    private function totaux($query, ?object $t = null): array
     {
-        $t = (clone $query)->reorder()->select(
+        $t ??= $this->requeteTotaux($query)->first();
+
+        return [(float) $t->qte, (float) $t->brutht, (float) $t->remise, (float) $t->netht, (float) $t->tva,
+            (float) $t->ttc, (float) $t->acompte, (float) $t->reste, (int) $t->nb, (float) $t->paye];
+    }
+
+    /** Requête d'agrégat des totaux de la liste (sans tri ni pagination). */
+    private function requeteTotaux($query)
+    {
+        return (clone $query)->reorder()->select(
             \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalqte), 0) as qte'),
             \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalbrutht), 0) as brutht'),
             \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalbrutht - ctickets.totalnetht), 0) as remise'),
@@ -436,9 +446,6 @@ class TicketController extends Controller
             \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.netapayer), 0) as reste'),
             \Illuminate\Support\Facades\DB::raw('COUNT(*) as nb'),
             \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(COALESCE(ctickets.totalttc, 0) - COALESCE(ctickets.netapayer, 0)), 0) as paye')
-        )->first();
-
-        return [(float) $t->qte, (float) $t->brutht, (float) $t->remise, (float) $t->netht, (float) $t->tva,
-            (float) $t->ttc, (float) $t->acompte, (float) $t->reste, (int) $t->nb, (float) $t->paye];
+        );
     }
 }

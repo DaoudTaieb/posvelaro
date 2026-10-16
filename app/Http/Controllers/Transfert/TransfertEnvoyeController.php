@@ -17,19 +17,19 @@ class TransfertEnvoyeController extends Controller
     {
         $siteid = \App\Support\SiteCourant::id(); // Expéditeur
 
-        $etats = DB::table('etatbontranferts')->get();
-
         $query = DB::table('bontransferts as b')
             ->join('sites as rec', 'rec.siteid', '=', 'b.siterecepteurid')
             ->join('sites as emet', 'emet.siteid', '=', 'b.siteid')
             ->leftJoin('etatbontranferts as e', 'e.etatbontransfertid', '=', 'b.etatbontransfertid')
             ->where('b.siteid', $siteid); // On est l'émetteur
 
-        // KPIs calculation (Base query without search filters)
-        $kpiQuery = clone $query;
-        $totalBons = $kpiQuery->count();
-        $brouillons = (clone $query)->where('b.etatbontransfertid', 1)->count();
-        $envoyes = (clone $query)->where('b.etatbontransfertid', 2)->count();
+        // Indicateurs (sans les filtres de recherche) : les trois compteurs en une seule requête
+        $kpi = (clone $query)->selectRaw(
+            'count(*) AS total, count(*) FILTER (WHERE b.etatbontransfertid = 1) AS brouillons, count(*) FILTER (WHERE b.etatbontransfertid = 2) AS envoyes'
+        )->first();
+        $totalBons = (int) $kpi->total;
+        $brouillons = (int) $kpi->brouillons;
+        $envoyes = (int) $kpi->envoyes;
 
         $query->select(
             'b.bontransfertid',
@@ -90,7 +90,7 @@ class TransfertEnvoyeController extends Controller
 
         $bontransferts = $query->orderBy('b.bontransfertdate', 'desc')
                                ->orderBy('b.bontransfertnumero', 'desc')
-                               ->paginate($request->get('per_page', 20));
+                               ->paginerVite($request->get('per_page', 20));
 
         if ($request->ajax()) {
             return response()->json([
@@ -107,8 +107,12 @@ class TransfertEnvoyeController extends Controller
         $defaultDateDebut = $request->datedebut ?? Carbon::now()->format('Y-m-d');
         $defaultDateFin = $request->datefin ?? Carbon::now()->format('Y-m-d');
 
-        $sites = DB::table('sites')->get();
-        $siteExpediteur = DB::table('sites')->where('siteid', $siteid)->first();
+        // États (filtre) et sites en une seule requête
+        ['etats' => $etats, 'sites' => $sites] = \App\Support\LectureGroupee::listes([
+            'etats' => DB::table('etatbontranferts'),
+            'sites' => DB::table('sites'),
+        ]);
+        $siteExpediteur = $sites->firstWhere('siteid', $siteid);
         $siteLibelle = $siteExpediteur ? $siteExpediteur->libelle : 'Velaro';
 
         return view('transfert.envoye.index', compact('bontransferts', 'etats', 'defaultDateDebut', 'defaultDateFin', 'sites', 'siteLibelle', 'totalBons', 'brouillons', 'envoyes'));
@@ -123,13 +127,16 @@ class TransfertEnvoyeController extends Controller
         $demandes_validees = $this->demandesAImporter($siteid);
 
         // Données pour le modal de sélection produit
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $categories = DB::table('categories')->orderBy('categorylibelle')->get();
-        $marques = DB::table('categories2')->orderBy('category2libelle')->get(); // Marque
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get(); // Saison
-        $employees = DB::table('employees')->orderBy('nom')->get();
-        $vehicules = DB::table('vehicules')->orderBy('libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 7)
+        ['familles' => $familles, 'sousFamilles' => $sousFamilles, 'categories' => $categories, 'marques' => $marques, 'saisons' => $saisons, 'employees' => $employees, 'vehicules' => $vehicules] = \App\Support\LectureGroupee::listes([
+            'familles' => DB::table('familles')->select('familleid', 'famillelibelle')->orderBy('famillelibelle'),
+            'sousFamilles' => DB::table('sousfamilles')->select('sousfamilleid', 'sousfamillelibelle', 'familleid', 'is_loyalty_enabled')->orderBy('sousfamillelibelle'),
+            'categories' => DB::table('categories')->orderBy('categorylibelle'),
+            'marques' => DB::table('categories2')->orderBy('category2libelle'), // Marque
+            'saisons' => DB::table('categories4')->orderBy('category4libelle'), // Saison
+            'employees' => DB::table('employees')->select('employeeid', 'code', 'nom', 'prenom', 'siteid', 'isvendeur', 'bloque')->orderBy('nom'),
+            'vehicules' => DB::table('vehicules')->orderBy('libelle'),
+        ]);
 
         return view('transfert.envoye.create', compact('site', 'sites', 'demandes_validees', 'familles', 'sousFamilles', 'categories', 'marques', 'saisons', 'employees', 'vehicules'));
     }
@@ -139,8 +146,11 @@ class TransfertEnvoyeController extends Controller
         $siteid = \App\Support\SiteCourant::id();
         $sites = DB::table('sites')->get();
         $siteExpediteur = DB::table('sites')->where('siteid', $siteid)->first();
-        $employees = DB::table('employees')->orderBy('nom')->get();
-        $vehicules = DB::table('vehicules')->orderBy('libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 2)
+        ['employees' => $employees, 'vehicules' => $vehicules] = \App\Support\LectureGroupee::listes([
+            'employees' => DB::table('employees')->select('employeeid', 'code', 'nom', 'prenom', 'siteid', 'isvendeur', 'bloque')->orderBy('nom'),
+            'vehicules' => DB::table('vehicules')->orderBy('libelle'),
+        ]);
 
         $query = DB::table('bontransferts as b')
             ->join('sites as emet', 'emet.siteid', '=', 'b.siteid')
@@ -298,15 +308,21 @@ class TransfertEnvoyeController extends Controller
         $sites = DB::table('sites')->get();
         $site = DB::table('sites')->where('siteid', $bon->siteid)->first();
 
-        $employees = DB::table('employees')->orderBy('nom')->get();
-        $vehicules = DB::table('vehicules')->orderBy('libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 2)
+        ['employees' => $employees, 'vehicules' => $vehicules] = \App\Support\LectureGroupee::listes([
+            'employees' => DB::table('employees')->select('employeeid', 'code', 'nom', 'prenom', 'siteid', 'isvendeur', 'bloque')->orderBy('nom'),
+            'vehicules' => DB::table('vehicules')->orderBy('libelle'),
+        ]);
 
         // Pour la modal
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $categories = DB::table('categories')->orderBy('categorylibelle')->get();
-        $marques = DB::table('categories2')->orderBy('category2libelle')->get(); // Marque
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get(); // Saison
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 5)
+        ['familles' => $familles, 'sousFamilles' => $sousFamilles, 'categories' => $categories, 'marques' => $marques, 'saisons' => $saisons] = \App\Support\LectureGroupee::listes([
+            'familles' => DB::table('familles')->select('familleid', 'famillelibelle')->orderBy('famillelibelle'),
+            'sousFamilles' => DB::table('sousfamilles')->select('sousfamilleid', 'sousfamillelibelle', 'familleid', 'is_loyalty_enabled')->orderBy('sousfamillelibelle'),
+            'categories' => DB::table('categories')->orderBy('categorylibelle'),
+            'marques' => DB::table('categories2')->orderBy('category2libelle'), // Marque
+            'saisons' => DB::table('categories4')->orderBy('category4libelle'), // Saison
+        ]);
 
         $demandes_validees = $this->demandesAImporter($siteid);
 

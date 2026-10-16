@@ -14,8 +14,6 @@ class DemandeTransfertRecuController extends Controller
     {
         $siteid = \App\Support\SiteCourant::id(); // Le site actuel (le récepteur)
 
-        $etats = DB::table('etatdemandetransferts')->get();
-
         $query = DB::table('detdemandetransferts as det')
             ->join('demandetransferts as d', 'd.demandetransfertid', '=', 'det.demandetransfertid')
             ->join('sites as demandeur', 'demandeur.siteid', '=', 'd.siteid')
@@ -28,10 +26,17 @@ class DemandeTransfertRecuController extends Controller
             ->where('d.etatdemandetransfertid', '!=', 1); // Cacher les brouillons
 
         // KPIs calculation (Base query without search filters)
-        $kpiQuery = clone $query;
-        $totalLignes = $kpiQuery->count();
-        $aTraiter = (clone $query)->where('det.etatdemandetransfertid', 2)->count(); // 2: Envoyé/En attente
-        $validees = (clone $query)->whereIn('det.etatdemandetransfertid', [3, 4, 5])->count();
+        // Trois compteurs et liste des états en une seule requête (2 : envoyé / en attente ; 3, 4, 5 : traitées)
+        ['etats' => $etats, 'kpi' => $kpi] = \App\Support\LectureGroupee::listes([
+            'etats' => DB::table('etatdemandetransferts'),
+            'kpi' => (clone $query)->selectRaw(
+                'count(*) AS total, count(*) FILTER (WHERE det.etatdemandetransfertid = 2) AS a_traiter, count(*) FILTER (WHERE det.etatdemandetransfertid IN (3, 4, 5)) AS validees'
+            ),
+        ]);
+        $kpi = $kpi->first();
+        $totalLignes = (int) $kpi->total;
+        $aTraiter = (int) $kpi->a_traiter;
+        $validees = (int) $kpi->validees;
 
         // Main Select
         $query->select(
@@ -97,7 +102,7 @@ class DemandeTransfertRecuController extends Controller
 
         $demandes = $query->orderBy('d.demandetransfertdate', 'desc')
                           ->orderBy('d.demandetransfertnumero', 'desc')
-                          ->paginate($request->get('per_page', 20));
+                          ->paginerVite($request->get('per_page', 20));
 
         if ($request->ajax()) {
             return response()->json([

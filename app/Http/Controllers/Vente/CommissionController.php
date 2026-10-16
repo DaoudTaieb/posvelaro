@@ -96,7 +96,7 @@ class CommissionController extends Controller
             $t = (clone $query)->reorder()->select(DB::raw('COALESCE(SUM(ctickets.totalnetht), 0) as netht'), DB::raw('COALESCE(SUM(ctickets.totalnetht * vendeurs.tauxcommission / 100), 0) as commission'), DB::raw('COUNT(*) as nb'))->first();
             [$totalNetHt, $totalCommission, $nbVentes] = [(float) $t->netht, (float) $t->commission, (int) $t->nb];
 
-            $commissions = $query->paginate(15);
+            $commissions = $query->paginerVite(15);
             $html = view('vente.commissions.partials.table_body', compact('commissions'))->render();
 
             return response()->json([
@@ -115,11 +115,16 @@ class CommissionController extends Controller
         }
 
         // Initial Load (Non-AJAX) -> Just load commissions, no empty paginator logic.
-        $commissions = $query->paginate(15);
+        $commissions = $query->paginerVite(15);
         
         // Calculate initial totals to pass to the view to avoid layout flickers
         // Totaux en une seule requête d'agrégat
-        $t = (clone $query)->reorder()->select(DB::raw('COALESCE(SUM(ctickets.totalnetht), 0) as netht'), DB::raw('COALESCE(SUM(ctickets.totalnetht * vendeurs.tauxcommission / 100), 0) as commission'), DB::raw('COUNT(*) as nb'))->first();
+        // Totaux et liste des vendeurs (filtre) dans la même requête
+        ['totaux' => $t, 'vendeurs' => $vendeurs] = \App\Support\LectureGroupee::listes([
+            'totaux' => (clone $query)->reorder()->select(DB::raw('COALESCE(SUM(ctickets.totalnetht), 0) as netht'), DB::raw('COALESCE(SUM(ctickets.totalnetht * vendeurs.tauxcommission / 100), 0) as commission'), DB::raw('COUNT(*) as nb')),
+            'vendeurs' => DB::table('employees')->select('employeeid', 'nom', 'prenom')->where('isvendeur', true),
+        ]);
+        $t = $t->first();
         [$totalNetHt, $totalCommission, $nbVentes] = [(float) $t->netht, (float) $t->commission, (int) $t->nb];
 
         $totals = [
@@ -133,7 +138,6 @@ class CommissionController extends Controller
             'commission' => number_format((float)($totalCommission ?? 0), 3, ',', ' ')
         ];
 
-        $vendeurs = DB::table('employees')->select('employeeid', 'nom', 'prenom')->where('isvendeur', true)->get();
 
         return view('vente.commissions.index', compact('commissions', 'vendeurs', 'totals', 'kpis'));
     }

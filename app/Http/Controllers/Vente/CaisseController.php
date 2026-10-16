@@ -173,9 +173,12 @@ class CaisseController extends Controller
             ], 'cticketid');
 
             // Insérer les lignes (pas pour un ticket en attente : le stock ne doit pas bouger avant la validation)
+            // Une seule instruction INSERT pour toutes les lignes : les triggers du bureau (cbl_stock,
+            // cticket_calc) sont « FOR EACH ROW » et s'exécutent pour chaque ligne comme avant.
             $ordre = 1;
+            $lignesTicket = [];
             foreach ($enAttente ? [] : $detLignes as $det) {
-                DB::table('detctickets')->insert(array_merge($det, [
+                $lignesTicket[] = array_merge($det, [
                     'cticketid' => $cticketid,
                     'remise2' => 0,
                     'taxe1' => 0, 'vtaxe1' => 0,
@@ -192,7 +195,10 @@ class CaisseController extends Controller
                     'retour' => 0,
                     'stocknegatif' => 0,
                     'modestock' => 1
-                ]));
+                ]);
+            }
+            if ($lignesTicket) {
+                DB::table('detctickets')->insert($lignesTicket);
             }
 
             // Si ce n'est pas une mise en attente, enregistrer le règlement
@@ -287,18 +293,17 @@ class CaisseController extends Controller
                 $messagesFidelite = $this->fidelite->annulerPourRetour($detLignes, $now);
 
                 if ($clientid != $passagerId) {
-                    $clientInfo = DB::table('clients')->where('clientid', $clientid)->first();
+                    // Client et « toute première vente » (tous cycles confondus, pour le SMS de bienvenue) en une requête
+                    $clientInfo = DB::table('clients')
+                        ->where('clientid', $clientid)
+                        ->select('clients.*')
+                        ->selectRaw('NOT EXISTS (SELECT 1 FROM ctickets t WHERE t.clientid = clients.clientid AND t.enattente = false AND t.totalttc > 0 AND t.cticketid <> ?) AS gp_premiere_vente', [$cticketid])
+                        ->first();
                     if ($clientInfo) {
                         $clientTel = $clientInfo->tel;
                         $clientNom = trim($clientInfo->nom . ' ' . ($clientInfo->prenom ?? ''));
-
-                        // Toute première vente du client (tous cycles confondus), pour le SMS de bienvenue
-                        $isFirstSale = DB::table('ctickets')
-                            ->where('clientid', $clientid)
-                            ->where('enattente', false)
-                            ->where('totalttc', '>', 0)
-                            ->where('cticketid', '!=', $cticketid)
-                            ->doesntExist();
+                        $isFirstSale = (bool) $clientInfo->gp_premiere_vente;
+                        unset($clientInfo->gp_premiere_vente);
 
                         if ($totalttc > 0.0005) {
                             $resFid = $this->fidelite->appliquerVente($clientInfo, $detLignes, (int) $cticketid, $now);
@@ -326,7 +331,8 @@ class CaisseController extends Controller
             // Mode navigateur ou échec : la caisse ouvre print_url comme avant.
             $impression = $enAttente ? null : $this->impression->imprimerTicket(
                 (int) $cticketid,
-                !$remboursement && collect($reglements)->contains(fn ($r) => (int) ($r['modereglementid'] ?? 0) === 1)
+                !$remboursement && collect($reglements)->contains(fn ($r) => (int) ($r['modereglementid'] ?? 0) === 1),
+                (int) $journal->caisseid
             );
 
             return response()->json([
@@ -605,8 +611,11 @@ class CaisseController extends Controller
             ->limit(1000)
             ->get();
 
-        $clients = \Illuminate\Support\Facades\DB::table('clients')->select('clientid', 'nom')->orderBy('nom')->get();
-        $vendeurs = \Illuminate\Support\Facades\DB::table('employees')->select('employeeid', 'nom')->where('isvendeur', true)->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 2)
+        ['clients' => $clients, 'vendeurs' => $vendeurs] = \App\Support\LectureGroupee::listes([
+            'clients' => DB::table('clients')->select('clientid', 'nom')->orderBy('nom'),
+            'vendeurs' => DB::table('employees')->select('employeeid', 'nom')->where('isvendeur', true),
+        ]);
 
         return response()->json([
             'tickets' => $tickets,

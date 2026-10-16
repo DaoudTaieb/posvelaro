@@ -20,20 +20,31 @@ class TicketService
      */
     public function preparerLignes(array $lignes): array
     {
+        // Articles de toutes les lignes en UNE requête (au lieu de deux par ligne) : la caisse envoie
+        // l'identifiant de variante ; les autres cas (code, produitid) passent par resoudreVariante().
+        $ids = [];
+        foreach ($lignes as $ligne) {
+            $id = (string) ($ligne['produit2id'] ?? '');
+            if ($id !== '' && ctype_digit($id) && strlen($id) <= 18) {
+                $ids[$id] = true;
+            }
+        }
+        $produits = $ids ? $this->infosProduits(array_keys($ids)) : [];
+
         $detLignes = [];
         foreach ($lignes as $ligne) {
             $libelle = $ligne['designation'] ?? $ligne['reference'] ?? '';
-            $produit2id = $this->resoudreVariante($ligne);
-            if (!$produit2id) {
-                throw new VenteRefusee("Erreur : La variante de l'article " . ($ligne['reference'] ?? '') . ' est introuvable.');
+            $id = (string) ($ligne['produit2id'] ?? '');
+            if (isset($produits[$id])) {
+                $produit2id = (int) $id;
+                $produit = $produits[$id];
+            } else {
+                $produit2id = $this->resoudreVariante($ligne);
+                if (!$produit2id) {
+                    throw new VenteRefusee("Erreur : La variante de l'article " . ($ligne['reference'] ?? '') . ' est introuvable.');
+                }
+                $produit = $this->infosProduits([$produit2id])[(string) $produit2id] ?? null;
             }
-
-            $produit = DB::table('produit2s')
-                ->join('produits', 'produit2s.produitid', '=', 'produits.produitid')
-                ->leftJoin('taxefamilles', 'produits.taxefamilleid', '=', 'taxefamilles.taxefamilleid')
-                ->where('produit2s.produit2id', $produit2id)
-                ->select('produits.produitid', 'produits.taxefamilleid', 'produits.ht_achat', 'produits.ttc_achat', 'taxefamilles.tvavente')
-                ->first();
 
             $tva = (float) ($produit->tvavente ?? 0);
             $qte = (float) ($ligne['qte'] ?? 0);
@@ -93,6 +104,28 @@ class TicketService
             'totalbrutht' => array_sum(array_column($detLignes, 'totalht')),
             'vremise' => array_sum(array_column($detLignes, 'totalttc')) - $totalttc,
         ];
+    }
+
+    /**
+     * Article, famille de taxe, prix d'achat et TVA de plusieurs variantes, indexés par produit2id (texte).
+     *
+     * @param  array<int, int|string> $produit2ids
+     * @return array<string, object>
+     */
+    private function infosProduits(array $produit2ids): array
+    {
+        $resultat = [];
+        $lignes = DB::table('produit2s')
+            ->join('produits', 'produit2s.produitid', '=', 'produits.produitid')
+            ->leftJoin('taxefamilles', 'produits.taxefamilleid', '=', 'taxefamilles.taxefamilleid')
+            ->whereIn('produit2s.produit2id', $produit2ids)
+            ->select('produit2s.produit2id', 'produits.produitid', 'produits.taxefamilleid', 'produits.ht_achat', 'produits.ttc_achat', 'taxefamilles.tvavente')
+            ->get();
+        foreach ($lignes as $ligne) {
+            $resultat[(string) $ligne->produit2id] = $ligne;
+        }
+
+        return $resultat;
     }
 
     /** Variante (produit2id) d'une ligne du panier, à partir de l'identifiant ou du code saisi. */

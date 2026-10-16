@@ -49,6 +49,12 @@ class User extends Authenticatable
     ];
 
     /**
+     * Rôle, droits bloqués et site lus avec l'utilisateur (VelaroUserProvider::retrieveById),
+     * pour éviter trois requêtes de plus à chaque page. Propriété PHP, pas un attribut : jamais écrite en base.
+     */
+    public ?array $precharge = null;
+
+    /**
      * Get the password for authentication.
      * Laravel's auth system looks for getAuthPassword().
      */
@@ -83,6 +89,10 @@ class User extends Authenticatable
     /** Site (magasin) de l'utilisateur. */
     public function siteRecord(): ?object
     {
+        if ($this->precharge !== null && (int) ($this->precharge['site']->siteid ?? 0) === (int) $this->siteid) {
+            return $this->precharge['site'];
+        }
+
         return $this->siteid ? \Illuminate\Support\Facades\DB::table('sites')->where('siteid', $this->siteid)->first() : null;
     }
 

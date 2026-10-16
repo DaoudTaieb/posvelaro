@@ -50,7 +50,7 @@ class StockNegatifController extends Controller
                           WHERE d.produit2id = s.produit2id AND ct.siteid = s.siteid AND ct.enattente = false) as derniere_vente")
             );
 
-        $stocks = $query->orderBy('s.qtestock')->orderBy('p.reference')->paginate(50)->withQueryString();
+        $stocks = $query->orderBy('s.qtestock')->orderBy('p.reference')->paginerVite(50)->withQueryString();
         $site = DB::table('sites')->where('siteid', $siteid)->value('libelle');
 
         return view('stock.negatifs.index', compact('stocks', 'totaux', 'site'));

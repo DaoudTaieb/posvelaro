@@ -11,10 +11,13 @@ class ArticleController extends Controller
     public function index(Request $request)
     {
         // Chargement des listes de filtres
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $rayons = DB::table('categories')->orderBy('categorylibelle')->get();
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 4)
+        ['familles' => $familles, 'sousFamilles' => $sousFamilles, 'rayons' => $rayons, 'saisons' => $saisons] = \App\Support\LectureGroupee::listes([
+            'familles' => DB::table('familles')->select('familleid', 'famillelibelle')->orderBy('famillelibelle'),
+            'sousFamilles' => DB::table('sousfamilles')->select('sousfamilleid', 'sousfamillelibelle', 'familleid', 'is_loyalty_enabled')->orderBy('sousfamillelibelle'),
+            'rayons' => DB::table('categories')->orderBy('categorylibelle'),
+            'saisons' => DB::table('categories4')->orderBy('category4libelle'),
+        ]);
 
         // Récupération des articles avec les jointures (basé sur produit2s)
         $query = DB::table('produit2s')
@@ -55,7 +58,7 @@ class ArticleController extends Controller
         }
 
         // On ordonne par id de produit, puis par variante
-        $articles = $query->orderBy('produits.produitcode')->orderBy('produit2s.produit2id')->paginate(20);
+        $articles = $query->orderBy('produits.produitcode')->orderBy('produit2s.produit2id')->paginerVite(20);
 
         return view('stock.articles.index', compact('articles', 'familles', 'sousFamilles', 'rayons', 'saisons'));
     }

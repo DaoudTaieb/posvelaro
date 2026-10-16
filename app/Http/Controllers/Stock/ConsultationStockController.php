@@ -63,7 +63,7 @@ class ConsultationStockController extends Controller
         // On ordonne par produit, puis variante
         $stocks = $query->orderBy('produits.produitcode')
                         ->orderBy('produit2s.produit2id')
-                        ->paginate(20);
+                        ->paginerVite(20);
 
         return view('stock.consultation.index', compact('stocks', 'rayons', 'typesStock', 'selectedType'));
     }

@@ -17,8 +17,11 @@ class DemandeTransfertEnvoyeController extends Controller
         $siteid = \App\Support\SiteCourant::id();
 
         // Données pour les filtres
-        $sites = DB::table('sites')->orderBy('libelle')->get();
-        $etats = DB::table('etatdemandetransferts')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 2)
+        ['sites' => $sites, 'etats' => $etats] = \App\Support\LectureGroupee::listes([
+            'sites' => DB::table('sites')->orderBy('libelle'),
+            'etats' => DB::table('etatdemandetransferts'),
+        ]);
 
         // Requête principale sur la vue
         $query = DB::table('demandetransfertsviews')
@@ -87,7 +90,7 @@ class DemandeTransfertEnvoyeController extends Controller
         $perPage = $request->input('per_page', 20);
         $demandes = $query->orderBy('demandetransfertdate', 'desc')
                           ->orderBy('demandetransfertnumero', 'desc')
-                          ->paginate($perPage);
+                          ->paginerVite($perPage);
 
         if ($request->ajax()) {
             return response()->json([
@@ -114,11 +117,14 @@ class DemandeTransfertEnvoyeController extends Controller
         $sites = DB::table('sites')->orderBy('libelle')->get();
         
         // Données pour le modal de sélection produit
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get();
-        $categories = DB::table('categories')->orderBy('categorylibelle')->get();
-        $marques = DB::table('categories2')->orderBy('category2libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 5)
+        ['familles' => $familles, 'sousFamilles' => $sousFamilles, 'saisons' => $saisons, 'categories' => $categories, 'marques' => $marques] = \App\Support\LectureGroupee::listes([
+            'familles' => DB::table('familles')->select('familleid', 'famillelibelle')->orderBy('famillelibelle'),
+            'sousFamilles' => DB::table('sousfamilles')->select('sousfamilleid', 'sousfamillelibelle', 'familleid', 'is_loyalty_enabled')->orderBy('sousfamillelibelle'),
+            'saisons' => DB::table('categories4')->orderBy('category4libelle'),
+            'categories' => DB::table('categories')->orderBy('categorylibelle'),
+            'marques' => DB::table('categories2')->orderBy('category2libelle'),
+        ]);
 
         return view('transfert.demande_envoye.create', compact('site', 'sites', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques'));
     }
@@ -342,11 +348,14 @@ class DemandeTransfertEnvoyeController extends Controller
         $site = DB::table('sites')->where('siteid', $siteid)->first();
 
         // Data for modal
-        $sousFamilles = DB::table('sousfamilles')->orderBy('sousfamillelibelle')->get();
-        $familles = DB::table('familles')->orderBy('famillelibelle')->get();
-        $saisons = DB::table('categories4')->orderBy('category4libelle')->get();
-        $categories = DB::table('categories')->orderBy('categorylibelle')->get();
-        $marques = DB::table('categories2')->orderBy('category2libelle')->get();
+        // Listes de référence lues en une seule requête (base distante : un aller-retour au lieu de 5)
+        ['sousFamilles' => $sousFamilles, 'familles' => $familles, 'saisons' => $saisons, 'categories' => $categories, 'marques' => $marques] = \App\Support\LectureGroupee::listes([
+            'sousFamilles' => DB::table('sousfamilles')->select('sousfamilleid', 'sousfamillelibelle', 'familleid', 'is_loyalty_enabled')->orderBy('sousfamillelibelle'),
+            'familles' => DB::table('familles')->select('familleid', 'famillelibelle')->orderBy('famillelibelle'),
+            'saisons' => DB::table('categories4')->orderBy('category4libelle'),
+            'categories' => DB::table('categories')->orderBy('categorylibelle'),
+            'marques' => DB::table('categories2')->orderBy('category2libelle'),
+        ]);
 
         // For simplicity, reusing the create view and passing the existing data
         return view('transfert.demande_envoye.create', compact('sites', 'site', 'sousFamilles', 'familles', 'saisons', 'categories', 'marques', 'demande', 'lignes'));
@@ -438,7 +447,7 @@ class DemandeTransfertEnvoyeController extends Controller
             });
         }
 
-        $products = $query->paginate(20);
+        $products = $query->paginerVite(20);
 
         return response()->json($products);
     }

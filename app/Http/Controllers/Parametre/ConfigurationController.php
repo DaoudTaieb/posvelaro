@@ -116,6 +116,7 @@ class ConfigurationController extends Controller
                     ->update(['value' => $value]);
             }
         });
+        \App\Support\RetailConfig::vider(); // nouvelles valeurs prises en compte immédiatement
 
         return redirect()->route('parametre.configuration.general')->with('success', 'Configuration mise à jour avec succès.');
     }

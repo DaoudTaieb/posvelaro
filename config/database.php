@@ -99,6 +99,15 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
             // Même fuseau que l'application pour les now()/CURRENT_DATE des triggers
             'timezone' => env('DB_TIMEZONE', 'Africa/Tunis'),
+            // Nom visible dans pg_stat_activity (supervision des connexions)
+            'application_name' => 'golden-pos',
+            // Base distante : connexion persistante (évite l'ouverture TCP + authentification à chaque
+            // page) et détection des coupures. Voir App\Database\PostgresConnecteur.
+            'keepalives' => true,
+            'connect_timeout' => env('DB_CONNECT_TIMEOUT', 10),
+            'options' => extension_loaded('pdo_pgsql') ? [
+                PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', false),
+            ] : [],
         ],
 
         'sqlsrv' => [

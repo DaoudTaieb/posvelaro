@@ -14,10 +14,6 @@ class TransfertRecuController extends Controller
     {
         $siteid = \App\Support\SiteCourant::id(); // Nous sommes le récepteur
 
-        $etats = DB::table('etatbontranferts')->where('etatbontransfertid', '>', 1)->get();
-        $sites = DB::table('sites')->get();
-        $siteRecepteur = DB::table('sites')->where('siteid', $siteid)->first();
-        $siteLibelle = $siteRecepteur ? $siteRecepteur->libelle : 'Golden Pos';
 
         $query = DB::table('bontransferts as b')
             ->join('sites as rec', 'rec.siteid', '=', 'b.siterecepteurid')
@@ -28,10 +24,21 @@ class TransfertRecuController extends Controller
             ->where('b.etatbontransfertid', '>', 1); // Les brouillons de l'expéditeur ne sont pas visibles
 
         // Calcul des KPIs
-        $kpiQuery = clone $query;
-        $totalBons = $kpiQuery->count();
-        $aTraiter = (clone $query)->whereIn('b.etatbontransfertid', [2])->count(); // Envoyé, en attente de réception
-        $valides = (clone $query)->where('b.etatbontransfertid', 3)->count(); // Reçu/Validé
+        // Trois compteurs, états et sites en une seule requête.
+        // À traiter = envoyé, en attente de réception ; validés = reçus.
+        ['etats' => $etats, 'sites' => $sites, 'kpi' => $kpi] = \App\Support\LectureGroupee::listes([
+            'etats' => DB::table('etatbontranferts')->where('etatbontransfertid', '>', 1),
+            'sites' => DB::table('sites'),
+            'kpi' => (clone $query)->selectRaw(
+                'count(*) AS total, count(*) FILTER (WHERE b.etatbontransfertid = 2) AS a_traiter, count(*) FILTER (WHERE b.etatbontransfertid = 3) AS valides'
+            ),
+        ]);
+        $kpi = $kpi->first();
+        $siteRecepteur = $sites->firstWhere('siteid', $siteid);
+        $siteLibelle = $siteRecepteur ? $siteRecepteur->libelle : 'Golden Pos';
+        $totalBons = (int) $kpi->total;
+        $aTraiter = (int) $kpi->a_traiter;
+        $valides = (int) $kpi->valides;
 
         $query->select(
             'emet.siteabrege as emetteur_code',
@@ -97,7 +104,7 @@ class TransfertRecuController extends Controller
 
         $bontransferts = $query->orderBy('b.bontransfertdate', 'desc')
                                ->orderBy('b.bontransfertnumero', 'desc')
-                               ->paginate($request->get('per_page', 20));
+                               ->paginerVite($request->get('per_page', 20));
 
         if ($request->ajax()) {
             return response()->json([

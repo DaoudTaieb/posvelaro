@@ -64,7 +64,7 @@ class FideliteService
      * @param  int|null $exclureTicketId  ticket à ne pas compter (celui en cours d'enregistrement)
      * @return array{eligible: bool, ventes: int, palier: int, debut: ?Carbon, expiree: bool, bons_disponibles: float}
      */
-    public function etat(?object $client, ?Carbon $now = null, ?int $exclureTicketId = null): array
+    public function etat(?object $client, ?Carbon $now = null, ?int $exclureTicketId = null, bool $avecBons = true): array
     {
         $now = $now ?? now();
         $p = $this->parametres();
@@ -74,7 +74,9 @@ class FideliteService
             return $etat;
         }
         $etat['eligible'] = true;
-        $etat['bons_disponibles'] = $this->soldeBons((int) $client->clientid, $now);
+        if ($avecBons) {
+            $etat['bons_disponibles'] = $this->soldeBons((int) $client->clientid, $now);
+        }
 
         $debut = !empty($client->fidelite_debut) ? Carbon::parse($client->fidelite_debut) : null;
 
@@ -124,24 +126,26 @@ class FideliteService
             return $resultats;
         }
 
-        // Dates des ventes validées (tickets positifs) de tous les clients éligibles
-        $ventes = DB::table('ctickets')
-            ->whereIn('clientid', array_keys($eligibles))
-            ->where('enattente', false)
-            ->where('totalttc', '>', 0)
-            ->get(['clientid', 'cticketdate'])
+        // Dates des ventes validées (tickets positifs) et bons d'achat utilisables de tous les clients
+        // éligibles : les deux lectures en une seule requête (base distante)
+        ['ventes' => $ventes, 'bons' => $bons] = \App\Support\LectureGroupee::listes([
+            'ventes' => DB::table('ctickets')
+                ->whereIn('clientid', array_keys($eligibles))
+                ->where('enattente', false)
+                ->where('totalttc', '>', 0)
+                ->select('clientid', 'cticketdate'),
+            'bons' => DB::table('bons_achat')
+                ->whereIn('clientid', array_keys($eligibles))
+                ->where('utilise', false)
+                ->where('annule', false)
+                ->where('montant', '>', 0)
+                ->whereDate('date_expiration', '>=', $now->toDateString())
+                ->orderBy('date_expiration'),
+        ]);
+        $ventes = $ventes
             ->groupBy('clientid')
             ->map(fn ($lignes) => $lignes->map(fn ($l) => Carbon::parse($l->cticketdate))->all());
-
-        // Bons d'achat utilisables, groupés par client
-        $bons = DB::table('bons_achat')
-            ->whereIn('clientid', array_keys($eligibles))
-            ->where('utilise', false)
-            ->where('annule', false)
-            ->where('montant', '>', 0)
-            ->whereDate('date_expiration', '>=', $now->toDateString())
-            ->orderBy('date_expiration')
-            ->get()
+        $bons = $bons
             ->map(function ($bon) {
                 $bon->numero = $this->numeroBon((int) $bon->id);
                 return $bon;
@@ -195,7 +199,8 @@ class FideliteService
     {
         $now = $now ?? now();
         $p = $this->parametres();
-        $etat = $this->etat($client, $now, $cticketid);
+        // Solde des bons inutile ici : recalculerSolde() le remet à jour en fin de vente
+        $etat = $this->etat($client, $now, $cticketid, false);
         if (!$etat['eligible']) {
             return null;
         }
@@ -339,9 +344,14 @@ class FideliteService
     /** Synchronise clients.soldefidelite (affiché en caisse) avec les bons disponibles. */
     public function recalculerSolde(int $clientid, ?Carbon $now = null): void
     {
-        DB::table('clients')->where('clientid', $clientid)->update([
-            'soldefidelite' => $this->soldeBons($clientid, $now),
-        ]);
+        // Calcul et mise à jour en une seule instruction (mêmes conditions que soldeBons())
+        $now = $now ?? now();
+        DB::update(<<<'SQL'
+            UPDATE clients SET soldefidelite = (
+                SELECT ROUND(COALESCE(SUM(montant), 0), 3) FROM bons_achat
+                 WHERE clientid = ? AND utilise = false AND annule = false AND date_expiration::date >= ?::date
+            ) WHERE clientid = ?
+            SQL, [$clientid, $now->toDateString(), $clientid]);
     }
 
     /** Numéro imprimé / scanné d'un bon : préfixe + identifiant sur 6 chiffres (ex. BA000123). */

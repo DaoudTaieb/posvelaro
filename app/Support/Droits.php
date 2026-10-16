@@ -104,6 +104,12 @@ class Droits
             return $cache[$userid];
         }
 
+        // Rôle et droits déjà lus avec l'utilisateur (une seule requête, VelaroUserProvider)
+        $precharge = $user->precharge ?? null;
+        if (is_array($precharge) && (int) ($precharge['role']->userdroitid ?? 0) === (int) ($user->userdroitid ?? -1)) {
+            return $cache[$userid] = ['role' => $precharge['role'], 'bloques' => $precharge['bloques']];
+        }
+
         $userdroitid = $user->userdroitid
             ?? DB::table('users')->where('userid', $userid)->value('userdroitid');
 

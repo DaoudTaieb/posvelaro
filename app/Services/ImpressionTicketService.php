@@ -34,10 +34,18 @@ class ImpressionTicketService
         'goldenpos_tiroir' => ['Golden Pos : ouvrir le tiroir-caisse', 'False', 2],
     ];
 
+    private const CLE_CACHE = 'goldenpos.caisseconfigs.';
+
     /** @return array{caisseid: int, mode: string, imprimante: string, reseau: string, colonnes: int, accents: bool, tiroir: bool} */
     public function configuration(int $caisseid): array
     {
-        $valeurs = DB::table('caisseconfigs')->where('caisseid', $caisseid)->pluck('value', 'libelle');
+        // Relu à l'ouverture de la caisse et à chaque ticket : cache d'une minute, vidé à l'enregistrement
+        // (un changement fait depuis le logiciel de bureau s'applique au plus tard une minute après).
+        $valeurs = \Illuminate\Support\Facades\Cache::remember(
+            self::CLE_CACHE . $caisseid,
+            60,
+            fn () => DB::table('caisseconfigs')->where('caisseid', $caisseid)->pluck('value', 'libelle')->all()
+        );
         $mode = (string) ($valeurs['goldenpos_impression_mode'] ?? 'navigateur');
 
         return [
@@ -66,6 +74,7 @@ class ImpressionTicketService
             $this->ecrire($caisseid, 'goldenpos_accents', !empty($c['accents']) ? 'True' : 'False');
             $this->ecrire($caisseid, 'goldenpos_tiroir', !empty($c['tiroir']) ? 'True' : 'False');
         });
+        \Illuminate\Support\Facades\Cache::forget(self::CLE_CACHE . $caisseid);
     }
 
     /**
@@ -73,9 +82,10 @@ class ImpressionTicketService
      *
      * @return array{ok: bool, mode: string, message: string}
      */
-    public function imprimerTicket(int $cticketid, bool $ouvrirTiroir = false): array
+    public function imprimerTicket(int $cticketid, bool $ouvrirTiroir = false, ?int $caisseid = null): array
     {
-        $caisseid = (int) DB::table('ctickets')->where('cticketid', $cticketid)->value('caisseid');
+        // Caisse connue de l'appelant (validation du ticket) : pas de relecture du ticket
+        $caisseid = $caisseid ?: (int) DB::table('ctickets')->where('cticketid', $cticketid)->value('caisseid');
         $config = $this->configuration($caisseid);
         if ($config['mode'] === 'navigateur') {
             return ['ok' => false, 'mode' => 'navigateur', 'message' => 'Impression par le navigateur.'];
@@ -125,7 +135,7 @@ class ImpressionTicketService
         abort_unless($ticket, 404, 'Ticket introuvable');
         $config ??= $this->configuration((int) $ticket->caisseid);
 
-        $societe = DB::table('societes')->orderBy('societeid')->first();
+        $societe = \App\Support\Societe::courante();
         $caisse = DB::table('caisses')->where('caisseid', $ticket->caisseid)->first();
         $caissier = DB::table('users')->where('userid', $ticket->caissierid ?: $ticket->userid)->value('login');
         $vendeur = DB::table('employees')->where('employeeid', $ticket->employeeid)->first();
