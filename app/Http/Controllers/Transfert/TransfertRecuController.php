@@ -185,14 +185,19 @@ class TransfertRecuController extends Controller
                 return redirect()->route('transfert.recu.index')->with('error', 'Ce bon de transfert ne peut pas être réceptionné (introuvable, non envoyé, déjà réceptionné ou destiné à un autre site).');
             }
 
-            // Uniquement les lignes de ce bon. Le passage de la ligne à l'état 3 crédite le stock
-            // du site récepteur via le trigger calcul_stock (qterecu).
+            // Uniquement les lignes de ce bon. Le passage de la ligne à l'état 3 crédite le stock du site
+            // récepteur via le trigger calcul_stock (cbl_stock) du logiciel de bureau, qui lit la colonne qte
+            // (= quantité expédiée) et non qterecu. Un écart de réception est donc enregistré (qteecart,
+            // observation) mais ne modifie pas le stock : il doit être régularisé par un bon de sortie
+            // ou un inventaire sur le site récepteur.
             $lignes = DB::table('detbontransferts')->where('bontransfertid', $id)->get();
+            $ecartTotal = 0.0;
 
             foreach ($lignes as $ligne) {
                 $data = $receptions[$ligne->detbontransfertid] ?? [];
                 $qteenvoi = (float) $ligne->qteenvoi;
                 $qterecu = max(0, min((float) ($data['qte_recue'] ?? 0), $qteenvoi));
+                $ecartTotal += $qteenvoi - $qterecu;
 
                 DB::table('detbontransferts')
                     ->where('detbontransfertid', $ligne->detbontransfertid)
@@ -210,7 +215,13 @@ class TransfertRecuController extends Controller
                 ->where('bontransfertid', $id)
                 ->update(['etatbontransfertid' => 3]); // 3 = Reçu/Validé
 
-            return redirect()->route('transfert.recu.index')->with('success', 'Bon de transfert réceptionné avec succès.');
+            $message = 'Bon de transfert réceptionné avec succès.';
+            if ($ecartTotal > 0.0005) {
+                $message .= ' Attention : écart de réception de ' . rtrim(rtrim(number_format($ecartTotal, 3, '.', ''), '0'), '.')
+                    . ' article(s). Le stock du site a été crédité de la quantité expédiée (règle du logiciel de bureau) : régularisez l\'écart par un bon de sortie ou un inventaire.';
+            }
+
+            return redirect()->route('transfert.recu.index')->with('success', $message);
         });
     }
 }

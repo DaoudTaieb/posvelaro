@@ -129,18 +129,27 @@ class PosVenteTest extends TestCase
 
     public function test_pos_fidelite_bon_achat_generation()
     {
-        // Utiliser un client existant pour éviter les erreurs de contraintes DB
-        $clientRecord = DB::table('clients')->first();
-        if (!$clientRecord) {
-            $this->markTestSkipped('Aucun client trouvé dans la BDD.');
+        // Client fidélité de test avec 3 ventes déjà validées dans le cycle : la vente suivante est la 4ème
+        $clientId = DB::table('clients')->insertGetId([
+            'nom' => 'TEST FIDELITE POS', 'prenom' => 'Vente', 'clientcode' => 'TSTF' . uniqid(), 'code' => 0,
+            'fidelite' => true, 'credit' => true, 'bloque' => false, 'tel' => '98 000 000',
+            'clientfamilleid' => DB::table('clientfamilles')->value('clientfamilleid'),
+            'echeance' => 0, 'impaye' => 0, 'plafonecheance' => 0, 'plafonsolde' => 0,
+            'solde' => 0, 'soldeinitial' => 0, 'remise' => 0, 'soldefidelite' => 0, 'cumulfidelite' => 0, 'pointfidelite' => 0,
+            'fidelite_debut' => now()->subDays(30),
+        ], 'clientid');
+        $journal = DB::table('journalcaisses')->orderByDesc('journalcaisseid')->first();
+        foreach ([20, 15, 10] as $j) {
+            DB::table('ctickets')->insert([
+                'clientid' => $clientId, 'siteid' => $journal->siteid, 'cticketnumero' => 9800000000 + random_int(1, 99999999),
+                'modepieceid' => 1, 'etatblid' => 1, 'transfere' => 0, 'datecreation' => now()->subDays($j), 'cticketdate' => now()->subDays($j),
+                'totalbrutht' => 100, 'remise' => 0, 'vremise' => 0, 'totalnetht' => 100, 'totaltva' => 0, 'totalttc' => 100,
+                'acompte' => 100, 'netapayer' => 0, 'totalqte' => 1, 'caissierid' => $journal->userid, 'employeeid' => $journal->employeeid,
+                'journalcaisseid' => $journal->journalcaisseid, 'caisseid' => $journal->caisseid, 'retour' => 0, 'totalavremise' => 100,
+                'userid' => $journal->userid, 'vierge' => 0, 'totalfidelite' => 0, 'totalhtachat' => 0, 'totalttcachat' => 0,
+                'margeht' => 0, 'margettc' => 0, 'pmargeht' => 0, 'pmargettc' => 0, 'enattente' => false, 'modestock' => 1, 'totalqtettans' => 1,
+            ]);
         }
-        $clientId = $clientRecord->clientid;
-
-        // Le rendre fidèle
-        DB::table('clients')->where('clientid', $clientId)->update([
-            'fidelite' => 1,
-            'total_ventes_fidelite' => 3
-        ]);
 
         $produit2 = DB::table('produit2s')->first();
         if (!$produit2) {
@@ -171,16 +180,28 @@ class PosVenteTest extends TestCase
         ];
 
         $response = $this->postJson(route('vente.caisse.store'), $payload);
-        $response->assertStatus(200);
+        $response->assertStatus(200)->assertJsonPath('success', true);
 
-        // Vérifier l'augmentation du compteur de ventes
-        $client = DB::table('clients')->where('clientid', $clientId)->first();
-        $this->assertEquals(4, $client->total_ventes_fidelite, 'Le compteur de vente n\'a pas été incrémenté à 4');
-
-        // Vérifier la génération du bon d'achat (3 paires * 10 = 30€)
+        // 4ème vente : un bon de 3 paires x 10 DT = 30 DT est généré et renvoyé à la caisse
         $bon = DB::table('bons_achat')->where('clientid', $clientId)->first();
-        
         $this->assertNotNull($bon, 'Le bon d\'achat de fidélité n\'a pas été généré');
-        $this->assertEquals(30, $bon->montant, 'Le montant du bon d\'achat doit être de 30');
+        $this->assertEquals(30, (float) $bon->montant, 'Le montant du bon d\'achat doit être de 30');
+        $this->assertEquals(now()->addMonths(3)->toDateString(), (string) $bon->date_expiration);
+        $response->assertJsonPath('bon_achat.montant', 30)
+            ->assertJsonPath('client_tel', '98 000 000')
+            ->assertJsonPath('is_first_sale', false);
+        $this->assertStringContainsString("bon d'achat de 30.000 DT", $response->json('sms_message'));
+
+        // Le solde fidélité affiché en caisse suit les bons disponibles, et le palier reste à 30 %
+        $client = DB::table('clients')->where('clientid', $clientId)->first();
+        $this->assertEquals(30, (float) $client->soldefidelite);
+        $this->assertSame(30, app(\App\Services\FideliteService::class)->palier($client));
+
+        // Le bon est accepté comme règlement d'une vente suivante, puis refusé une seconde fois
+        $numero = app(\App\Services\FideliteService::class)->numeroBon((int) $bon->id);
+        $payload['reglements'] = [['modereglementid' => 10, 'montant' => 30, 'numero' => $numero], ['modereglementid' => 1, 'montant' => 120]];
+        $this->postJson(route('vente.caisse.store'), $payload)->assertStatus(200)->assertJsonPath('success', true);
+        $this->assertTrue((bool) DB::table('bons_achat')->where('id', $bon->id)->value('utilise'));
+        $this->postJson(route('vente.caisse.store'), $payload)->assertStatus(200)->assertJsonPath('success', false);
     }
 }

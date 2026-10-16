@@ -129,8 +129,13 @@
             Vous avez gagné un Bon d'Achat de :<br>
             <span style="font-size: 14px;">{{ number_format($bon->montant ?? 0, 3, '.', '') }} DT</span>
         </div>
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: 1px;">BON N° {{ $bon->numero ?? $bon->id }}</div>
+        @if(!empty($bon->barcode_svg))
+        <div style="display: flex; justify-content: center; margin: 4px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact;">{!! $bon->barcode_svg !!}</div>
+        @endif
         <div style="font-size: 10px;">
             Valable jusqu'au {{ \Carbon\Carbon::parse($bon->date_expiration)->format('d/m/Y') }}
+            @if(!$bon->utilise) &middot; à présenter en caisse @else &middot; utilisé @endif
         </div>
         @endforeach
     </div>

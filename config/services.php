@@ -28,8 +28,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Bip SMS (bulksms.bipsms.tn). Les lignes bipsms_* de retailconfigs l'emportent si renseignées.
     'bipsms' => [
         'key' => env('BIPSMS_KEY'),
+        'sender' => env('BIPSMS_SENDER', 'GOLDENPOS'),
+        'url' => env('BIPSMS_URL', 'http://bulksms.bipsms.tn/Api/Api.aspx'),
     ],
 
     'slack' => [

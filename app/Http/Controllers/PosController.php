@@ -4,40 +4,40 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
+use App\Services\FideliteService;
+use App\Services\SmsService;
 
 class PosController extends Controller
 {
+    public function __construct(
+        private readonly FideliteService $fidelite,
+        private readonly SmsService $sms,
+    ) {
+    }
+
+    /**
+     * Remise fidélité (%) applicable à la prochaine vente du client. Lecture seule : l'état de la
+     * carte (ventes, expiration) est calculé depuis les tickets par FideliteService.
+     */
     public function getLoyaltyTier($client)
     {
-        if (!$client || empty($client->fidelite) || $client->clientid == 1 || strtoupper($client->nom) === 'PASSAGER') {
-            return 0;
-        }
-        
-        $ventes = (int) $client->total_ventes_fidelite;
-        
-        if ($ventes > 0 && $client->date_premiere_vente) {
-            $firstSaleDate = \Carbon\Carbon::parse($client->date_premiere_vente);
-            if ($firstSaleDate->lt(now()->subYear())) {
-                $salesLastYear = DB::table('ctickets')
-                    ->where('clientid', $client->clientid)
-                    ->where('enattente', false)
-                    ->where('cticketdate', '>=', now()->subYear())
-                    ->count();
-                if ($salesLastYear < 2) {
-                    $ventes = 0;
-                    DB::table('clients')->where('clientid', $client->clientid)->update([
-                        'total_ventes_fidelite' => 0,
-                        'date_premiere_vente' => null
-                    ]);
-                }
-            }
-        }
-        
-        if ($ventes == 0) return 10;
-        if ($ventes == 1) return 20;
-        if ($ventes >= 2) return 30;
-        return 0;
+        return $this->fidelite->palier($client);
+    }
+
+    /**
+     * Complète une fiche client (stdClass) avec les informations fidélité renvoyées à la caisse.
+     */
+    private function enrichirClient(object $client): object
+    {
+        $etat = $this->fidelite->etat($client);
+        $client->loyalty_tier = $etat['palier'];
+        $client->fidelite_ventes = $etat['ventes'];
+        $client->fidelite_expiree = $etat['expiree'];
+        $client->num_fidelite = $client->barcode ?? null; // n° de carte = colonne barcode (partagée avec le bureau)
+        $client->soldefidelite = $etat['bons_disponibles'];
+        $client->bons_disponibles = $etat['eligible'] ? $this->fidelite->bonsDisponibles((int) $client->clientid)->values() : [];
+
+        return $client;
     }
 
     public function index()
@@ -311,10 +311,18 @@ class PosController extends Controller
     {
         $request->validate([
             'raison' => 'required|string|max:255',
+            'prenom' => 'nullable|string|max:255',
             'telephone' => 'required|string|max:255',
+            'num_fidelite' => 'nullable|string|max:50',
+            'date_naissance' => 'nullable|date',
         ]);
 
         try {
+            $numFidelite = trim((string) $request->input('num_fidelite', ''));
+            if ($numFidelite !== '' && DB::table('clients')->where('barcode', $numFidelite)->exists()) {
+                return response()->json(['success' => false, 'message' => "Le n° de carte fidélité {$numFidelite} est déjà attribué à un autre client."], 422);
+            }
+
             $nextId = DB::table('clients')->max('clientid') + 1;
             $clientCode = '411' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
 
@@ -328,11 +336,10 @@ class PosController extends Controller
                 'credit' => 1,
                 'mf' => $request->matricule_fiscal,
                 'fidelite' => $request->has('g_fidelite') ? 1 : 0,
-                'barcode' => $request->num_fidelite,
-                'num_fidelite' => $request->num_fidelite, // Just in case, save to both
+                'barcode' => $numFidelite !== '' ? $numFidelite : null, // n° carte fidélité (colonne du bureau)
                 'tel' => $request->telephone ?? '',
                 'email' => $request->email ?? '',
-                'datenaissance' => $request->date_naissance ?? '1900-01-01',
+                'datenaissance' => $request->filled('date_naissance') ? $request->date_naissance : '1900-01-01',
                 'ville' => $request->ville ?? '',
                 'adressefacturation' => $request->adresse,
                 'adresselivraison' => $request->adresse,
@@ -354,7 +361,7 @@ class PosController extends Controller
                 'pointfidelite' => 0,
             ], 'clientid');
 
-            $client = DB::table('clients')->where('clientid', $id)->first();
+            $client = $this->enrichirClient(DB::table('clients')->where('clientid', $id)->first());
 
             return response()->json([
                 'success' => true,
@@ -377,8 +384,7 @@ class PosController extends Controller
         if (!$client) {
             return response()->json(['success' => false, 'message' => 'Client introuvable'], 404);
         }
-        $client->loyalty_tier = $this->getLoyaltyTier($client);
-        return response()->json(['success' => true, 'client' => $client]);
+        return response()->json(['success' => true, 'client' => $this->enrichirClient($client)]);
     }
 
     /**
@@ -388,27 +394,38 @@ class PosController extends Controller
     {
         $request->validate([
             'raison' => 'required|string|max:255',
+            'prenom' => 'nullable|string|max:255',
             'telephone' => 'required|string|max:255',
+            'num_fidelite' => 'nullable|string|max:50',
+            'date_naissance' => 'nullable|date',
         ]);
 
         try {
-            DB::table('clients')->where('clientid', $id)->update([
+            $numFidelite = trim((string) $request->input('num_fidelite', ''));
+            if ($numFidelite !== '' && DB::table('clients')->where('barcode', $numFidelite)->where('clientid', '!=', $id)->exists()) {
+                return response()->json(['success' => false, 'message' => "Le n° de carte fidélité {$numFidelite} est déjà attribué à un autre client."], 422);
+            }
+
+            $data = [
                 'nom' => $request->raison,
                 'prenom' => $request->prenom,
                 'bloquercredit' => $request->has('bloque_credit') ? 1 : 0,
                 'mf' => $request->matricule_fiscal,
                 'fidelite' => $request->has('g_fidelite') ? 1 : 0,
-                'barcode' => $request->num_fidelite,
-                'num_fidelite' => $request->num_fidelite,
+                'barcode' => $numFidelite !== '' ? $numFidelite : null,
                 'tel' => $request->telephone,
                 'email' => $request->email,
-                'datenaissance' => $request->date_naissance,
                 'ville' => $request->ville,
                 'adressefacturation' => $request->adresse,
                 'adresselivraison' => $request->adresse,
-            ]);
+            ];
+            // datenaissance est NOT NULL en base : on ne l'écrase que si une date est fournie
+            if ($request->filled('date_naissance')) {
+                $data['datenaissance'] = $request->date_naissance;
+            }
+            DB::table('clients')->where('clientid', $id)->update($data);
 
-            $client = DB::table('clients')->where('clientid', $id)->first();
+            $client = $this->enrichirClient(DB::table('clients')->where('clientid', $id)->first());
 
             return response()->json([
                 'success' => true,
@@ -456,9 +473,9 @@ class PosController extends Controller
             ->select(
                 'ctickets.cticketdate as date',
                 'ctickets.cticketnumero as ticket',
-                'clients.nom as client',
+                DB::raw("TRIM(clients.nom || ' ' || COALESCE(clients.prenom, '')) as client"),
                 'clients.tel as telephone',
-                'clients.num_fidelite as carte',
+                'clients.barcode as carte',
                 'produits.reference',
                 'produits.produitlibelle as designation',
                 'couleurs.couleurlibelle as couleur',
@@ -467,18 +484,31 @@ class PosController extends Controller
                 'detctickets.ttc',
                 'detctickets.totalttcnet as totalttc'
             )
-            ->where('ctickets.enattente', false);
+            ->where('ctickets.enattente', false)
+            ->where('ctickets.clientid', '!=', (int) config('pos.client_passager_id'));
 
+        // Filtre client : nom, prénom, téléphone ou n° de carte fidélité (carte / téléphone : correspondance exacte prioritaire)
         if ($request->filled('q')) {
-            $search = '%' . strtolower($request->q) . '%';
-            $query->where(function($q) use ($search) {
+            $brut = trim((string) $request->q);
+            $search = '%' . strtolower($brut) . '%';
+            $chiffres = preg_replace('/\D+/', '', $brut) ?? '';
+            $query->where(function($q) use ($search, $chiffres) {
                 $q->whereRaw('LOWER(clients.nom) LIKE ?', [$search])
-                  ->orWhereRaw('LOWER(clients.tel) LIKE ?', [$search])
-                  ->orWhereRaw('LOWER(clients.num_fidelite) LIKE ?', [$search]);
+                  ->orWhereRaw('LOWER(COALESCE(clients.prenom, \'\')) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(COALESCE(clients.barcode, \'\')) LIKE ?', [$search]);
+                if ($chiffres !== '') {
+                    $q->orWhereRaw("regexp_replace(COALESCE(clients.tel, ''), '\\D', '', 'g') LIKE ?", ['%' . $chiffres . '%']);
+                }
             });
         }
+        if ($request->filled('du')) {
+            $query->whereDate('ctickets.cticketdate', '>=', $request->du);
+        }
+        if ($request->filled('au')) {
+            $query->whereDate('ctickets.cticketdate', '<=', $request->au);
+        }
 
-        $history = $query->orderBy('ctickets.cticketdate', 'desc')->limit(100)->get();
+        $history = $query->orderBy('ctickets.cticketdate', 'desc')->limit(200)->get();
 
         return response()->json([
             'success' => true,
@@ -492,46 +522,74 @@ class PosController extends Controller
     public function sendSms(Request $request)
     {
         $request->validate([
-            'telephone' => ['required', 'string', 'regex:/^\+?[0-9 ]{8,15}$/'],
-            'message' => 'required|string|max:480'
+            'telephone' => ['required', 'string', 'regex:/^\+?[0-9 .\-]{8,20}$/'],
+            'message' => 'required|string|max:480',
+            'clientid' => 'nullable|integer',
+            'cticketid' => 'nullable|integer',
         ]);
 
-        // Clean phone number: remove '+' and spaces (API expects international format without +)
-        $tel = str_replace(['+', ' '], '', $request->telephone);
-        $msg = $request->message;
+        $resultat = $this->sms->envoyer($request->telephone, $request->message, [
+            'clientid' => $request->input('clientid'),
+            'cticketid' => $request->input('cticketid'),
+        ]);
 
-        // Nouvelle intégration Bip SMS (bulksms.bipsms.tn)
-        // Endpoint: http://bulksms.bipsms.tn/Api/Api.aspx?fct=sms&key=KEY&mobile=PHONE&sms=MSG&sender=SENDER
-        $key = DB::table('retailconfigs')->where('libelle', 'bipsms_key')->value('value') ?? config('services.bipsms.key');
-        if (!$key) {
-            return response()->json(['success' => false, 'message' => "Service SMS non configuré (clé API manquante)."]);
+        return response()->json($resultat);
+    }
+
+    /**
+     * Vérifie un bon d'achat saisi ou scanné dans la caisse (mode de règlement « Bon d'achat »).
+     */
+    public function checkBonAchat(Request $request)
+    {
+        $code = trim((string) $request->input('code', ''));
+        if ($code === '') {
+            return response()->json(['success' => false, 'message' => 'Veuillez saisir ou scanner le numéro du bon.']);
         }
-        $sender = DB::table('retailconfigs')->where('libelle', 'bipsms_sender')->value('value') ?? 'VELARO';
-        $apiUrl = DB::table('retailconfigs')->where('libelle', 'bipsms_url')->value('value') ?? 'http://bulksms.bipsms.tn/Api/Api.aspx';
-
-        try {
-            $response = Http::get($apiUrl, [
-                'fct' => 'sms',
-                'key' => $key,
-                'sender' => $sender,
-                'mobile' => $tel,
-                'sms' => $msg,
-                'date' => date('d/m/Y'),
-                'heure' => date('H:i:s')
-            ]);
-            
-            // L'API renvoie un XML avec un <status_code>200</status_code> en cas de succès
-            $success = $response->successful() && str_contains($response->body(), '200');
-            \Log::info("SMS Envoyé à $tel : $msg - Reponse: " . $response->body());
-
-            if ($success) {
-                return response()->json(['success' => true, 'message' => 'SMS envoyé avec succès!']);
-            } else {
-                return response()->json(['success' => false, 'message' => 'Erreur lors de l\'envoi du SMS.']);
-            }
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Erreur Exception: ' . $e->getMessage()]);
+        $clientid = $request->filled('clientid') ? (int) $request->input('clientid') : null;
+        if ($clientid === (int) config('pos.client_passager_id')) {
+            $clientid = null;
         }
+
+        $verif = $this->fidelite->verifierBon($code, $clientid);
+        if ($verif['erreur']) {
+            return response()->json(['success' => false, 'message' => $verif['erreur']]);
+        }
+        $bon = $verif['bon'];
+        $client = DB::table('clients')->where('clientid', $bon->clientid)->first();
+
+        return response()->json([
+            'success' => true,
+            'bon' => [
+                'id' => $bon->id,
+                'numero' => $bon->numero,
+                'montant' => (float) $bon->montant,
+                'date_expiration' => $bon->date_expiration,
+                'clientid' => $bon->clientid,
+                'client_nom' => trim(($client->nom ?? '') . ' ' . ($client->prenom ?? '')),
+                'client_tel' => $client->tel ?? '',
+            ],
+        ]);
+    }
+
+    /**
+     * Bons d'achat utilisables d'un client (liste proposée dans la caisse).
+     */
+    public function bonsClient($id)
+    {
+        $client = DB::table('clients')->where('clientid', $id)->first();
+        if (!$client) {
+            return response()->json(['success' => false, 'message' => 'Client introuvable'], 404);
+        }
+        $etat = $this->fidelite->etat($client);
+
+        return response()->json([
+            'success' => true,
+            'eligible' => $etat['eligible'],
+            'palier' => $etat['palier'],
+            'ventes' => $etat['ventes'],
+            'solde' => $etat['bons_disponibles'],
+            'bons' => $etat['eligible'] ? $this->fidelite->bonsDisponibles((int) $client->clientid)->values() : [],
+        ]);
     }
 
     /**
@@ -670,8 +728,10 @@ class PosController extends Controller
             $search = '%' . strtolower($request->q) . '%';
             $query->where(function($q) use ($search) {
                 $q->whereRaw('LOWER(nom) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(COALESCE(prenom, \'\')) LIKE ?', [$search])
                   ->orWhereRaw('LOWER(clientcode) LIKE ?', [$search])
                   ->orWhereRaw('LOWER(tel) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(COALESCE(barcode, \'\')) LIKE ?', [$search])
                   ->orWhereRaw('LOWER(CAST(clientid AS TEXT)) LIKE ?', [$search]);
             });
         }
@@ -686,23 +746,12 @@ class PosController extends Controller
         if ($request->filled('f_plafonremise')) $query->where('plafonremise', $request->f_plafonremise);
         if ($request->filled('f_solde')) $query->where('solde', $request->f_solde);
 
-        $clients = $query->select('clientid', 'clientcode', 'nom', 'tel', 'adressefacturation', 'mf', 'remise', 'plafonremise', 'solde', 'ville', 'soldefidelite', 'pointfidelite', 'fidelite', 'total_ventes_fidelite', 'date_premiere_vente')
+        $clients = $query->select('clientid', 'clientcode', 'nom', 'prenom', 'tel', 'adressefacturation', 'mf', 'remise', 'plafonremise', 'solde', 'ville', 'soldefidelite', 'pointfidelite', 'fidelite', 'barcode', 'fidelite_debut')
             ->orderBy('nom')
             ->paginate(15);
-            
-        // Map over the items to calculate loyalty_tier and override soldefidelite
-        $clients->getCollection()->transform(function ($client) {
-            $client->loyalty_tier = $this->getLoyaltyTier($client);
-            
-            // Override soldefidelite using our bons_achat table to bypass DB triggers
-            $bonsAchatTotal = DB::table('bons_achat')
-                ->where('clientid', $client->clientid)
-                ->where('utilise', false)
-                ->sum('montant');
-            $client->soldefidelite = $bonsAchatTotal;
-            
-            return $client;
-        });
+
+        // Palier de remise et solde des bons d'achat disponibles, calculés par FideliteService
+        $clients->getCollection()->transform(fn ($client) => $this->enrichirClient($client));
 
         return response()->json($clients);
     }

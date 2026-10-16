@@ -179,7 +179,7 @@ class TransfertScenariosExtendedTest extends TestCase
             'taxe4' => 0, 'vtaxe4' => 0,
             'tva' => 19, 'vtva' => 0, 'totalttc' => 59.5, 'totalttcnet' => 59.5,
             'date' => now(), 'largeur' => 0, 'longueur' => 0, 'surface' => 0,
-            'pointer' => false, 'ordre' => 1, 'prodid' => $produit->produitid,
+            'pointer' => false, 'ordre' => 1, 'prodid' => 0, // colonne integer, produitid bigint : même convention que le code
             'modestock' => 1
         ]);
 
@@ -351,7 +351,7 @@ class TransfertScenariosExtendedTest extends TestCase
             'taxe4' => 0, 'vtaxe4' => 0,
             'tva' => 19, 'vtva' => 0, 'totalttc' => 238, 'totalttcnet' => 238,
             'date' => now(), 'largeur' => 0, 'longueur' => 0, 'surface' => 0,
-            'pointer' => false, 'ordre' => 1, 'prodid' => $produit->produitid,
+            'pointer' => false, 'ordre' => 1, 'prodid' => 0, // colonne integer, produitid bigint : même convention que le code
             'modestock' => 1, 'modereceptionid' => 1, 'stockorigineid' => 1
         ]);
 
@@ -442,7 +442,7 @@ class TransfertScenariosExtendedTest extends TestCase
             'taxe4' => 0, 'vtaxe4' => 0,
             'tva' => 19, 'vtva' => 0, 'totalttc' => 11.9, 'totalttcnet' => 11.9,
             'date' => now(), 'largeur' => 0, 'longueur' => 0, 'surface' => 0,
-            'pointer' => false, 'ordre' => 1, 'prodid' => $produit->produitid,
+            'pointer' => false, 'ordre' => 1, 'prodid' => 0, // colonne integer, produitid bigint : même convention que le code
             'modestock' => 1, 'modereceptionid' => 1, 'stockorigineid' => 1
         ]);
 
@@ -514,7 +514,7 @@ class TransfertScenariosExtendedTest extends TestCase
             'taxe4' => 0, 'vtaxe4' => 0,
             'tva' => 19, 'vtva' => 0, 'totalttc' => 297.5, 'totalttcnet' => 297.5,
             'date' => now(), 'largeur' => 0, 'longueur' => 0, 'surface' => 0,
-            'pointer' => false, 'ordre' => 1, 'prodid' => $produit->produitid,
+            'pointer' => false, 'ordre' => 1, 'prodid' => 0, // colonne integer, produitid bigint : même convention que le code
             'modestock' => 1
         ]);
 

@@ -593,8 +593,12 @@ class TransfertEnvoyeController extends Controller
     }
 
     /**
-     * Insère les lignes du bon. Le stock est mis à jour uniquement par les triggers (calcul_stock)
-     * selon l'état de chaque ligne.
+     * Insère les lignes du bon. Le stock est mis à jour uniquement par le trigger calcul_stock (cbl_stock)
+     * du logiciel de bureau, tel qu'il existe en base :
+     *  - l'expéditeur est débité de detbontransferts.qte dès que la ligne est à l'état > 1 (envoyé / confirmé) ;
+     *  - le récepteur est crédité de detbontransferts.qte quand la ligne passe à l'état 3 (confirmé).
+     * Le trigger ne lit ni qteenvoi ni qterecu : la colonne qte doit donc contenir la quantité réellement
+     * expédiée (convention du bureau : qte = qteenvoi = qterecu). La quantité demandée reste sur la demande.
      */
     private function insererLignes($bontransfertid, $siteid, $siterecepteurid, $etat, array $lignes): array
     {
@@ -604,8 +608,8 @@ class TransfertEnvoyeController extends Controller
         $ordre = 1;
 
         foreach ($lignes as $ligne) {
-            $qte = $ligne['qte'];
             $qteenvoi = $ligne['qteenvoi'];
+            $qte = $qteenvoi; // quantité lue par le trigger de stock = quantité expédiée
             $prix = $ligne['prix'];
             $ht = $prix / 1.19;
 
@@ -648,7 +652,8 @@ class TransfertEnvoyeController extends Controller
                 'largeur' => 0, 'longueur' => 0, 'surface' => 0,
                 'pointer' => false,
                 'ordre' => $ordre++,
-                'prodid' => $ligne['produitid'],
+                // prodid est un integer alors que produitid est un bigint (ex. 1000000000001) : 0 comme la demande de transfert
+                'prodid' => ((int) $ligne['produitid'] <= 2147483647) ? (int) $ligne['produitid'] : 0,
                 'modestock' => 1,
                 'grammagegr' => 0,
                 'largeurmm' => 0,

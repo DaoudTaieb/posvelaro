@@ -176,9 +176,13 @@
                 @csrf
                 <div class="form-grid">
                     <!-- Row 1 -->
-                    <div class="form-group col-8">
-                        <label class="form-label">Raison</label>
+                    <div class="form-group col-4">
+                        <label class="form-label">Nom / Raison</label>
                         <input type="text" class="form-control" id="raison" name="raison" required>
+                    </div>
+                    <div class="form-group col-4">
+                        <label class="form-label">Prénom</label>
+                        <input type="text" class="form-control" id="prenom" name="prenom">
                     </div>
                     <div class="form-group col-4 row-align">
                         <input type="checkbox" id="bloqueCredit" name="bloque_credit" class="form-checkbox">
@@ -1022,6 +1026,8 @@
 
                         // Fill data
                         if(document.getElementById('raison')) document.getElementById('raison').value = this.getAttribute('data-nom') || '';
+                        if(document.getElementById('prenom')) document.getElementById('prenom').value = this.getAttribute('data-prenom') || '';
+                        if(document.getElementById('carte_fid')) document.getElementById('carte_fid').value = this.getAttribute('data-carte') || '';
                         if(document.getElementById('matricule_fiscal')) document.getElementById('matricule_fiscal').value = this.getAttribute('data-mf') || '';
                         if(document.getElementById('telephone')) document.getElementById('telephone').value = this.getAttribute('data-tel') || '';
                         if(document.getElementById('email')) document.getElementById('email').value = this.getAttribute('data-email') || '';

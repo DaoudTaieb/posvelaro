@@ -131,6 +131,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/caisse/pos/check-stock/{produit2id}', [\App\Http\Controllers\PosController::class, 'checkStock'])->whereNumber('produit2id')->name('caisse.pos.check_stock');
             Route::get('/caisse/pos/advanced-check-stock', [\App\Http\Controllers\PosController::class, 'advancedCheckStock'])->name('caisse.pos.advanced_check_stock');
             Route::get('/caisse/pos/check-avoir', [\App\Http\Controllers\PosController::class, 'checkAvoir'])->name('caisse.pos.check_avoir');
+            Route::get('/caisse/pos/check-bon-achat', [\App\Http\Controllers\PosController::class, 'checkBonAchat'])->name('caisse.pos.check_bon_achat');
+            Route::get('/caisse/pos/bons-client/{id}', [\App\Http\Controllers\PosController::class, 'bonsClient'])->whereNumber('id')->name('caisse.pos.bons_client');
             Route::post('/caisse', [CaisseController::class, 'store'])->name('caisse.store');
             Route::get('/caisse/en-attente', [CaisseController::class, 'getEnAttente'])->name('caisse.en_attente');
             Route::post('/caisse/reprise/{id}', [CaisseController::class, 'reprise'])->whereNumber('id')->name('caisse.reprise');

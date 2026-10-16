@@ -20,7 +20,14 @@ class ConfigurationController extends Controller
             ->orderBy('ordreaffichage')
             ->get();
 
-        return view('parametre.configuration.general', compact('configs'));
+        // Sous-familles ouvrant droit à la fidélité (remise par palier + bons d'achat « par paire »)
+        $sousFamilles = DB::table('sousfamilles as sf')
+            ->leftJoin('familles as f', 'f.familleid', '=', 'sf.familleid')
+            ->orderBy('f.famillelibelle')
+            ->orderBy('sf.sousfamillelibelle')
+            ->get(['sf.sousfamilleid', 'sf.sousfamillelibelle', 'sf.is_loyalty_enabled', 'f.famillelibelle']);
+
+        return view('parametre.configuration.general', compact('configs', 'sousFamilles'));
     }
 
     public function updateGeneral(Request $request)
@@ -36,7 +43,20 @@ class ConfigurationController extends Controller
             ->get(['retailconfigid', 'typevalueid', 'value'])
             ->keyBy('retailconfigid');
 
-        DB::transaction(function () use ($configsData, $configs) {
+        // Sous-familles fidélité : cases cochées = fidélité active (le champ n'est envoyé que si la section est affichée)
+        $fideliteIds = null;
+        if ($request->has('fidelite_section')) {
+            $fideliteIds = array_values(array_filter(array_map('intval', (array) $request->input('sousfamilles_fidelite', []))));
+        }
+
+        DB::transaction(function () use ($configsData, $configs, $fideliteIds) {
+            if ($fideliteIds !== null) {
+                DB::table('sousfamilles')->update(['is_loyalty_enabled' => false]);
+                if ($fideliteIds) {
+                    DB::table('sousfamilles')->whereIn('sousfamilleid', $fideliteIds)->update(['is_loyalty_enabled' => true]);
+                }
+            }
+
             foreach ($configsData as $id => $value) {
                 if (!$configs->has($id) || !(is_scalar($value) || $value === null)) {
                     continue;

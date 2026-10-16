@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Support\Droits;
+use App\Services\FideliteService;
+use App\Services\SmsService;
 
 class CaisseController extends Controller
 {
@@ -13,6 +15,12 @@ class CaisseController extends Controller
     private const MODE_AVOIR = 9;
     private const MODE_BON_ACHAT = 10;
     private const FAMILLE_DEPENSE_RETOUR_ARGENT = 10;
+
+    public function __construct(
+        private readonly FideliteService $fidelite,
+        private readonly SmsService $sms,
+    ) {
+    }
 
     /**
      * Affiche l'interface principale de la caisse (POS).
@@ -73,10 +81,11 @@ class CaisseController extends Controller
             $journalcaisseid = $journal->journalcaisseid;
             $agencebid = $journal->agencebid;
 
+            $passagerId = (int) config('pos.client_passager_id');
             $clientid = $request->input('clientid');
             if (!$clientid) {
                 $client = DB::table('clients')->where('nom', 'PASSAGER')->first();
-                $clientid = $client ? $client->clientid : 1;
+                $clientid = $client ? $client->clientid : $passagerId;
             }
 
             $enAttente = $request->input('en_attente') ? 1 : 0;
@@ -243,9 +252,9 @@ class CaisseController extends Controller
                 if ($montant <= 0) continue;
                 $modereglementid = intval($reglement['modereglementid']);
 
-                // Bon d'achat fidélité : doit être valide et non utilisé
+                // Bon d'achat fidélité : doit exister, être valide, non utilisé et appartenir au client
                 if ($modereglementid == self::MODE_BON_ACHAT) {
-                    $erreur = $this->consommerBonAchat($reglement['numero'] ?? null, $montant, $clientid);
+                    $erreur = $this->fidelite->consommerBon($reglement['numero'] ?? null, $montant, $clientid != $passagerId ? (int) $clientid : null, (int) $cticketid, $now);
                     if ($erreur) {
                         DB::rollBack();
                         return response()->json(['success' => false, 'message' => $erreur]);
@@ -333,63 +342,47 @@ class CaisseController extends Controller
                 DB::table('journalcaisses')->where('journalcaisseid', $journalcaisseid)->increment('montantdepense', $montantRendu);
             }
 
-            // Loyalty Logic
+            // Fidélité : paliers, bon d'achat à partir de la Nième vente, annulation des bons sur retour
             $isFirstSale = false;
             $clientTel = null;
             $clientNom = null;
-            if (!$enAttente && $clientid != 1) { // 1 = PASSAGER
-                $clientInfo = DB::table('clients')->where('clientid', $clientid)->first();
-                if ($clientInfo) {
-                    $clientTel = $clientInfo->tel;
-                    $clientNom = $clientInfo->nom;
+            $smsMessage = null;
+            $bonGagne = null;
+            $messagesFidelite = [];
+            if (!$enAttente) {
+                // Un retour annule (au prorata) les bons issus du ticket d'origine
+                $messagesFidelite = $this->fidelite->annulerPourRetour($detLignes, $now);
 
-                    // Count completed tickets for this client to determine if it is the first sale
-                    $salesCount = DB::table('ctickets')
-                        ->where('clientid', $clientid)
-                        ->where('enattente', 0)
-                        ->count();
-                    if ($salesCount <= 1) {
-                        $isFirstSale = true;
-                    }
+                if ($clientid != $passagerId) {
+                    $clientInfo = DB::table('clients')->where('clientid', $clientid)->first();
+                    if ($clientInfo) {
+                        $clientTel = $clientInfo->tel;
+                        $clientNom = trim($clientInfo->nom . ' ' . ($clientInfo->prenom ?? ''));
 
-                    if ($clientInfo->fidelite == 1) {
-                        $ventes = (int) $clientInfo->total_ventes_fidelite;
-                        $ventes++;
+                        // Toute première vente du client (tous cycles confondus), pour le SMS de bienvenue
+                        $isFirstSale = DB::table('ctickets')
+                            ->where('clientid', $clientid)
+                            ->where('enattente', false)
+                            ->where('totalttc', '>', 0)
+                            ->where('cticketid', '!=', $cticketid)
+                            ->doesntExist();
 
-                        $updateData = ['total_ventes_fidelite' => $ventes];
-                        if ($ventes == 1 || empty($clientInfo->date_premiere_vente)) {
-                            $updateData['date_premiere_vente'] = $now;
-                        }
-
-                        if ($ventes >= 4) {
-                            $paires = 0;
-                            foreach ($detLignes as $det) {
-                                $prod = DB::table('produits')->where('produitid', $det['produitid'])->first();
-                                if ($prod) {
-                                    $sousfamille = DB::table('sousfamilles')->where('sousfamilleid', $prod->sousfamilleid)->first();
-                                    if ($sousfamille && $sousfamille->is_loyalty_enabled) {
-                                        $paires += floatval($det['qte']);
-                                    }
+                        if ($totalttc > 0.0005) {
+                            $resFid = $this->fidelite->appliquerVente($clientInfo, $detLignes, (int) $cticketid, $now);
+                            if ($resFid) {
+                                $bonGagne = $resFid['bon'];
+                                if ($resFid['expiree']) {
+                                    $messagesFidelite[] = 'Carte fidélité expirée (moins de ' . $this->fidelite->parametres()['ventes_par_an'] . ' ventes sur l\'année) : nouveau cycle démarré.';
+                                }
+                                if ($bonGagne) {
+                                    $messagesFidelite[] = sprintf("Bon d'achat %s de %s DT gagné, valable jusqu'au %s.", $bonGagne->numero, number_format((float) $bonGagne->montant, 3, '.', ''), \Carbon\Carbon::parse($bonGagne->date_expiration)->format('d/m/Y'));
                                 }
                             }
-
-                            if ($paires > 0) {
-                                $montantBon = $paires * 10;
-                                DB::table('bons_achat')->insert([
-                                    'clientid' => $clientid,
-                                    'montant' => $montantBon,
-                                    'date_emission' => $now,
-                                    'date_expiration' => now()->addMonths(3),
-                                    'utilise' => false,
-                                    'ticketid_source' => $cticketid,
-                                    'created_at' => $now,
-                                    'updated_at' => $now
-                                ]);
-                                $updateData['soldefidelite'] = floatval($clientInfo->soldefidelite) + $montantBon;
-                            }
                         }
 
-                        DB::table('clients')->where('clientid', $clientid)->update($updateData);
+                        if (!empty($clientTel) && $totalttc > 0.0005) {
+                            $smsMessage = $this->sms->messageApresVente($clientNom, $nextNumero, (float) $totalttc, $isFirstSale, $bonGagne);
+                        }
                     }
                 }
             }
@@ -404,10 +397,19 @@ class CaisseController extends Controller
                         : 'Ticket validé avec succès.'),
                 'cticketid' => $cticketid,
                 'cticketnumero' => $nextNumero,
+                'clientid' => $clientid,
                 'client_tel' => $clientTel,
                 'client_nom' => $clientNom,
                 'totalttc' => $totalttc,
                 'is_first_sale' => $isFirstSale,
+                'sms_message' => $smsMessage,
+                'sms_disponible' => $this->sms->estConfigure(),
+                'bon_achat' => $bonGagne ? [
+                    'numero' => $bonGagne->numero,
+                    'montant' => (float) $bonGagne->montant,
+                    'date_expiration' => $bonGagne->date_expiration,
+                ] : null,
+                'fidelite_messages' => $messagesFidelite,
                 'print_url' => $enAttente ? null : route('vente.tickets.show', $cticketid)
             ]);
 
@@ -610,35 +612,6 @@ class CaisseController extends Controller
                 })
                 ->value('produit2s.produit2id');
         }
-        return null;
-    }
-
-    /**
-     * Marquer un bon d'achat fidélité comme utilisé. Retourne un message d'erreur, ou null si OK.
-     * Un numéro qui ne correspond à aucun bon du système (bon externe) est accepté tel quel.
-     */
-    private function consommerBonAchat($numero, float $montant, $clientid)
-    {
-        if (!$numero || !ctype_digit((string) $numero)) {
-            return null;
-        }
-        $bon = DB::table('bons_achat')->where('id', $numero)->lockForUpdate()->first();
-        if (!$bon) {
-            return null;
-        }
-        if ($bon->utilise) {
-            return "Le bon d'achat N° $numero a déjà été utilisé.";
-        }
-        if ($bon->date_expiration && $bon->date_expiration < now()->toDateString()) {
-            return "Le bon d'achat N° $numero est expiré.";
-        }
-        if ($bon->clientid && $clientid && $bon->clientid != $clientid) {
-            return "Le bon d'achat N° $numero appartient à un autre client.";
-        }
-        if ($montant > floatval($bon->montant) + 0.0005) {
-            return "Le montant dépasse la valeur du bon d'achat N° $numero (" . number_format($bon->montant, 3) . " DT).";
-        }
-        DB::table('bons_achat')->where('id', $bon->id)->update(['utilise' => true, 'updated_at' => now()]);
         return null;
     }
 

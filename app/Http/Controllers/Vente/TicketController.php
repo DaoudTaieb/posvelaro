@@ -417,10 +417,18 @@ class TicketController extends Controller
             ->unionAll($reglementsDirects)
             ->get();
             
-        // Fetch Bons d'Achat generated from this ticket
+        // Bons d'achat fidélité gagnés avec ce ticket (numéro + code-barres imprimés pour pouvoir les scanner)
+        $fidelite = app(\App\Services\FideliteService::class);
         $bons_achat = \Illuminate\Support\Facades\DB::table('bons_achat')
             ->where('ticketid_source', $id)
-            ->get();
+            ->where('annule', false)
+            ->orderBy('id')
+            ->get()
+            ->map(function ($bon) use ($fidelite) {
+                $bon->numero = $fidelite->numeroBon((int) $bon->id);
+                $bon->barcode_svg = \App\Support\Code128::svg($bon->numero, 38, 2);
+                return $bon;
+            });
 
         if (request()->ajax() || request()->headers->get('X-Requested-With') === 'XMLHttpRequest') {
             return view('vente.tickets.show', compact(

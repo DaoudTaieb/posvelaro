@@ -174,7 +174,7 @@ class TransfertBugsTest extends TestCase
             'taxe4' => 0, 'vtaxe4' => 0,
             'tva' => 19, 'vtva' => 19, 'totalttc' => 119, 'totalttcnet' => 119,
             'date' => now(), 'largeur' => 0, 'longueur' => 0, 'surface' => 0,
-            'pointer' => false, 'ordre' => 1, 'prodid' => $produit->produitid,
+            'pointer' => false, 'ordre' => 1, 'prodid' => 0, // colonne integer, produitid bigint : même convention que le code
             'modestock' => 1
         ]);
 
@@ -216,7 +216,9 @@ class TransfertBugsTest extends TestCase
             'produit2id' => $produit->produit2id,
             'taxefamilleid' => 1,
             'ht' => 10, 'ttc' => 11.9,
-            'qte' => 10, // Original requested qty is kept as 10
+            // Convention du logiciel de bureau, lue par le trigger cbl_stock en base : qte = quantité expédiée.
+            // La quantité demandée (10) reste sur la demande de transfert.
+            'qte' => 5,
             'qteenvoi' => 5, // We shipped only 5
             'qterecu' => 0, 'qteecart' => 0,
             'etatbontransfertid' => 2,
@@ -227,7 +229,7 @@ class TransfertBugsTest extends TestCase
             'taxe4' => 0, 'vtaxe4' => 0,
             'tva' => 19, 'vtva' => 9.5, 'totalttc' => 59.5, 'totalttcnet' => 59.5,
             'date' => now(), 'largeur' => 0, 'longueur' => 0, 'surface' => 0,
-            'pointer' => false, 'ordre' => 1, 'prodid' => $produit->produitid,
+            'pointer' => false, 'ordre' => 1, 'prodid' => 0, // colonne integer, produitid bigint : même convention que le code
             'modestock' => 1,
             'grammagegr' => 0, 'largeurmm' => 0, 'longueurm' => 0, 'modereceptionid' => 1, 'poids' => 0, 'stockorigineid' => 1
         ]);
@@ -240,8 +242,8 @@ class TransfertBugsTest extends TestCase
 
         // Sender initial stock is computed dynamically from scratch by the trigger.
         // Since no other documents exist, computed stock = (0 inputs) - (sent transfer).
-        // The trigger is now correct, so it subtracts 5 (qteenvoi) -> stock is -5.
-        $this->assertEquals(-5.0, (float)$senderStock); // Trigger now correctly calculates -5 instead of -10!
+        // Le trigger en base débite detbontransferts.qte (= 5 expédiés) -> stock -5.
+        $this->assertEquals(-5.0, (float)$senderStock);
         
         // 4. Receive the stock at the receiver site (e.g. they receive the 5 items)
         DB::table('detbontransferts')->where('detbontransfertid', $detBteId)->update([

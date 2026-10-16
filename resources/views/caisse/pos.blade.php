@@ -1032,10 +1032,12 @@
     }
 
     // Global functions definition at the very top
-    function sendSmsDirectly(tel, msg) {
+    function sendSmsDirectly(tel, msg, ctx) {
         let formData = new FormData();
         formData.append('telephone', tel);
         formData.append('message', msg);
+        if (ctx && ctx.clientid) formData.append('clientid', ctx.clientid);
+        if (ctx && ctx.cticketid) formData.append('cticketid', ctx.cticketid);
         formData.append('_token', '{{ csrf_token() }}');
 
         fetch("{{ route('vente.caisse.pos.send_sms') }}", {
@@ -1075,17 +1077,17 @@
                 if (typeof closeMultiPaymentModal === 'function') closeMultiPaymentModal();
                 notifier(res.message);
                 
-                // Prompt to send SMS if client phone is available
-                if (res.client_tel) {
-                    let message = "";
-                    if (res.is_first_sale) {
-                        message = `Bienvenue chez Golden Pos, ${res.client_nom}! Nous vous remercions pour votre premier achat. Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
+                // Informations fidélité (bon d'achat gagné, carte expirée, bons annulés sur retour)
+                (res.fidelite_messages || []).forEach(m => notifier(m, 'info', 9000));
+
+                // Proposer l'envoi du SMS (texte préparé par le serveur : bienvenue à la 1ère vente, puis fidélité)
+                if (res.client_tel && res.sms_message) {
+                    if (res.sms_disponible === false) {
+                        notifier("SMS non envoyé : le service Bip SMS n'est pas configuré (Paramètres > Général).", 'warning', 8000);
                     } else {
-                        message = `Merci pour votre fidélité chez Golden Pos, ${res.client_nom}! Votre ticket N° ${res.cticketnumero} d'un montant de ${parseFloat(res.totalttc).toFixed(3)} DT a été validé.`;
+                        confirmer(`Voulez-vous envoyer un SMS de confirmation au client (${res.client_tel}) ?`, { titre: 'SMS client', okLabel: 'Envoyer' })
+                            .then(ok => { if (ok) sendSmsDirectly(res.client_tel, res.sms_message, { clientid: res.clientid, cticketid: res.cticketid }); });
                     }
-                    
-                    confirmer(`Voulez-vous envoyer un SMS de confirmation au client (${res.client_tel}) ?`, { titre: 'SMS client', okLabel: 'Envoyer' })
-                        .then(ok => { if (ok) sendSmsDirectly(res.client_tel, message); });
                 }
 
                 // Vider le panier AVANT d'ouvrir le reçu : le ticket est enregistré,
@@ -3202,18 +3204,88 @@
         baLignes = [];
         baAdding = false;
         renderBaTable();
+        baChargerBonsClient();
+        setTimeout(() => document.getElementById('baCodeInput').focus(), 50);
     }
 
     function closeBonAchatModal() {
         document.getElementById('bonAchatModal').style.display = 'none';
     }
 
+    // Bons d'achat fidélité disponibles pour le client du ticket (cliquer pour l'ajouter)
+    function baChargerBonsClient() {
+        const cont = document.getElementById('baBonsClient');
+        const passagerId = {{ (int) config('pos.client_passager_id') }};
+        if (!currentClientId || parseInt(currentClientId) === passagerId) {
+            cont.innerHTML = '<span style="color:#666;">Sélectionnez un client fidélité pour voir ses bons disponibles, ou scannez le bon.</span>';
+            return;
+        }
+        cont.innerHTML = '<span style="color:#666;">Chargement des bons du client...</span>';
+        fetch(`{{ url('vente/caisse/pos/bons-client') }}/${currentClientId}`)
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success || !d.bons || d.bons.length === 0) {
+                    cont.innerHTML = '<span style="color:#666;">Aucun bon d\'achat disponible pour ce client.</span>';
+                    return;
+                }
+                let html = `<span style="font-weight:bold;">Bons disponibles (${parseFloat(d.solde).toFixed(3)} DT) :</span>`;
+                d.bons.forEach(b => {
+                    html += `<button type="button" onclick="baAjouterBon('${escHtml(b.numero)}')" title="Valable jusqu'au ${escHtml(b.date_expiration)}"
+                        style="padding: 4px 10px; border: 1px solid #0284c7; color: #0369a1; background: #e0f2fe; border-radius: 12px; cursor: pointer; font-size: 12px;">
+                        ${escHtml(b.numero)} · ${parseFloat(b.montant).toFixed(3)} DT</button>`;
+                });
+                cont.innerHTML = html;
+            })
+            .catch(() => { cont.innerHTML = '<span style="color:#b91c1c;">Impossible de charger les bons du client.</span>'; });
+    }
+
     function baAddLine() {
-        baAdding = true;
         let code = document.getElementById('baCodeInput').value.trim();
-        baDraft = { numero: code, montant: '', remise: '' };
-        document.getElementById('baCodeInput').value = '';
-        renderBaTable();
+        if (code === '') {
+            // Saisie manuelle d'un bon externe (numéro + montant)
+            baAdding = true;
+            baDraft = { numero: '', montant: '', remise: '' };
+            renderBaTable();
+            return;
+        }
+        baAjouterBon(code);
+    }
+
+    // Vérifie le bon côté serveur (existence, validité, client) et l'ajoute avec son montant
+    function baAjouterBon(code) {
+        code = String(code || '').trim();
+        if (baLignes.some(l => String(l.numero).toUpperCase() === code.toUpperCase())) {
+            notifier('Ce bon d\'achat est déjà ajouté.', 'warning');
+            return;
+        }
+        const passagerId = {{ (int) config('pos.client_passager_id') }};
+        const params = new URLSearchParams({ code: code });
+        if (currentClientId && parseInt(currentClientId) !== passagerId) params.append('clientid', currentClientId);
+
+        fetch(`{{ route('vente.caisse.pos.check_bon_achat') }}?${params.toString()}`)
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('baCodeInput').value = '';
+                if (!d.success) {
+                    notifier(d.message || 'Bon d\'achat invalide.', 'error');
+                    return;
+                }
+                const dejaSaisi = baLignes.reduce((s, l) => s + (parseFloat(l.montant) || 0), 0);
+                const restant = Math.max(0, mpTotalDu - dejaSaisi);
+                if (restant <= 0.0005) {
+                    notifier('Le net à payer est déjà couvert.', 'warning');
+                    return;
+                }
+                const montant = Math.min(parseFloat(d.bon.montant), restant);
+                baLignes.push({ numero: d.bon.numero, montant: parseFloat(montant.toFixed(3)), remise: 0 });
+                if (!document.getElementById('baNom').value && d.bon.client_nom) document.getElementById('baNom').value = d.bon.client_nom;
+                if (!document.getElementById('baTelephone').value && d.bon.client_tel) document.getElementById('baTelephone').value = d.bon.client_tel;
+                if (montant + 0.0005 < parseFloat(d.bon.montant)) {
+                    notifier(`Bon ${d.bon.numero} : ${parseFloat(d.bon.montant).toFixed(3)} DT disponibles, ${montant.toFixed(3)} DT utilisés (le bon sera soldé).`, 'info', 8000);
+                }
+                renderBaTable();
+            })
+            .catch(() => notifier('Erreur réseau lors de la vérification du bon.', 'error'));
     }
 
     function baSaveDraft() {
@@ -4404,8 +4476,13 @@
         </div>
 
         <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
-            <!-- Code Input -->
-            <input type="text" id="baCodeInput" style="width: 50%; padding: 8px; border: 1px solid #ccc;" onkeydown="if(event.key==='Enter') baAddLine()">
+            <!-- Code Input (scan du code-barres imprimé sur le ticket, ex. BA000123) -->
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" id="baCodeInput" placeholder="Scanner ou saisir le N° du bon (BA000123)" style="width: 60%; padding: 8px; border: 1px solid #ccc;" onkeydown="if(event.key==='Enter') { event.preventDefault(); baAddLine(); }">
+                <button type="button" onclick="baAddLine()" style="padding: 8px 14px; border: 1px solid #333; background: white; border-radius: 4px; cursor: pointer; font-weight: bold;">Ajouter</button>
+            </div>
+            <!-- Bons disponibles du client sélectionné -->
+            <div id="baBonsClient" style="font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
 
             <!-- Table -->
             <div style="border: 1px solid #ddd; min-height: 100px;">

@@ -87,6 +87,26 @@
                     @endforeach
                 </div>
             </div>
+
+            {{-- Sous-familles ouvrant droit à la fidélité --}}
+            @if(isset($sousFamilles))
+            <input type="hidden" name="fidelite_section" value="1">
+            <div style="margin-top: 32px; border-top: 2px solid var(--border); padding-top: 20px;">
+                <h2 style="font-size: 15px; font-weight: 600; margin: 0 0 4px;">Fidélité : sous-familles concernées</h2>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px;">
+                    La remise fidélité (paliers ci-dessus) et le bon d'achat « par paire » ne s'appliquent qu'aux articles de ces sous-familles.
+                </p>
+                <div class="fidelite-grid">
+                    @foreach($sousFamilles as $sf)
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+                            <input type="checkbox" name="sousfamilles_fidelite[]" value="{{ $sf->sousfamilleid }}" {{ $sf->is_loyalty_enabled ? 'checked' : '' }}>
+                            <span>{{ $sf->sousfamillelibelle }}</span>
+                            <span style="margin-left: auto; font-size: 11px; color: var(--text-muted);">{{ $sf->famillelibelle }}</span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+            @endif
         </form>
     </div>
 </div>
@@ -105,6 +125,12 @@
             grid-template-columns: 1fr;
             gap: 0;
         }
+    }
+
+    .fidelite-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 8px;
     }
 
     /* Toggle switch CSS - Golden Pos Style */

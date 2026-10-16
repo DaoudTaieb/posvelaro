@@ -96,14 +96,16 @@ class TransfertCorrectionsTest extends TestCase
         $this->assertEquals(2, (float) $ligne->qteecart);
         $this->assertEquals(3, DB::table('bontransferts')->where('bontransfertid', $bon->bontransfertid)->value('etatbontransfertid'));
 
-        // Le trigger crédite le site récepteur de la quantité reçue
-        $this->assertEquals($stockRecepteurAvant + 3, $this->stock($this->siteRecepteur->siteid));
+        // Le trigger cbl_stock en base (logiciel de bureau) crédite le récepteur de la quantité expédiée
+        // (colonne qte = qteenvoi = 5), pas de la quantité reçue : l'écart de 2 est enregistré sur la ligne
+        // et doit être régularisé par un bon de sortie ou un inventaire.
+        $this->assertEquals($stockRecepteurAvant + 5, $this->stock($this->siteRecepteur->siteid));
 
         // Deuxième réception refusée, stock inchangé
         $this->post('/transfert/recu/' . $bon->bontransfertid . '/receptionner', [
             'reception' => [$ligne->detbontransfertid => ['qte_recue' => 5]],
         ])->assertSessionHas('error');
-        $this->assertEquals($stockRecepteurAvant + 3, $this->stock($this->siteRecepteur->siteid));
+        $this->assertEquals($stockRecepteurAvant + 5, $this->stock($this->siteRecepteur->siteid));
     }
 
     public function test_reception_refusee_pour_un_brouillon_ou_un_autre_site()

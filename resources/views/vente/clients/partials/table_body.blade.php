@@ -4,6 +4,8 @@
         <button class="btn-icon btn-edit" title="Modifier" 
             data-id="{{ $client->clientid ?? '' }}"
             data-nom="{{ $client->nom ?? '' }}"
+            data-prenom="{{ $client->prenom ?? '' }}"
+            data-carte="{{ $client->barcode ?? '' }}"
             data-mf="{{ $client->mf ?? '' }}"
             data-tel="{{ $client->tel ?? '' }}"
             data-email="{{ $client->email ?? '' }}"

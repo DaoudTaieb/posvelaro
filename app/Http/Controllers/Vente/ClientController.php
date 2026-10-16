@@ -116,15 +116,25 @@ class ClientController extends Controller
         // Simple validation
         $request->validate([
             'raison' => 'required|string|max:255',
+            'prenom' => 'nullable|string|max:255',
+            'carte_fid' => 'nullable|string|max:50',
         ]);
 
         try {
+            // N° de carte fidélité = colonne barcode (partagée avec le logiciel de bureau), unique
+            $carte = trim((string) $request->input('carte_fid', ''));
+            if ($carte !== '' && \Illuminate\Support\Facades\DB::table('clients')->where('barcode', $carte)->exists()) {
+                return redirect()->route('vente.clients.index')->with('error', "Le n° de carte fidélité {$carte} est déjà attribué à un autre client.");
+            }
+
             // Generate a random clientcode if not provided
             $nextId = \Illuminate\Support\Facades\DB::table('clients')->max('clientid') + 1;
             $clientCode = '411' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
 
             \Illuminate\Support\Facades\DB::table('clients')->insert([
                 'nom' => $request->raison,
+                'prenom' => $request->prenom,
+                'barcode' => $carte !== '' ? $carte : null,
                 'clientcode' => $clientCode,
                 'code' => $clientCode, // often both are used
                 'credit' => $request->has('bloque_credit') ? false : true, // Assuming bloque means no credit
@@ -172,11 +182,20 @@ class ClientController extends Controller
     {
         $request->validate([
             'raison' => 'required|string|max:255',
+            'prenom' => 'nullable|string|max:255',
+            'carte_fid' => 'nullable|string|max:50',
         ]);
 
         try {
+            $carte = trim((string) $request->input('carte_fid', ''));
+            if ($carte !== '' && \Illuminate\Support\Facades\DB::table('clients')->where('barcode', $carte)->where('clientid', '!=', $id)->exists()) {
+                return redirect()->route('vente.clients.index')->with('error', "Le n° de carte fidélité {$carte} est déjà attribué à un autre client.");
+            }
+
             \Illuminate\Support\Facades\DB::table('clients')->where('clientid', $id)->update([
                 'nom' => $request->raison,
+                'prenom' => $request->prenom,
+                'barcode' => $carte !== '' ? $carte : null,
                 'credit' => $request->has('bloque_credit') ? false : true,
                 'mf' => $request->matricule_fiscal,
                 'fidelite' => $request->has('g_fidelite'),
