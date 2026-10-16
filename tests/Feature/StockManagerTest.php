@@ -18,26 +18,27 @@ class StockManagerTest extends TestCase
         // Simuler un login d'utilisateur
         $user = DB::table('users')->orderBy('userid')->first();
         if ($user) {
-            $userModel = new \App\Models\User();
-            $userModel->userid = $user->userid;
-            $userModel->login = $user->login;
-            $userModel->exists = true;
-            $this->actingAs($userModel);
+            // Utilisateur réel (avec son site) : un compte sans site est désormais refusé
+            $this->actingAs(\App\Models\User::find($user->userid));
         }
     }
 
     public function test_vente_pos_decremente_le_stock_automatiquement()
     {
-        $stockData = DB::table('stock2s')->where('qtestock', '>', 0)->first();
+        // Vendre sur le site de la journée de caisse ouverte, avec le caissier de cette journée
+        $journal = DB::table('journalcaisses')->where('isclosed', false)->orderByDesc('journalcaisseid')->first();
+        if (!$journal) {
+            $this->markTestSkipped('Aucune journée de caisse ouverte dans la base.');
+        }
+        $this->actingAs(\App\Models\User::find($journal->userid));
+
+        $stockData = DB::table('stock2s')->where('siteid', $journal->siteid)->where('qtestock', '>', 2)->first();
         if (!$stockData) {
-            $this->markTestSkipped('Aucun stock disponible dans la base.');
+            $this->markTestSkipped('Aucun stock disponible sur le site de la journée ouverte.');
         }
 
         $site = DB::table('sites')->where('siteid', $stockData->siteid)->first();
-        DB::table('sites')->where('siteid', $site->siteid)->update(['isstock' => 1]);
-
-        $caisse = DB::table('caisses')->first();
-        DB::table('caisses')->where('caisseid', $caisse->caisseid)->update(['siteid' => $site->siteid]);
+        $caisse = DB::table('caisses')->where('caisseid', $journal->caisseid)->first();
 
         $produit2id = $stockData->produit2id;
         $produitid = clone DB::table('produit2s')->where('produit2id', $produit2id)->first();

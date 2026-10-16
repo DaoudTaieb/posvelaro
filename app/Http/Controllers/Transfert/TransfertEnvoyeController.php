@@ -15,7 +15,7 @@ class TransfertEnvoyeController extends Controller
 
     public function index(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102; // Expéditeur
+        $siteid = \App\Support\SiteCourant::id(); // Expéditeur
 
         $etats = DB::table('etatbontranferts')->get();
 
@@ -116,7 +116,7 @@ class TransfertEnvoyeController extends Controller
 
     public function create()
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $site = DB::table('sites')->where('siteid', $siteid)->first();
         $sites = DB::table('sites')->get();
 
@@ -136,7 +136,7 @@ class TransfertEnvoyeController extends Controller
 
     public function impressionMultiple(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $sites = DB::table('sites')->get();
         $siteExpediteur = DB::table('sites')->where('siteid', $siteid)->first();
         $employees = DB::table('employees')->orderBy('nom')->get();
@@ -187,7 +187,7 @@ class TransfertEnvoyeController extends Controller
         ], $this->messagesLignes()));
 
         // Le site expéditeur est toujours celui de l'utilisateur connecté
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $siterecepteurid = (int) $request->siterecepteurid;
 
         if ($siteid == $siterecepteurid) {
@@ -269,7 +269,7 @@ class TransfertEnvoyeController extends Controller
 
     public function edit($id)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
 
         $bon = DB::table('bontransferts')->where('bontransfertid', $id)->first();
         if (!$bon) {
@@ -317,7 +317,7 @@ class TransfertEnvoyeController extends Controller
     {
         $request->validate($this->reglesLignes(), $this->messagesLignes());
 
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $description = $request->description;
         $trajet = $request->trajet;
         $vehiculeid = $request->vehiculeid;
@@ -360,7 +360,7 @@ class TransfertEnvoyeController extends Controller
 
             $totaux = count($lignes) > 0
                 ? $this->insererLignes($bon->bontransfertid, $bon->siteid, $bon->siterecepteurid, $nouvel_etat, $lignes)
-                : ['totalqte' => 0, 'totalbrutht' => 0, 'totalnetht' => 0, 'totalttc' => 0, 'netapayer' => 0];
+                : ['totalqte' => 0, 'totalbrutht' => 0, 'totalnetht' => 0, 'totaltva' => 0, 'totalttc' => 0, 'netapayer' => 0];
 
             DB::table('bontransferts')->where('bontransfertid', $id)->update($totaux);
 
@@ -370,7 +370,7 @@ class TransfertEnvoyeController extends Controller
 
     public function destroy($id)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
 
         try {
             return DB::transaction(function () use ($id, $siteid) {
@@ -611,7 +611,8 @@ class TransfertEnvoyeController extends Controller
             $qteenvoi = $ligne['qteenvoi'];
             $qte = $qteenvoi; // quantité lue par le trigger de stock = quantité expédiée
             $prix = $ligne['prix'];
-            $ht = $prix / 1.19;
+            $taxe = \App\Support\TaxeProduit::pour($ligne['produitid']); // TVA réelle du produit
+            $ht = \App\Support\TaxeProduit::ht($prix, $taxe['tva']);
 
             $totalqte += $qteenvoi; // on compte ce qu'on envoie
             $totalttc += ($prix * $qteenvoi);
@@ -628,7 +629,7 @@ class TransfertEnvoyeController extends Controller
                 'produitid' => $ligne['produitid'],
                 'produit2id' => $ligne['produit2id'],
                 'detdemandetransfertid' => $ligne['detdemandetransfertid'],
-                'taxefamilleid' => 1,
+                'taxefamilleid' => $taxe['taxefamilleid'],
                 'ht' => $ht,
                 'ttc' => $prix,
                 'qte' => $qte,
@@ -644,8 +645,8 @@ class TransfertEnvoyeController extends Controller
                 'taxe2' => 0, 'vtaxe2' => 0,
                 'taxe3' => 0, 'vtaxe3' => 0,
                 'taxe4' => 0, 'vtaxe4' => 0,
-                'tva' => 19,
-                'vtva' => 0,
+                'tva' => $taxe['tva'],
+                'vtva' => round(($prix - $ht) * $qteenvoi, 3),
                 'totalttc' => $prix * $qteenvoi,
                 'totalttcnet' => $prix * $qteenvoi,
                 'date' => Carbon::now(),
@@ -668,6 +669,7 @@ class TransfertEnvoyeController extends Controller
             'totalqte' => $totalqte,
             'totalbrutht' => $totalht,
             'totalnetht' => $totalht,
+            'totaltva' => round($totalttc - $totalht, 3),
             'totalttc' => $totalttc,
             'netapayer' => $totalttc
         ];

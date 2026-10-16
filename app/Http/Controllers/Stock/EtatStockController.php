@@ -10,7 +10,7 @@ class EtatStockController extends Controller
 {
     public function index(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
+        $siteid = \App\Support\SiteCourant::id();
 
         // Données pour le filtre modale
         $familles = DB::table('familles')->orderBy('famillelibelle')->get();

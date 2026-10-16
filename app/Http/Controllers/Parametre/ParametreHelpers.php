@@ -35,7 +35,7 @@ trait ParametreHelpers
      */
     protected function userSiteId(): int
     {
-        return (int) (auth()->user()->siteid ?? 102);
+        return \App\Support\SiteCourant::id();
     }
 
     /**

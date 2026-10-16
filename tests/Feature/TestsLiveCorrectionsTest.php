@@ -120,7 +120,7 @@ class TestsLiveCorrectionsTest extends TestCase
         $this->assertNotNull($depense);
         $this->assertEquals(10, $depense->familledepenseid);
         $this->assertEqualsWithDelta(50, $depense->montant, 0.001);
-        $this->assertEquals(0, DB::table('creglements')->where('documentid', $ticket->cticketid)->where('typeid', 1)->count());
+        $this->assertEquals(0, DB::table('creglementdets')->where('documentid', $ticket->cticketid)->where('typeid', 1)->count());
     }
 
     public function test_reglement_negatif_refuse_sur_une_vente()
@@ -136,7 +136,8 @@ class TestsLiveCorrectionsTest extends TestCase
             'date' => '2026-12-31', 'proprietaire' => 'Client Test',
         ]])->assertJson(['success' => true]);
 
-        $reg = DB::table('creglements')->where('documentid', $res->json('cticketid'))->where('typeid', 1)->first();
+        // Format du logiciel de bureau : le ticket est rattaché par creglementdets
+        $reg = DB::table('creglements')->whereIn('creglementid', DB::table('creglementdets')->where('documentid', $res->json('cticketid'))->where('typeid', 1)->select('creglementid'))->first();
         $this->assertEquals('CHQ-778', $reg->numero);
         $this->assertEquals('STB', $reg->agencereglement);
         $this->assertEquals('Client Test', $reg->raisonreglement);
@@ -197,7 +198,10 @@ class TestsLiveCorrectionsTest extends TestCase
         $ticket = DB::table('ctickets')->where('cticketid', $res->json('cticketid'))->first();
         $this->assertNotNull($ticket->caisseid, 'ctickets.caisseid doit être renseigné');
 
-        $reg = DB::table('creglements')->where('documentid', $ticket->cticketid)->where('typeid', 1)->first();
+        $reg = DB::table('creglements')->whereIn('creglementid', DB::table('creglementdets')->where('documentid', $ticket->cticketid)->where('typeid', 1)->select('creglementid'))->first();
+        $this->assertNotNull($reg, 'Le règlement doit être rattaché au ticket par creglementdets');
+        $this->assertEquals(0, (int) $reg->documentid, 'creglements.documentid = 0 (convention du bureau)');
+        $this->assertEquals(2, (int) $reg->statusreglementid, 'Statut « Payé » comme le bureau');
         $this->assertEqualsWithDelta(-50, $reg->montantav, 0.001);
         $this->assertEqualsWithDelta(50, $reg->montantrecu, 0.001);
     }

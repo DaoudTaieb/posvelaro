@@ -11,7 +11,7 @@ class MouvementsArticlesController extends Controller
 {
     public function index(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
+        $siteid = \App\Support\SiteCourant::id();
 
         // Valeurs par défaut pour les dates (Aujourd'hui)
         $dateDu = $request->input('date_du') ?: Carbon::today()->format('Y-m-d');

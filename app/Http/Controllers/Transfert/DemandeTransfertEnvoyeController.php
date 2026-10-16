@@ -14,7 +14,7 @@ class DemandeTransfertEnvoyeController extends Controller
 
     public function index(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
+        $siteid = \App\Support\SiteCourant::id();
 
         // Données pour les filtres
         $sites = DB::table('sites')->orderBy('libelle')->get();
@@ -110,7 +110,7 @@ class DemandeTransfertEnvoyeController extends Controller
 
     public function create()
     {
-        $site = DB::table('sites')->where('siteid', auth()->user()->siteid ?? 102)->first();
+        $site = DB::table('sites')->where('siteid', \App\Support\SiteCourant::id())->first();
         $sites = DB::table('sites')->orderBy('libelle')->get();
         
         // Données pour le modal de sélection produit
@@ -126,7 +126,7 @@ class DemandeTransfertEnvoyeController extends Controller
     public function store(Request $request)
     {
         // Le site demandeur est toujours celui de l'utilisateur connecté
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $siterecepteurid = $request->siterecepteurid;
 
         if ($siteid == $siterecepteurid) {
@@ -249,7 +249,8 @@ class DemandeTransfertEnvoyeController extends Controller
             foreach ($lignes as $index => $ligne) {
                 $qte = (int) $ligne['qte'];
                 $prix = (float) ($ligne['prix'] ?? 0);
-                $ht = $prix / 1.19; // Assuming standard 19% TVA for generic calculation if not provided
+                $taxe = \App\Support\TaxeProduit::pour($ligne['produitid']); // TVA réelle du produit
+                $ht = \App\Support\TaxeProduit::ht($prix, $taxe['tva']);
                 $totalqte += $qte;
                 $totalttc += ($prix * $qte);
                 $totalht += ($ht * $qte);
@@ -260,7 +261,7 @@ class DemandeTransfertEnvoyeController extends Controller
                     'siterecepteurid' => $siterecepteurid,
                     'produitid' => $ligne['produitid'],
                     'produit2id' => $ligne['produit2id'] ?? $ligne['produitid'],
-                    'taxefamilleid' => 1,
+                    'taxefamilleid' => $taxe['taxefamilleid'],
                     'ht' => $ht,
                     'ttc' => $prix,
                     'qte' => $qte,
@@ -275,8 +276,8 @@ class DemandeTransfertEnvoyeController extends Controller
                     'taxe2' => 0, 'vtaxe2' => 0,
                     'taxe3' => 0, 'vtaxe3' => 0,
                     'taxe4' => 0, 'vtaxe4' => 0,
-                    'tva' => 19,
-                    'vtva' => 0,
+                    'tva' => $taxe['tva'],
+                    'vtva' => round(($prix - $ht) * $qte, 3),
                     'totalttc' => $prix * $qte,
                     'totalttcnet' => $prix * $qte,
                     'qteecart' => 0,
@@ -299,6 +300,7 @@ class DemandeTransfertEnvoyeController extends Controller
                         'totalqte' => $totalqte,
                         'totalbrutht' => $totalht,
                         'totalnetht' => $totalht,
+                        'totaltva' => round($totalttc - $totalht, 3),
                         'totalttc' => $totalttc,
                         'netapayer' => $totalttc
                     ]);
@@ -310,7 +312,7 @@ class DemandeTransfertEnvoyeController extends Controller
 
     public function edit($id)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
 
         $demande = DB::table('demandetransferts')->where('demandetransfertid', $id)->first();
         if (!$demande) {
@@ -352,7 +354,7 @@ class DemandeTransfertEnvoyeController extends Controller
 
     public function destroy($id)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
 
         return DB::transaction(function () use ($id, $siteid) {
             $demande = DB::table('demandetransferts')->where('demandetransfertid', $id)->lockForUpdate()->first();
@@ -372,7 +374,7 @@ class DemandeTransfertEnvoyeController extends Controller
 
     public function searchProducts(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
 
         $query = DB::table('produits')
             ->leftJoin('familles', 'produits.familleid', '=', 'familles.familleid')

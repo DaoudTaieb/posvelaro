@@ -18,7 +18,7 @@ class ConsultationStockController extends Controller
             'reserve' => 'Réservé'
         ];
 
-        $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
+        $siteid = \App\Support\SiteCourant::id();
 
         // Type de stock sélectionné par défaut (valeur inconnue => 'reel')
         $selectedType = $request->input('type_stock', 'reel');

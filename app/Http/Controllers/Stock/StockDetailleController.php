@@ -16,7 +16,7 @@ class StockDetailleController extends Controller
         $rayons = DB::table('categories')->orderBy('categorylibelle')->get();
         $saisons = DB::table('categories4')->orderBy('category4libelle')->get();
 
-        $siteid = auth()->user()->siteid ?? 102; // Sécurité si non connecté
+        $siteid = \App\Support\SiteCourant::id();
 
         // Sous-requêtes d'agrégation pour éviter le produit cartésien
         $mvtSub = DB::table('vdetmvtstcs')

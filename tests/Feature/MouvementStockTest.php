@@ -17,11 +17,8 @@ class MouvementStockTest extends TestCase
         
         $user = DB::table('users')->orderBy('userid')->first();
         if ($user) {
-            $userModel = new User();
-            $userModel->userid = $user->userid;
-            $userModel->login = $user->login;
-            $userModel->exists = true;
-            $this->actingAs($userModel);
+            // Utilisateur réel (avec son site) : un compte sans site est désormais refusé
+            $this->actingAs(User::find($user->userid));
         }
     }
 

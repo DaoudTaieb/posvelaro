@@ -98,7 +98,8 @@ class VenteCorrectionsTest extends TestCase
             'cticketid' => $ticketId,
             'reglements' => [['modereglementid' => 1, 'montant' => 50]],
         ])->assertJson(['success' => false]);
-        $this->assertEquals(0, DB::table('creglements')->where('documentid', $ticketId)->where('typeid', 1)->where('montant', '<=', 0)->count());
+        $this->assertEquals(0, DB::table('creglementdets')->where('documentid', $ticketId)->where('typeid', 1)->where('montant', '<=', 0)->count());
+        $this->assertEquals(2, DB::table('creglementdets')->where('documentid', $ticketId)->where('typeid', 1)->count(), 'acompte initial + complément');
     }
 
     public function test_reprise_refuse_un_ticket_paye_et_les_requetes_get()
@@ -131,7 +132,8 @@ class VenteCorrectionsTest extends TestCase
         $this->assertEqualsWithDelta(100, $ligne['prix'], 0.001);
         $this->assertEqualsWithDelta(70, $ligne['prixNet'], 0.001);
         $this->assertEqualsWithDelta(140, $ligne['total'], 0.001);
-        $this->assertFalse(DB::table('ctickets')->where('cticketid', $res->json('cticketid'))->exists());
+        // La reprise ne supprime plus le ticket en attente : il disparaît seulement à la validation
+        $this->assertTrue(DB::table('ctickets')->where('cticketid', $res->json('cticketid'))->exists());
     }
 
     public function test_ticket_en_attente_ne_modifie_pas_le_stock()

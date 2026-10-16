@@ -12,7 +12,7 @@ class TransfertRecuController extends Controller
 {
     public function index(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102; // Nous sommes le récepteur
+        $siteid = \App\Support\SiteCourant::id(); // Nous sommes le récepteur
 
         $etats = DB::table('etatbontranferts')->where('etatbontransfertid', '>', 1)->get();
         $sites = DB::table('sites')->get();
@@ -119,7 +119,7 @@ class TransfertRecuController extends Controller
 
     public function receptionner($id)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
 
         $bon = DB::table('bontransferts as b')
             ->join('sites as rec', 'rec.siteid', '=', 'b.siterecepteurid')
@@ -169,7 +169,7 @@ class TransfertRecuController extends Controller
 
     public function storeReception(Request $request, $id)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $receptions = (array) $request->input('reception', []);
 
         return DB::transaction(function () use ($id, $siteid, $receptions) {

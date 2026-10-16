@@ -61,6 +61,17 @@ class AuthController extends Controller
                 $user->save();
             }
 
+            // Toutes les opérations (ventes, stock, transferts) sont rattachées au site de l'utilisateur
+            if (empty(Auth::user()->siteid)) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return back()->withErrors([
+                    'login' => 'Aucun site n\'est associé à ce compte. Contactez l\'administrateur.',
+                ])->onlyInput('login');
+            }
+
             $request->session()->regenerate();
 
             return redirect()->intended(route('dashboard'));

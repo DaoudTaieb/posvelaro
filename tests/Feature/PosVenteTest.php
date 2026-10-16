@@ -123,7 +123,7 @@ class PosVenteTest extends TestCase
         $this->assertEqualsWithDelta($expectedHt, $ticket->totalnetht, 0.01, 'Le calcul du HT est incorrect');
 
         // Vérifier que le règlement a été créé
-        $reglementCount = DB::table('creglements')->where('documentid', $ticketId)->count();
+        $reglementCount = DB::table('creglementdets')->where('documentid', $ticketId)->where('typeid', 1)->count();
         $this->assertEquals(1, $reglementCount, 'Le règlement n\'a pas été enregistré');
     }
 

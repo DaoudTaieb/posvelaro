@@ -12,7 +12,7 @@ class DemandeTransfertRecuController extends Controller
 {
     public function index(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102; // Le site actuel (le récepteur)
+        $siteid = \App\Support\SiteCourant::id(); // Le site actuel (le récepteur)
 
         $etats = DB::table('etatdemandetransferts')->get();
 
@@ -119,7 +119,7 @@ class DemandeTransfertRecuController extends Controller
 
     public function pointer(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $pointages = (array) $request->input('pointage', []);
 
         // Seules les lignes cochées (selected_demandes[] = detdemandetransfertid) sont pointées

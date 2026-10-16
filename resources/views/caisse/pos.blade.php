@@ -1061,7 +1061,21 @@
         });
     }
 
+    // Ticket en attente repris dans la caisse : supprimé côté serveur seulement à la validation
+    let currentRepriseId = null;
+    try { currentRepriseId = localStorage.getItem('pos_repriseId') || null; } catch (e) {}
+    function setRepriseId(id) {
+        currentRepriseId = id ? String(id) : null;
+        try {
+            if (currentRepriseId) localStorage.setItem('pos_repriseId', currentRepriseId);
+            else localStorage.removeItem('pos_repriseId');
+        } catch (e) {}
+    }
+
     window.submitTicketToBackend = function(data) {
+        if (currentRepriseId && !data.reprise_cticketid) {
+            data.reprise_cticketid = currentRepriseId;
+        }
         fetch(`{{ route('vente.caisse.store') }}`, {
             method: 'POST',
             headers: {
@@ -1073,6 +1087,7 @@
         .then(r => r.json())
         .then(res => {
             if (res.success) {
+                setRepriseId(null); // le ticket en attente repris a été remplacé par ce ticket
                 if (typeof closePaymentModal === 'function') closePaymentModal();
                 if (typeof closeMultiPaymentModal === 'function') closeMultiPaymentModal();
                 notifier(res.message);
@@ -1442,6 +1457,11 @@
         }
         ticketLines = [];
         currentClientId = null;
+        // Annuler une reprise : le ticket reste dans la liste « en attente » (rien n'est perdu)
+        if (currentRepriseId) {
+            notifier('Reprise annulée : le ticket reste dans la liste des tickets en attente.', 'info');
+            setRepriseId(null);
+        }
         document.getElementById('clientCode').value = '';
         document.getElementById('clientName').innerText = 'PASSAGER';
         document.getElementById('clientSoldeInfo').style.display = 'none';
@@ -3535,7 +3555,9 @@
                                 <td style="padding: 8px;">${t.datecreation}</td>
                                 <td style="padding: 8px; text-align: right; font-weight: bold;">${parseFloat(t.totalttc).toFixed(3)}</td>
                                 <td style="padding: 8px; text-align: center;">
-                                    <button onclick="loadReprise(${t.cticketid})" style="padding: 4px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Reprendre</button>
+                                    ${String(t.cticketid) === String(currentRepriseId)
+                                        ? '<span style="color:#0369a1; font-weight:bold;">En cours dans la caisse</span>'
+                                        : `<button onclick="loadReprise(${t.cticketid})" style="padding: 4px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Reprendre</button>`}
                                 </td>
                             `;
                             tbody.appendChild(tr);
@@ -3564,6 +3586,7 @@
             .then(r => r.json())
             .then(res => {
                 if (res.success) {
+                    setRepriseId(res.cticketid || id);
                     currentClientId = res.clientid;
                     ticketLines = res.lignes;
                     

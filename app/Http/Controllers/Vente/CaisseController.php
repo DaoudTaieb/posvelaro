@@ -7,7 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Support\Droits;
 use App\Services\FideliteService;
+use App\Services\JourneeCaisseService;
+use App\Services\ReglementService;
 use App\Services\SmsService;
+use App\Support\SiteCourant;
 
 class CaisseController extends Controller
 {
@@ -19,6 +22,8 @@ class CaisseController extends Controller
     public function __construct(
         private readonly FideliteService $fidelite,
         private readonly SmsService $sms,
+        private readonly JourneeCaisseService $journees,
+        private readonly ReglementService $reglementsService,
     ) {
     }
 
@@ -42,6 +47,12 @@ class CaisseController extends Controller
             'reglements' => 'nullable|array',
             'reglements.*.montant' => 'required|numeric',
             'reglements.*.modereglementid' => 'required|integer|exists:modereglements,modereglementid',
+            'clientid' => 'nullable|integer|exists:clients,clientid',
+            'vendeurid' => 'nullable|integer|exists:employees,employeeid',
+            'reprise_cticketid' => 'nullable|integer',
+        ], [
+            'clientid.exists' => 'Le client sélectionné n\'existe pas.',
+            'vendeurid.exists' => 'Le vendeur sélectionné n\'existe pas.',
         ]);
 
         if ($refus = $this->verifierDroitsTicket($request)) {
@@ -52,30 +63,35 @@ class CaisseController extends Controller
             DB::beginTransaction();
 
             $user = auth()->user();
-            $siteid = $user->siteid ?? 102;
+            $siteid = SiteCourant::id();
             $caissierid = $user->userid;
-            $employeeid = $request->input('vendeurid');
+            $employeeid = $request->input('vendeurid') ?: $user->employeeid;
             if (!$employeeid) {
-                $employeeid = $user->employeeid ?? 1;
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Veuillez sélectionner un vendeur (aucun employé n\'est associé à votre compte).']);
             }
 
-            $journal = DB::table('journalcaisses')
-                ->where('userid', $caissierid)
-                ->where('isclosed', 0) // 0 = ouvert
-                ->orderBy('journalcaisseid', 'desc')
-                ->first();
-
-            if (!$journal) {
-                $journal = DB::table('journalcaisses')
-                    ->where('siteid', $siteid)
-                    ->where('isclosed', 0)
-                    ->orderBy('journalcaisseid', 'desc')
-                    ->first();
-            }
-
+            $journal = $this->journees->journeeOuverte($user);
             if (!$journal) {
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Aucune journée ouverte. Veuillez ouvrir une journée avant de valider le ticket.']);
+            }
+
+            // Ticket repris depuis la liste « en attente » : il n'est supprimé qu'ici, dans la même
+            // transaction que le nouveau ticket (aucune perte si la caisse est fermée entre-temps).
+            if ($request->filled('reprise_cticketid')) {
+                $enAttenteOrigine = DB::table('ctickets')
+                    ->where('cticketid', (int) $request->input('reprise_cticketid'))
+                    ->where('siteid', $siteid)
+                    ->where('enattente', true)
+                    ->lockForUpdate()
+                    ->first();
+                if (!$enAttenteOrigine) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => 'Ce ticket en attente a déjà été repris et validé sur un autre poste. Annulez le ticket en cours pour éviter une double vente.']);
+                }
+                DB::table('detctickets')->where('cticketid', $enAttenteOrigine->cticketid)->delete();
+                DB::table('ctickets')->where('cticketid', $enAttenteOrigine->cticketid)->delete();
             }
 
             $journalcaisseid = $journal->journalcaisseid;
@@ -270,39 +286,23 @@ class CaisseController extends Controller
                     }
                 }
 
-                $creglementid = DB::table('creglements')->insertGetId([
+                // Format du logiciel de bureau : creglements (documentid = 0) + creglementdets (documentid = ticket).
+                // Le trigger creglement_calc recalcule ctickets.acompte / netapayer.
+                $creglementid = $this->reglementsService->enregistrerPourTicket((int) $cticketid, [
                     'clientid' => $clientid,
                     'siteid' => $siteid,
                     'date' => $now,
-                    'datecreation' => $now,
                     'montant' => $montant,
-                    'modereglementid' => $modereglementid, // 1=Espèce, 4=CB...
-                    'statusreglementid' => 1,
-                    'documentid' => $cticketid, // Lié au ticket
-                    'typeid' => 1, // 1 = Ticket de caisse
-                ] + $this->detailsReglement($reglement, $nextNumero, $now) + [
-                    'montantnet' => $montant,
-                    'montantav' => -$montant,   // convention du logiciel de bureau
-                    'montantrecu' => $montant,
-                    'montantrs' => 0,
-                    'tauxrs' => 0,
-                    'ismultiple' => 0,
-                    'retenuevalide' => 0,
+                    'modereglementid' => $modereglementid,
                     'employeeid' => $employeeid,
                     'userid' => $caissierid,
                     'agencebid' => $agencebid,
-                    'cours' => 1,
-                    'nonaffecte' => 0,
-                    'iscomplement' => 0,
                     'journalcaisseid' => $journalcaisseid,
                     'rendu' => floatval($request->input('rendu', 0)),
-                    'deviseid' => 1,
-                    'typechequecadeauid' => $reglement['typechequecadeauid'] ?? null
-                ], 'creglementid');
+                    'typechequecadeauid' => $reglement['typechequecadeauid'] ?? null,
+                ] + $this->detailsReglement($reglement, $nextNumero, $now));
 
                 // Consommer l'avoir (verrouillé plus haut) : on diminue son reste et on le clôture s'il est épuisé.
-                // Pas d'insertion dans creglementdets : le trigger creglement_calc de cette table échoue sur
-                // new.bonconventionid (colonne absente de creglementdets).
                 if ($avoir) {
                     $acompteAvoir = round(floatval($avoir->acompte) + $montant, 3);
                     $resteAvoir = round(floatval($avoir->totalttc) - $acompteAvoir, 3);
@@ -449,7 +449,7 @@ class CaisseController extends Controller
             $origine = DB::table('detctickets')
                 ->join('ctickets', 'ctickets.cticketid', '=', 'detctickets.cticketid')
                 ->where('detctickets.detcticketid', $detventeid)
-                ->where('ctickets.siteid', auth()->user()->siteid ?? 102)
+                ->where('ctickets.siteid', \App\Support\SiteCourant::id())
                 ->where('detctickets.qte', '>', 0)
                 ->first(['detctickets.qte']);
             if (!$origine) {
@@ -463,7 +463,7 @@ class CaisseController extends Controller
 
         // Vente sans stock suffisant sur le site (droit « autoriser stock négatif »)
         if (Droits::bloque('autorise.stock.négatif')) {
-            $siteid = auth()->user()->siteid ?? 102;
+            $siteid = \App\Support\SiteCourant::id();
             $quantites = [];
             foreach ($lignes as $ligne) {
                 if (!empty($ligne['produit2id']) && floatval($ligne['qte'] ?? 0) > 0) {
@@ -620,7 +620,7 @@ class CaisseController extends Controller
      */
     public function getEnAttente()
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $tickets = DB::table('ctickets')
             ->leftJoin('clients', 'ctickets.clientid', '=', 'clients.clientid')
             ->where('ctickets.enattente', 1)
@@ -637,7 +637,7 @@ class CaisseController extends Controller
      */
     public function journalVenteData()
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $tickets = \Illuminate\Support\Facades\DB::table('ctickets')
             ->leftJoin('clients', 'ctickets.clientid', '=', 'clients.clientid')
             ->leftJoin('users as caissiers', 'ctickets.caissierid', '=', 'caissiers.userid')
@@ -684,7 +684,7 @@ class CaisseController extends Controller
         $ticket = null;
         if (ctype_digit((string) $id)) {
             $query = DB::table('ctickets')
-                ->where('siteid', auth()->user()->siteid ?? 102)
+                ->where('siteid', \App\Support\SiteCourant::id())
                 ->where('enattente', false);
             $ticket = $request->query('par') === 'numero'
                 ? $query->where('cticketnumero', $id)->orderByDesc('cticketid')->first()
@@ -730,7 +730,7 @@ class CaisseController extends Controller
             ->join('produit2s', 'detctickets.produit2id', '=', 'produit2s.produit2id')
             ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
             ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
-            ->where('ctickets.siteid', auth()->user()->siteid ?? 102)
+            ->where('ctickets.siteid', \App\Support\SiteCourant::id())
             ->where('ctickets.enattente', false)
             ->whereBetween(DB::raw('DATE(ctickets.datecreation)'), [$du, $au]);
 
@@ -761,12 +761,12 @@ class CaisseController extends Controller
     public function reprise($id)
     {
         return DB::transaction(function () use ($id) {
-            // Seul un ticket EN ATTENTE du site peut être repris (il est supprimé ensuite)
+            // Seul un ticket EN ATTENTE du site peut être repris
             $ticket = ctype_digit((string) $id)
                 ? DB::table('ctickets')
                     ->where('cticketid', $id)
                     ->where('enattente', true)
-                    ->where('siteid', auth()->user()->siteid ?? 102)
+                    ->where('siteid', \App\Support\SiteCourant::id())
                     ->lockForUpdate()
                     ->first()
                 : null;
@@ -821,14 +821,14 @@ class CaisseController extends Controller
             }
             }
             
-            // Supprimer le ticket en attente original (car on le reprend dans la caisse)
-            // Optionnellement, on pourrait juste le mettre à jour à la fin, mais c'est plus simple de le supprimer
-            DB::table('detctickets')->where('cticketid', $id)->delete();
-            DB::table('ctickets')->where('cticketid', $id)->delete();
-            
+            // Le ticket en attente n'est PAS supprimé ici : il reste dans la liste tant que la vente reprise
+            // n'est pas validée. La caisse renvoie son identifiant (reprise_cticketid) à la validation, et
+            // store() le supprime dans la même transaction que le nouveau ticket.
             return response()->json([
                 'success' => true,
+                'cticketid' => $ticket->cticketid,
                 'clientid' => $ticket->clientid,
+                'vendeurid' => $ticket->employeeid,
                 'lignes' => $formattedLignes
             ]);
         });
@@ -850,7 +850,7 @@ class CaisseController extends Controller
             ->leftJoin('employees as vendeurs', 'ctickets.employeeid', '=', 'vendeurs.employeeid')
             ->where('ctickets.netapayer', '>', 0.0005)
             ->where('ctickets.enattente', 0)
-            ->where('ctickets.siteid', auth()->user()->siteid ?? 102)
+            ->where('ctickets.siteid', \App\Support\SiteCourant::id())
             ->when(Droits::bloque('cons.allticket'), fn ($q) => $q->where('ctickets.caissierid', auth()->user()->userid))
             ->whereBetween(DB::raw('DATE(ctickets.datecreation)'), [$du, $au]);
 
@@ -897,9 +897,8 @@ class CaisseController extends Controller
             DB::beginTransaction();
 
             $user = auth()->user();
-            $siteid = $user->siteid ?? 102;
+            $siteid = SiteCourant::id();
             $caissierid = $user->userid;
-            $employeeid = $user->employeeid ?? 1;
 
             $cticketid = $request->input('cticketid');
             $reglements = $request->input('reglements', []);
@@ -926,24 +925,15 @@ class CaisseController extends Controller
 
             $now = now();
 
-            $journal = DB::table('journalcaisses')
-                ->where('userid', $caissierid)
-                ->where('isclosed', 0)
-                ->orderBy('journalcaisseid', 'desc')
-                ->first();
-            if (!$journal) {
-                $journal = DB::table('journalcaisses')
-                    ->where('siteid', $siteid)
-                    ->where('isclosed', 0)
-                    ->orderBy('journalcaisseid', 'desc')
-                    ->first();
-            }
+            $journal = $this->journees->journeeOuverte($user);
             if (!$journal) {
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => 'Aucune journée ouverte. Veuillez ouvrir une journée avant d\'encaisser.']);
             }
             $journalcaisseid = $journal->journalcaisseid;
             $agencebid = $journal->agencebid;
+            // Vendeur du règlement : celui du ticket d'origine, à défaut celui du compte connecté
+            $employeeid = $ticket->employeeid ?: $user->employeeid;
 
             $reste = round(floatval($ticket->netapayer), 3);
             $totalAdded = 0;
@@ -956,35 +946,19 @@ class CaisseController extends Controller
                 }
                 if ($montant <= 0) continue;
 
-                // Insérer le règlement complement
-                DB::table('creglements')->insert([
+                // Règlement de complément, au format du logiciel de bureau (creglements + creglementdets)
+                $this->reglementsService->enregistrerPourTicket((int) $ticket->cticketid, [
                     'clientid' => $ticket->clientid,
                     'siteid' => $siteid,
                     'date' => $now,
-                    'datecreation' => $now,
                     'montant' => $montant,
                     'modereglementid' => $modereglementid,
-                    'statusreglementid' => 1,
-                    'documentid' => $cticketid,
-                    'typeid' => 1,
-                ] + $this->detailsReglement($reg, $ticket->cticketnumero, $now) + [
-                    'montantnet' => $montant,
-                    'montantav' => -$montant,   // convention du logiciel de bureau
-                    'montantrecu' => $montant,
-                    'montantrs' => 0,
-                    'tauxrs' => 0,
-                    'ismultiple' => 0,
-                    'retenuevalide' => 0,
                     'employeeid' => $employeeid,
                     'userid' => $caissierid,
                     'agencebid' => $agencebid,
-                    'cours' => 1,
-                    'nonaffecte' => 0,
-                    'iscomplement' => 1,
                     'journalcaisseid' => $journalcaisseid,
-                    'rendu' => 0,
-                    'deviseid' => 1
-                ]);
+                    'iscomplement' => true,
+                ] + $this->detailsReglement($reg, $ticket->cticketnumero, $now));
 
                 $totalAdded += $montant;
                 $reste -= $montant;

@@ -16,7 +16,7 @@ class CommissionController extends Controller
         $query = DB::table('ctickets')
             ->join('employees as vendeurs', 'ctickets.employeeid', '=', 'vendeurs.employeeid')
             ->where('vendeurs.isvendeur', true)
-            ->where('ctickets.siteid', auth()->user()->siteid ?? 102)
+            ->where('ctickets.siteid', \App\Support\SiteCourant::id())
             ->where('ctickets.enattente', false)
             ->select(
                 'ctickets.cticketdate',

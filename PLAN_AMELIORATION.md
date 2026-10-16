@@ -24,17 +24,20 @@ Date : 16 octobre 2026. Base analysée : PostgreSQL 17, base `velaro` (127.0.0.1
 4. ~~**Nettoyage du dépôt**~~ **Fait le 16/10/2026** (scratch supprimés, `db_schema*.json` désuivis et ignorés, README réécrit) : supprimer les ~45 scripts jetables à la racine (`check_*.php`, `find_*.php`, `test*.php`, `get()`, `scratch_clients.txt`…), retirer `db_schema.json` et `db_schema_utf8.json` de git, remplacer le README Laravel par un README Golden Pos (installation, lancement, base).
 5. ~~**Scripts de lancement**~~ **Fait le 16/10/2026** (PID enregistrés dans `.golden_pos.pid`, arrêt ciblé par `Fermer_Projet.bat` ; Apache non retenu) : `lancer_invisible.vbs` et `Fermer_Projet.bat` tuent tous les `php.exe` et `node.exe` de la machine. Les restreindre au PID du serveur (fichier `.pid`) ou passer à Apache (XAMPP est installé).
 
-## 3. Phase 1 — Fiabilité métier de la caisse (1 à 2 semaines)
+## 3. Phase 1 — Fiabilité métier de la caisse
 
-- **Site courant** : remplacer les 41 `?? 102` par un service `SiteCourant` qui lève une erreur claire si l'utilisateur n'a pas de site ; refuser la connexion d'un utilisateur sans `siteid` ou sans `employeeid`.
-- **Journée de caisse** : aujourd'hui, si le caissier n'a pas de journée ouverte, le ticket est rattaché à la journée ouverte d'un autre caissier du même site. Décider : soit interdire, soit tracer explicitement. Lier la caisse au poste (`caisses.machineid` / `stations`) comme le fait le bureau.
-- **Ticket en attente** : ne plus supprimer le ticket au moment de la reprise ; le marquer « en reprise » et le supprimer seulement quand le nouveau ticket est validé (sinon perte si le navigateur se ferme).
-- **Règlements** : corriger le trigger `creglement_calc` (tester `TG_TABLE_NAME` avant de lire `new.bonconventionid`) ou ajouter la colonne à `creglementdets`, puis réinsérer les `creglementdets` comme le bureau. À valider avec l'éditeur du logiciel de bureau.
-- **Numérotation** : conserver `max()+1` sous verrou mais aligner le repli sur le format bureau (préfixe année + site + caisse). Idem pour les bons de transfert (`BTE-` n'existe pas côté bureau : vérifier qu'il n'est pas lu).
-- **Fidélité** : sortir le recalcul du palier (`getLoyaltyTier`) d'un GET ; en faire une commande planifiée. Rendre le montant (10 DT/paire) et le seuil (4e vente) configurables dans `retailconfigs`.
-- **TVA des transferts** : lire `taxefamilles.tvavente` du produit au lieu de `/ 1.19` codé en dur ; remplacer `prodid = 0` par la vraie valeur ou documenter la raison.
-- **Constantes** : créer `config/pos.php` (client passager, modes de règlement, famille dépense « Retour argent », états transfert) alimenté par `retailconfigs` quand la clé existe.
-- **Validation** : passer les gros `validate()` en FormRequest (ticket, clôture, bon de transfert), et valider `clientid`, `vendeurid`, `produit2id` comme existants et du bon site.
+État au 16/10/2026 : **fait**, sauf les deux derniers points. 99 tests Feature au vert, smoke test sans erreur.
+
+- ✅ **Site courant** : `App\Support\SiteCourant` remplace les 41 replis `?? 102` ; un utilisateur sans site est refusé à la connexion et sur chaque écran (403).
+- ✅ **Journée de caisse** : `JourneeCaisseService` donne une règle unique (journée de l'utilisateur, sinon journée ouverte la plus récente de son site) pour la caisse, la validation du ticket, le complément d'acompte, l'état et la clôture. Plusieurs caissiers peuvent travailler sur la même journée ; chaque ticket porte son `caissierid`. La liaison caisse ↔ poste (`stations`) reste à faire avec la Phase 3.
+- ✅ **Ticket en attente** : la reprise ne supprime plus rien. Le ticket repris est supprimé seulement à la validation (ou à la remise en attente), dans la même transaction ; une double validation depuis deux postes est refusée.
+- ✅ **Règlements** : sans toucher au trigger, la caisse écrit désormais au format du bureau (`creglements.documentid = 0`, statut Payé + `creglementdets` lié au ticket), vérifié sur les 823 règlements existants. Le bureau voit donc les encaissements du web.
+- ✅ **Fidélité** : fait (voir commit fidélité/SMS).
+- ✅ **TVA des transferts** : taux réel du produit (`taxefamilles.tvavente`) sur les demandes et bons, TVA totale en en-tête. `prodid` = 0 quand `produitid` dépasse un integer (convention déjà utilisée par les demandes).
+- ✅ **Constantes** : `config/pos.php` + `retailconfigs`.
+- ✅ **Validation** : client et vendeur du ticket doivent exister ; plus de vendeur par défaut « 1 ».
+- ⏳ **Numérotation** : inchangée (`max()+1` sous verrou, compatible avec la séquence du bureau). Le format de repli `yy000001` ne sert que sur une base vide.
+- ⏳ **FormRequest** : les validations sont encore dans les contrôleurs ; prévu avec le découpage de la Phase 2.
 
 ## 4. Phase 2 — Architecture et qualité (2 à 4 semaines)
 

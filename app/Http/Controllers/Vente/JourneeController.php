@@ -335,43 +335,8 @@ class JourneeController extends Controller
                 abort(403, 'Accès non autorisé.');
             }
         } else {
-            // Recherche de la session de caisse ouverte
-            $journalCaisse = DB::table('journalcaisses')
-                ->where(function ($q) {
-                    $q->where('isclosed', false)
-                      ->orWhereNull('isclosed');
-                })
-                ->where('userid', $user->userid ?? $user->id)
-                ->when($user->siteid, fn ($q) => $q->where('siteid', $user->siteid))
-                ->orderBy('journalcaisseid', 'desc')
-                ->first();
-
-            // Si aucune session ouverte trouvée, chercher par site
-            if (!$journalCaisse && !empty($user->siteid)) {
-                $journalCaisse = DB::table('journalcaisses')
-                    ->where(function ($q) {
-                        $q->where('isclosed', false)
-                          ->orWhereNull('isclosed');
-                    })
-                    ->where('siteid', $user->siteid)
-                    ->orderBy('journalcaisseid', 'desc')
-                    ->first();
-
-                // Si toujours pas trouvé, chercher dans les caisses du site de l'utilisateur
-                if (!$journalCaisse) {
-                    $caissesSite = DB::table('caisses')->where('siteid', $user->siteid)->pluck('caisseid');
-                    if ($caissesSite->isNotEmpty()) {
-                        $journalCaisse = DB::table('journalcaisses')
-                            ->whereIn('caisseid', $caissesSite)
-                            ->where(function ($q) {
-                                $q->where('isclosed', false)
-                                  ->orWhereNull('isclosed');
-                            })
-                            ->orderBy('journalcaisseid', 'desc')
-                            ->first();
-                    }
-                }
-            }
+            // Journée ouverte : même règle que la caisse (journée de l'utilisateur, sinon celle du site)
+            $journalCaisse = app(\App\Services\JourneeCaisseService::class)->journeeOuverte($user);
         }
 
         if (!$journalCaisse) {
@@ -573,43 +538,8 @@ class JourneeController extends Controller
     {
         $user = Auth::user();
 
-        // Recherche de la session de caisse ouverte (isclosed = false ou NULL)
-        $journalCaisse = DB::table('journalcaisses')
-            ->where(function ($q) {
-                $q->where('isclosed', false)
-                  ->orWhereNull('isclosed');
-            })
-            ->where('userid', $user->userid ?? $user->id)
-            ->when($user->siteid, fn ($q) => $q->where('siteid', $user->siteid))
-            ->orderBy('journalcaisseid', 'desc')
-            ->first();
-
-        // Si aucune session ouverte trouvée, chercher par site
-        if (!$journalCaisse && !empty($user->siteid)) {
-            $journalCaisse = DB::table('journalcaisses')
-                ->where(function ($q) {
-                    $q->where('isclosed', false)
-                      ->orWhereNull('isclosed');
-                })
-                ->where('siteid', $user->siteid)
-                ->orderBy('journalcaisseid', 'desc')
-                ->first();
-                
-            // Si toujours pas trouvé, chercher dans les caisses du site de l'utilisateur
-            if (!$journalCaisse) {
-                $caissesSite = DB::table('caisses')->where('siteid', $user->siteid)->pluck('caisseid');
-                if ($caissesSite->isNotEmpty()) {
-                    $journalCaisse = DB::table('journalcaisses')
-                        ->whereIn('caisseid', $caissesSite)
-                        ->where(function ($q) {
-                            $q->where('isclosed', false)
-                              ->orWhereNull('isclosed');
-                        })
-                        ->orderBy('journalcaisseid', 'desc')
-                        ->first();
-                }
-            }
-        }
+        // Journée ouverte : même règle que la caisse (journée de l'utilisateur, sinon celle du site)
+        $journalCaisse = app(\App\Services\JourneeCaisseService::class)->journeeOuverte($user);
 
         if (!$journalCaisse) {
             return redirect()->route('vente.journee.ouverture')

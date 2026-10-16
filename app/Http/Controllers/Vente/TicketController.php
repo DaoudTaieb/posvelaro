@@ -28,7 +28,7 @@ class TicketController extends Controller
                 'statutdocuments.libelle as statut_libelle',
                 'statutdocuments.couleurcode as statut_couleur'
             )
-            ->where('ctickets.siteid', auth()->user()->siteid ?? 102)
+            ->where('ctickets.siteid', \App\Support\SiteCourant::id())
             ->where('ctickets.enattente', false)
             // Rôle limité à ses propres tickets (droit "consulter tous les tickets" bloqué)
             ->when(\App\Support\Droits::bloque('cons.allticket'), fn ($q) => $q->where('ctickets.caissierid', auth()->user()->userid))
@@ -317,7 +317,7 @@ class TicketController extends Controller
         $ticket = ctype_digit((string) $id)
             ? \Illuminate\Support\Facades\DB::table('ctickets')
                 ->where('cticketid', $id)
-                ->where('siteid', auth()->user()->siteid ?? 102)
+                ->where('siteid', \App\Support\SiteCourant::id())
                 ->when(\App\Support\Droits::bloque('cons.allticket'), fn ($q) => $q->where('caissierid', auth()->user()->userid))
                 ->first()
             : null;
@@ -391,29 +391,8 @@ class TicketController extends Controller
         // Remise = Total TTC avant remise - Total TTC payé
         $remise_montant = (float)($ticket->totalavremise ?? 0) - (float)($ticket->totalttc ?? 0);
 
-        $reglementsDirects = \Illuminate\Support\Facades\DB::table('creglements')
-            ->leftJoin('modereglements', 'creglements.modereglementid', '=', 'modereglements.modereglementid')
-            ->where('creglements.documentid', $id)
-            ->where('creglements.typeid', 1)
-            ->where('creglements.statusreglementid', '!=', 4)
-            ->select(
-                'creglements.montant',
-                'creglements.date',
-                'modereglements.libelle as mode_libelle'
-            );
-
-        $reglements = \Illuminate\Support\Facades\DB::table('creglementdets')
-            ->leftJoin('creglements', 'creglementdets.creglementid', '=', 'creglements.creglementid')
-            ->leftJoin('modereglements', 'creglements.modereglementid', '=', 'modereglements.modereglementid')
-            ->where('creglementdets.documentid', $id)
-            ->where('creglementdets.typeid', 1)
-            ->select(
-                'creglementdets.montant',
-                'creglements.date',
-                'modereglements.libelle as mode_libelle'
-            )
-            ->unionAll($reglementsDirects)
-            ->get();
+        // Règlements du ticket : format bureau (creglementdets) et ancien format web, sans doublon
+        $reglements = app(\App\Services\ReglementService::class)->reglementsDuTicket((int) $ticket->cticketid);
             
         // Bons d'achat fidélité gagnés avec ce ticket (numéro + code-barres imprimés pour pouvoir les scanner)
         $fidelite = app(\App\Services\FideliteService::class);

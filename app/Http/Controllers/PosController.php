@@ -44,27 +44,8 @@ class PosController extends Controller
     {
         $user = auth()->user();
 
-        // Vérifier s'il y a une session de caisse ouverte pour cet utilisateur
-        $journalCaisse = DB::table('journalcaisses')
-            ->where(function ($q) {
-                $q->where('isclosed', false)
-                  ->orWhereNull('isclosed');
-            })
-            ->where('userid', $user->userid)
-            ->orderBy('journalcaisseid', 'desc')
-            ->first();
-
-        // Sinon, vérifier par site
-        if (!$journalCaisse) {
-            $journalCaisse = DB::table('journalcaisses')
-                ->where(function ($q) {
-                    $q->where('isclosed', false)
-                      ->orWhereNull('isclosed');
-                })
-                ->where('siteid', $user->siteid)
-                ->orderBy('journalcaisseid', 'desc')
-                ->first();
-        }
+        // Journée de caisse ouverte (même règle que la validation des tickets)
+        $journalCaisse = app(\App\Services\JourneeCaisseService::class)->journeeOuverte($user);
 
         // Si aucune session n'est ouverte, rediriger vers la page d'ouverture
         if (!$journalCaisse) {
@@ -102,7 +83,7 @@ class PosController extends Controller
         $typeChequeCadeaus = DB::table('typechequecadeaus')->orderBy('priorite')->get();
 
         // Récupérer le nombre de demandes et bons de transfert actifs pour ce site
-        $siteId = $user->siteid ?? 102;
+        $siteId = \App\Support\SiteCourant::id();
         $demandeTransfCount = DB::table('demandetransferts')
             ->where(function ($q) use ($siteId) {
                 $q->where('siterecepteurid', $siteId)
@@ -128,7 +109,7 @@ class PosController extends Controller
 
     public function searchProducts(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
 
         $query = DB::table('produits')
             ->leftJoin('familles', 'produits.familleid', '=', 'familles.familleid')
@@ -208,7 +189,7 @@ class PosController extends Controller
      */
     public function scanProduct(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $code = $request->input('code', '');
 
         if (empty($code)) {
@@ -267,7 +248,7 @@ class PosController extends Controller
     }
     public function getProductVariants(Request $request)
     {
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         $produitid = $request->produitid;
 
         if (!$produitid) {

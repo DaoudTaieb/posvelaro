@@ -20,7 +20,7 @@ class DashboardController extends Controller
 
         $today = Carbon::today();
         $yesterday = Carbon::yesterday();
-        $siteid = auth()->user()->siteid ?? 102;
+        $siteid = \App\Support\SiteCourant::id();
         
         // 1. Chiffre d'affaires total (Aujourd'hui)
         $caToday = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $today)->sum('totalttc') ?? 0;
