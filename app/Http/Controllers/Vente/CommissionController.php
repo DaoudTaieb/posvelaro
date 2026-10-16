@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Vente;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class CommissionController extends Controller
 {
@@ -92,8 +91,6 @@ class CommissionController extends Controller
         }
 
         if ($request->ajax()) {
-            Log::info('AJAX Commissions Query: ' . $query->toSql(), $query->getBindings());
-            Log::info('Request Filters: ', $request->all());
 
             $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
             $totalCommission = (clone $query)->sum(DB::raw('(ctickets.totalnetht * vendeurs.tauxcommission / 100)'));

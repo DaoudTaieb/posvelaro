@@ -221,8 +221,6 @@ class TicketController extends Controller
         }
 
         if ($request->ajax()) {
-            \Illuminate\Support\Facades\Log::info('AJAX Search Query: ' . $query->toSql(), $query->getBindings());
-            \Illuminate\Support\Facades\Log::info('Request Filters: ', $request->all());
 
             $totalQte = (clone $query)->sum('ctickets.totalqte');
             $totalBrutHt = (clone $query)->sum('ctickets.totalbrutht');

@@ -48,3 +48,10 @@ Thumbs.db
 /test[0-9].php
 /test_*.php
 /write_clients.py
+
+# Exports du schéma de la base velaro (générés localement, volumineux)
+/db_schema.json
+/db_schema_utf8.json
+
+# PID des serveurs lances par lancer_projet.bat / lancer_invisible.vbs
+/.golden_pos.pid
