@@ -63,10 +63,14 @@ Date : 16 octobre 2026. Base analysée : PostgreSQL 17, base `velaro` (127.0.0.1
 
 ## 6. Phase 4 — Déploiement et exploitation
 
-- Serveur : Apache (XAMPP) ou Nginx + PHP-FPM au lieu de `php artisan serve` ; `php artisan optimize` ; HTTPS sur le réseau local.
-- Sauvegarde : `pg_dump` quotidien planifié + test de restauration ; conserver le script de schéma Golden Pos pour rejouer après restauration.
-- Supervision : log quotidien, alerte sur erreurs 500, commande `app:smoke-test` planifiée chaque matin.
-- Documentation : `CLAUDE.md` ou `docs/` décrivant la base, les triggers, les conventions du bureau (montantav négatif, caissierid 0) et la procédure d'installation.
+État au 16/10/2026 : **fait** (fichiers prêts et vérifiés ; l'installation sur le poste serveur reste à lancer par l'administrateur).
+
+- ✅ **Serveur** : `deploy/apache/golden-pos.conf` (hôte virtuel XAMPP, port 8080, réseau local uniquement, HTTPS prêt à activer), syntaxe validée par `httpd -t`. `deploy/env.production.example` (debug désactivé, journaux 30 jours niveau warning) et `deploy/mise_en_production.bat` (sauvegarde, dépendances sans outils de dev, migrations, caches `optimize`, smoke test). Mise en cache des routes vérifiée. Vite n'est pas utilisé par les écrans : le serveur `npm run dev` n'est pas nécessaire en production.
+- ✅ **Sauvegarde** : `deploy/sauvegarde_velaro.bat` (`pg_dump` compressé, archive vérifiée par `pg_restore --list`, rotation 30 jours). Testé : archive de 16 Mo en 3 s. Pas de test de restauration dans une autre base (décision : tout reste sur `velaro`).
+- ✅ **Supervision** : smoke test planifié chaque jour à 07:30 (`routes/console.php`, journal `storage/logs/smoke-test.log`), code retour 1 et trace dans le journal applicatif si une page plante. `deploy/planifier_taches.bat` enregistre les tâches Windows (planificateur Laravel + sauvegarde 23:30).
+- ✅ **Documentation** : `CLAUDE.md` (règles, conventions du bureau, ajouts Golden Pos, organisation du code, exploitation) et `README.md`.
+
+**À faire sur le poste serveur (administrateur)** : copier `deploy/env.production.example` en `.env` et le compléter, inclure `golden-pos.conf` dans Apache, lancer `deploy/planifier_taches.bat` en administrateur, puis `deploy/mise_en_production.bat`.
 
 ## 7. Décisions à prendre avant de commencer
 

@@ -110,8 +110,14 @@ class SmokeTestCommand extends Command
                 $this->line("- $error");
             }
             $this->info("Astuce : Vérifiez le fichier storage/logs/laravel.log pour voir les détails de ces bugs.");
-        } else {
-            $this->info("\nFélicitations ! Aucun bug critique n'a été détecté sur l'ouverture des pages.");
+            // Trace datée dans le journal applicatif (exploitée par la supervision quotidienne)
+            \Illuminate\Support\Facades\Log::error('Smoke test : ' . count($errors) . ' page(s) en erreur', ['erreurs' => $errors]);
+
+            return self::FAILURE; // code retour non nul : la tâche planifiée et « composer test » échouent
         }
+
+        $this->info("\nFélicitations ! Aucun bug critique n'a été détecté sur l'ouverture des pages.");
+
+        return self::SUCCESS;
     }
 }
