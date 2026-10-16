@@ -935,7 +935,6 @@
 </head>
 <body>
     @include('partials.ui-dialogs')
-    @include('partials.ui-dialogs')
     <!-- Top bar -->
     <nav class="topbar">
         <a href="{{ route('dashboard') }}" class="topbar-brand" style="text-decoration: none; cursor: pointer;">

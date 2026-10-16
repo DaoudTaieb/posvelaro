@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 
 class JourneeController extends Controller
 {
@@ -225,25 +224,9 @@ class JourneeController extends Controller
     /**
      * Enregistre l'ouverture de la journée (création du journalcaisse).
      */
-    public function storeOuverture(Request $request)
+    public function storeOuverture(\App\Http\Requests\StoreOuvertureRequest $request)
     {
         $user = Auth::user();
-
-        $request->validate([
-            'caisseid' => [
-                'required',
-                'integer',
-                // La caisse doit appartenir au site de l'utilisateur
-                Rule::exists('caisses', 'caisseid')->where(function ($q) use ($user) {
-                    if ($user->siteid) {
-                        $q->where('siteid', $user->siteid);
-                    }
-                }),
-            ],
-            'fondcaisse' => 'required|numeric|min:0',
-        ], [
-            'caisseid.exists' => 'Cette caisse n\'existe pas ou n\'appartient pas à votre site.',
-        ]);
 
         // journalcaisses.employeeid est NOT NULL avec FK vers employees : pas de valeur de repli
         if (empty($user->employeeid)) {
@@ -630,21 +613,8 @@ class JourneeController extends Controller
     /**
      * Enregistre la clôture de la journée.
      */
-    public function storeCloture(Request $request)
+    public function storeCloture(\App\Http\Requests\StoreClotureRequest $request)
     {
-        $request->validate([
-            'journalcaisseid' => 'required|integer',
-            'totalespecephys' => 'nullable|numeric|min:0',
-            'totalchequephys' => 'nullable|numeric|min:0',
-            'totaltpephys' => 'nullable|numeric|min:0',
-            'totalcontrebonphys' => 'nullable|numeric|min:0',
-            'totaltkrestophys' => 'nullable|numeric|min:0',
-            'totalbonconventionphys' => 'nullable|numeric|min:0',
-            'totalregavoirphys' => 'nullable|numeric|min:0',
-            'totalcouponphys' => 'nullable|numeric|min:0',
-            'totalregautrephys' => 'nullable|numeric|min:0',
-        ]);
-
         $user = Auth::user();
 
         $closed = DB::transaction(function () use ($request, $user) {

@@ -152,7 +152,6 @@ Route::middleware(['auth'])->group(function () {
         // Calcul Commissions
         Route::middleware('droit:backoffice,cons.commission.vendeur')->group(function () {
             Route::get('/commissions', [CommissionController::class, 'index'])->name('commissions.index');
-            Route::post('/commissions/calculate', [CommissionController::class, 'calculate'])->name('commissions.calculate');
         });
 
         // Journée
@@ -177,7 +176,6 @@ Route::middleware(['auth'])->group(function () {
         // Clients (mêmes noms que l'ancien Route::resource, avec un droit par action)
         Route::middleware('droit:backoffice')->group(function () {
             Route::get('/clients', [ClientController::class, 'index'])->middleware('droit:cons.client')->name('clients.index');
-            Route::get('/clients/{client}', [ClientController::class, 'show'])->whereNumber('client')->middleware('droit:cons.client')->name('clients.show');
             Route::post('/clients', [ClientController::class, 'store'])->middleware('droit:aj.client')->name('clients.store');
             Route::match(['put', 'patch'], '/clients/{client}', [ClientController::class, 'update'])->whereNumber('client')->middleware('droit:mod.client')->name('clients.update');
             Route::delete('/clients/{client}', [ClientController::class, 'destroy'])->whereNumber('client')->middleware('droit:supp.client')->name('clients.destroy');

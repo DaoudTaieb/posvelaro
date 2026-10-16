@@ -6,15 +6,18 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Support\Droits;
+use App\Exceptions\VenteRefusee;
+use App\Http\Requests\StoreTicketRequest;
 use App\Services\FideliteService;
 use App\Services\JourneeCaisseService;
+use App\Services\NumerotationService;
 use App\Services\ReglementService;
 use App\Services\SmsService;
+use App\Services\TicketService;
 use App\Support\SiteCourant;
 
 class CaisseController extends Controller
 {
-    private const LOCK_TICKET_NUMERO = 7710001;
     private const MODE_AVOIR = 9;
     private const MODE_BON_ACHAT = 10;
     private const FAMILLE_DEPENSE_RETOUR_ARGENT = 10;
@@ -24,37 +27,18 @@ class CaisseController extends Controller
         private readonly SmsService $sms,
         private readonly JourneeCaisseService $journees,
         private readonly ReglementService $reglementsService,
+        private readonly TicketService $tickets,
+        private readonly NumerotationService $numerotation,
     ) {
     }
 
     /**
-     * Affiche l'interface principale de la caisse (POS).
+     * Validation d'un ticket : vente, retour (lignes négatives) ou mise en attente.
+     * Orchestration : droits, journée, lignes (TicketService), numéro (NumerotationService),
+     * règlements (ReglementService), fidélité (FideliteService), SMS proposé (SmsService).
      */
-    public function index()
+    public function store(StoreTicketRequest $request)
     {
-        // Logique backend pour charger les données de la caisse (catégories, produits, etc.)
-        // return view('vente.caisse.index');
-        return response()->json(['message' => 'Backend Caisse prêt']);
-    }
-
-    public function store(Request $request)
-    {
-        $request->validate([
-            'lignes' => 'required|array|min:1',
-            'lignes.*.qte' => 'required|numeric',
-            'lignes.*.prix' => 'required|numeric',
-            'lignes.*.total' => 'required|numeric',
-            'reglements' => 'nullable|array',
-            'reglements.*.montant' => 'required|numeric',
-            'reglements.*.modereglementid' => 'required|integer|exists:modereglements,modereglementid',
-            'clientid' => 'nullable|integer|exists:clients,clientid',
-            'vendeurid' => 'nullable|integer|exists:employees,employeeid',
-            'reprise_cticketid' => 'nullable|integer',
-        ], [
-            'clientid.exists' => 'Le client sélectionné n\'existe pas.',
-            'vendeurid.exists' => 'Le vendeur sélectionné n\'existe pas.',
-        ]);
-
         if ($refus = $this->verifierDroitsTicket($request)) {
             return response()->json(['success' => false, 'message' => $refus]);
         }
@@ -107,74 +91,15 @@ class CaisseController extends Controller
             $enAttente = $request->input('en_attente') ? 1 : 0;
             $lignes = $request->input('lignes', []);
 
-            // Préparer les lignes : variante, taxe réelle de l'article, montants arrondis au millime
-            $detLignes = [];
-            foreach ($lignes as $ligne) {
-                $produit2id = $this->resolveProduit2id($ligne);
-                if (!$produit2id) {
-                    DB::rollBack();
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Erreur : La variante de l'article " . ($ligne['reference'] ?? '') . " est introuvable."
-                    ]);
-                }
-
-                $produit = DB::table('produit2s')
-                    ->join('produits', 'produit2s.produitid', '=', 'produits.produitid')
-                    ->leftJoin('taxefamilles', 'produits.taxefamilleid', '=', 'taxefamilles.taxefamilleid')
-                    ->where('produit2s.produit2id', $produit2id)
-                    ->select('produits.produitid', 'produits.taxefamilleid', 'produits.ht_achat', 'produits.ttc_achat', 'taxefamilles.tvavente')
-                    ->first();
-
-                $tva_rate = floatval($produit->tvavente ?? 0);
-                $l_qte = floatval($ligne['qte'] ?? 0);
-                $l_prix = floatval($ligne['prix'] ?? 0);
-                $l_total = round(floatval($ligne['total'] ?? 0), 3);
-                $l_prixNet = round(floatval($ligne['prixNet'] ?? $l_prix), 3);
-
-                // Une ligne doit avoir une quantité et un total cohérents (quantité x prix net) :
-                // sinon un article pourrait sortir du stock sans être payé.
-                if (abs($l_qte) < 0.0005) {
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => "La ligne " . ($ligne['designation'] ?? $ligne['reference'] ?? '') . " a une quantité nulle : supprimez-la du ticket."]);
-                }
-                if (abs($l_total - $l_qte * $l_prixNet) > 0.01 + 0.0005 * abs($l_qte)) {
-                    DB::rollBack();
-                    return response()->json(['success' => false, 'message' => "Montant incohérent sur la ligne " . ($ligne['designation'] ?? $ligne['reference'] ?? '') . " : le total ne correspond pas à quantité × prix net."]);
-                }
-                $l_brut = round($l_prix * $l_qte, 3);
-
-                $ht = round($l_total / (1 + ($tva_rate / 100)), 3);
-                $ht_base = round($l_brut / (1 + ($tva_rate / 100)), 3);
-
-                $detLignes[] = [
-                    'produitid' => $produit->produitid,
-                    'produit2id' => $produit2id,
-                    'taxefamilleid' => $produit->taxefamilleid ?? 7,
-                    'ht' => $ht_base / $l_qte,
-                    'ttc' => $l_prix,
-                    'qte' => $l_qte,
-                    'totalht' => $ht_base,
-                    'remise' => floatval($ligne['remise'] ?? 0),
-                    'totalhtnet' => $ht,
-                    'tva' => $tva_rate,
-                    'vtva' => $l_total - $ht,
-                    'totalttc' => $l_brut,
-                    'totalttcnet' => $l_total,
-                    'puttcnet' => $l_prixNet,
-                    'htachat' => floatval($produit->ht_achat ?? 0),
-                    'ttcachat' => floatval($produit->ttc_achat ?? 0),
-                    'detventeid' => ($l_qte < 0 && !empty($ligne['detventeid'])) ? (int) $ligne['detventeid'] : 0,
-                ];
-            }
-
-            // Calculer les totaux (le trigger cticket_calc recalcule aussi l'entête à partir des lignes)
-            $totalqte = array_sum(array_column($detLignes, 'qte'));
-            $totalttc = round(array_sum(array_column($detLignes, 'totalttcnet')), 3);
-            $totalht = array_sum(array_column($detLignes, 'totalhtnet'));
-            $totaltva = array_sum(array_column($detLignes, 'vtva'));
-            $totalbrutht = array_sum(array_column($detLignes, 'totalht'));
-            $remise_totale = array_sum(array_column($detLignes, 'totalttc')) - $totalttc;
+            // Lignes : variante, TVA réelle de l'article, montants arrondis au millime, cohérence quantité × prix net
+            $detLignes = $this->tickets->preparerLignes($lignes);
+            $totaux = $this->tickets->totaux($detLignes);
+            $totalqte = $totaux['totalqte'];
+            $totalttc = $totaux['totalttc'];
+            $totalht = $totaux['totalnetht'];
+            $totaltva = $totaux['totaltva'];
+            $totalbrutht = $totaux['totalbrutht'];
+            $remise_totale = $totaux['vremise'];
 
             $remboursement = !$enAttente && $totalttc < -0.0005;
             $reglements = ($enAttente || $remboursement) ? [] : $request->input('reglements', []);
@@ -192,10 +117,8 @@ class CaisseController extends Controller
                 return response()->json(['success' => false, 'message' => 'Le montant réglé dépasse le total du ticket.']);
             }
 
-            // Numéro de ticket : verrou pour éviter que deux caisses obtiennent le même numéro
-            DB::statement('SELECT pg_advisory_xact_lock(?)', [self::LOCK_TICKET_NUMERO]);
-            $maxNumero = DB::table('ctickets')->max('cticketnumero');
-            $nextNumero = $maxNumero ? (intval($maxNumero) + 1) : intval(date('y') . '000001');
+            // Numéro de ticket (série du logiciel de bureau, sous verrou)
+            $nextNumero = $this->numerotation->prochainNumeroTicket();
 
             $now = now();
 
@@ -413,6 +336,9 @@ class CaisseController extends Controller
                 'print_url' => $enAttente ? null : route('vente.tickets.show', $cticketid)
             ]);
 
+        } catch (VenteRefusee $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Erreur Caisse Store: ' . $e->getMessage() . ' - Ligne: ' . $e->getLine());
@@ -587,32 +513,6 @@ class CaisseController extends Controller
             'raisonreglement' => $titulaire !== '' ? mb_substr($titulaire, 0, 100) : null,
             'echeance' => $echeance,
         ];
-    }
-
-    /**
-     * Retrouver la variante (produit2id) d'une ligne du panier
-     */
-    private function resolveProduit2id(array $ligne)
-    {
-        if (!empty($ligne['produit2id']) && DB::table('produit2s')->where('produit2id', $ligne['produit2id'])->exists()) {
-            return $ligne['produit2id'];
-        }
-        foreach (['produitid', 'articleid'] as $key) {
-            if (!empty($ligne[$key])) {
-                $id = DB::table('produit2s')->where('produitid', $ligne[$key])->value('produit2id');
-                if ($id) return $id;
-            }
-        }
-        if (!empty($ligne['code'])) {
-            return DB::table('produit2s')
-                ->join('produits', 'produit2s.produitid', '=', 'produits.produitid')
-                ->where(function ($q) use ($ligne) {
-                    $q->where('produits.reference', $ligne['code'])
-                      ->orWhere('produit2s.barcode2', $ligne['code']);
-                })
-                ->value('produit2s.produit2id');
-        }
-        return null;
     }
 
     /**

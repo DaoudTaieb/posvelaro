@@ -137,13 +137,4 @@ class CommissionController extends Controller
 
         return view('vente.commissions.index', compact('commissions', 'vendeurs', 'totals', 'kpis'));
     }
-
-    /**
-     * Calcule ou recalcule les commissions pour une période donnée.
-     */
-    public function calculate(Request $request)
-    {
-        // Logique de calcul des commissions si nécessaire pour sauvegarder en BDD
-        return response()->json(['message' => 'Calcul effectué.']);
-    }
 }

@@ -22,14 +22,27 @@ class DashboardController extends Controller
         $yesterday = Carbon::yesterday();
         $siteid = \App\Support\SiteCourant::id();
         
+        // Indicateurs d'aujourd'hui et d'hier en une seule requête (CA, nombre de tickets, articles)
+        $jours = DB::table('ctickets')
+            ->where('siteid', $siteid)
+            ->where('enattente', false)
+            ->whereDate('cticketdate', '>=', $yesterday)
+            ->whereDate('cticketdate', '<=', $today)
+            ->groupBy(DB::raw('DATE(cticketdate)'))
+            ->select(DB::raw('DATE(cticketdate) as jour'), DB::raw('SUM(totalttc) as ca'), DB::raw('COUNT(*) as nb'), DB::raw('SUM(totalqte) as qte'))
+            ->get()
+            ->keyBy(fn ($r) => (string) $r->jour);
+        $jourAujourdhui = $jours[$today->toDateString()] ?? null;
+        $jourHier = $jours[$yesterday->toDateString()] ?? null;
+
         // 1. Chiffre d'affaires total (Aujourd'hui)
-        $caToday = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $today)->sum('totalttc') ?? 0;
-        $caYesterday = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $yesterday)->sum('totalttc') ?? 0;
+        $caToday = (float) ($jourAujourdhui->ca ?? 0);
+        $caYesterday = (float) ($jourHier->ca ?? 0);
         $caTrend = $caYesterday > 0 ? (($caToday - $caYesterday) / $caYesterday) * 100 : 0;
 
         // 2. Tickets (Aujourd'hui)
-        $ticketsToday = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $today)->count();
-        $ticketsYesterday = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $yesterday)->count();
+        $ticketsToday = (int) ($jourAujourdhui->nb ?? 0);
+        $ticketsYesterday = (int) ($jourHier->nb ?? 0);
         $ticketsTrend = $ticketsYesterday > 0 ? (($ticketsToday - $ticketsYesterday) / $ticketsYesterday) * 100 : 0;
 
         // 3. Panier Moyen (Aujourd'hui)
@@ -38,18 +51,26 @@ class DashboardController extends Controller
         $panierMoyenTrend = $panierMoyenYesterday > 0 ? (($panierMoyenToday - $panierMoyenYesterday) / $panierMoyenYesterday) * 100 : 0;
 
         // 4. Articles Vendus (Aujourd'hui)
-        $articlesToday = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $today)->sum('totalqte') ?? 0;
-        $articlesYesterday = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $yesterday)->sum('totalqte') ?? 0;
+        $articlesToday = (float) ($jourAujourdhui->qte ?? 0);
+        $articlesYesterday = (float) ($jourHier->qte ?? 0);
         $articlesTrend = $articlesYesterday > 0 ? (($articlesToday - $articlesYesterday) / $articlesYesterday) * 100 : 0;
 
-        // Chart Data (Last 7 days)
+        // Courbe des 7 derniers jours : une seule requête groupée par jour (au lieu d'une par jour)
+        $ventesParJour = DB::table('ctickets')
+            ->where('siteid', $siteid)
+            ->where('enattente', false)
+            ->whereDate('cticketdate', '>=', Carbon::today()->subDays(6))
+            ->whereDate('cticketdate', '<=', $today)
+            ->groupBy(DB::raw('DATE(cticketdate)'))
+            ->select(DB::raw('DATE(cticketdate) as jour'), DB::raw('SUM(totalttc) as ca'))
+            ->pluck('ca', 'jour');
+
         $chartData = [];
         $chartLabels = [];
         for ($i = 6; $i >= 0; $i--) {
             $date = Carbon::today()->subDays($i);
             $chartLabels[] = ucfirst($date->translatedFormat('D'));
-            $sales = DB::table('ctickets')->where('siteid', $siteid)->where('enattente', false)->whereDate('cticketdate', $date)->sum('totalttc') ?? 0;
-            $chartData[] = round($sales, 3);
+            $chartData[] = round((float) ($ventesParJour[$date->toDateString()] ?? 0), 3);
         }
 
         // Recent Activity

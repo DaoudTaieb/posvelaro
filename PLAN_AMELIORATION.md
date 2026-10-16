@@ -39,14 +39,16 @@ Date : 16 octobre 2026. Base analysée : PostgreSQL 17, base `velaro` (127.0.0.1
 - ⏳ **Numérotation** : inchangée (`max()+1` sous verrou, compatible avec la séquence du bureau). Le format de repli `yy000001` ne sert que sur une base vide.
 - ⏳ **FormRequest** : les validations sont encore dans les contrôleurs ; prévu avec le découpage de la Phase 2.
 
-## 4. Phase 2 — Architecture et qualité (2 à 4 semaines)
+## 4. Phase 2 — Architecture et qualité
 
-- **Découper `CaisseController::store`** (390 lignes) en services : `TicketService`, `ReglementService`, `FideliteService`, `NumerotationService`, `TransfertService`. Les contrôleurs ne gardent que l'orchestration HTTP.
-- **Découper `pos.blade.php`** (5 171 lignes, 150 fonctions JS, 28 modales) : une vue par modale dans `resources/views/caisse/modals/`, le JavaScript en modules Vite (`resources/js/pos/panier.js`, `paiement.js`, `clients.js`, `api.js`) avec un wrapper `fetch` qui gère CSRF, erreurs 403 et messages. Compiler avec `npm run build` et retirer `public/hot` en production.
-- **Modèle User** : supprimer les relations vers Site, Employee et UserDroit qui n'existent pas, ou créer ces modèles en lecture seule.
-- **Code mort** : supprimer `CaisseController::index`, `ClientController::show`, `CommissionController::calculate` et leurs routes ; retirer la double inclusion de `partials.ui-dialogs`.
-- **Tests** : créer une base `velaro_test` restaurée depuis le dump, exécuter les migrations dessus, pointer `phpunit.xml` dessus. Ne plus jamais lancer les tests sur la base du magasin (le test Dusk modifie `stock2s`). Ajouter une CI (GitHub Actions ou Azure DevOps) qui lance `composer test` et le smoke test.
-- **Performance** : index composite `ctickets (siteid, cticketdate)` et `detctickets (cticketid, qte)` ; mettre en cache 60 s les agrégats du dashboard (10 requêtes par affichage).
+État au 16/10/2026 : **fait**. 99 tests Feature au vert, smoke test sans erreur.
+
+- ✅ **Contrôleur caisse découpé** : `StoreTicketRequest` (validation), `TicketService` (lignes, TVA, totaux, variante), `NumerotationService` (numéro sous verrou), `ReglementService`, `FideliteService`, `JourneeCaisseService`. Refus métier via l'exception `VenteRefusee`. Ouverture et clôture de journée validées par `StoreOuvertureRequest` / `StoreClotureRequest`.
+- ✅ **Vue caisse découpée** : `pos.blade.php` (5 270 lignes) devient un fichier d'assemblage de 80 lignes ; 25 modales dans `caisse/modals/`, l'écran et l'en-tête dans `caisse/partials/`, le JavaScript en 6 fichiers dans `caisse/scripts/`. HTML rendu vérifié identique avant/après (4 949 lignes). Le JavaScript reste en Blade (il utilise `route()` et `csrf_token()`) : le passage en modules Vite est reporté.
+- ✅ **Modèle User** : relations vers des classes inexistantes remplacées par des accès lecture seule (`siteRecord`, `employeeRecord`, `roleRecord`).
+- ✅ **Code mort** : `CaisseController::index`, `ClientController::show`, `CommissionController::calculate` et leurs routes supprimés ; double inclusion des boîtes de dialogue (identifiants HTML en double) corrigée dans la caisse et le layout.
+- ✅ **Tests** : décision du 16/10/2026, tout reste sur la base `velaro` (pas de base de test séparée) ; les tests s'exécutent en transactions annulées. Pas de CI externe (la base n'est accessible que sur le poste).
+- ✅ **Performance** : tableau de bord en 11 requêtes au lieu de 22, indicateurs vérifiés identiques. Pas d'index ajouté : volumes faibles (795 tickets) et base partagée avec le bureau.
 
 ## 5. Phase 3 — Fonctionnel et expérience utilisateur (en continu)
 

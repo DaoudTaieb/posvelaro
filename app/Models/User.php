@@ -74,27 +74,27 @@ class User extends Authenticatable
         return '';
     }
 
-    /**
-     * Relationship: User belongs to a Site.
+    /*
+     * Les tables liées (sites, employees, userdroits) appartiennent au logiciel de bureau et n'ont pas
+     * de modèle Eloquent : elles sont lues en lecture seule via le query builder.
+     * (Les anciennes relations pointaient vers des classes Site / Employee / UserDroit inexistantes.)
      */
-    public function site()
+
+    /** Site (magasin) de l'utilisateur. */
+    public function siteRecord(): ?object
     {
-        return $this->belongsTo(\App\Models\Site::class, 'siteid', 'siteid');
+        return $this->siteid ? \Illuminate\Support\Facades\DB::table('sites')->where('siteid', $this->siteid)->first() : null;
     }
 
-    /**
-     * Relationship: User belongs to an Employee.
-     */
-    public function employee()
+    /** Employé (vendeur) lié au compte. */
+    public function employeeRecord(): ?object
     {
-        return $this->belongsTo(\App\Models\Employee::class, 'employeeid', 'employeeid');
+        return $this->employeeid ? \Illuminate\Support\Facades\DB::table('employees')->where('employeeid', $this->employeeid)->first() : null;
     }
 
-    /**
-     * Relationship: User has a UserDroit (permissions profile).
-     */
-    public function userdroit()
+    /** Rôle (profil de droits) de l'utilisateur. */
+    public function roleRecord(): ?object
     {
-        return $this->belongsTo(\App\Models\UserDroit::class, 'userdroitid', 'userdroitid');
+        return $this->userdroitid ? \Illuminate\Support\Facades\DB::table('userdroits')->where('userdroitid', $this->userdroitid)->first() : null;
     }
 }

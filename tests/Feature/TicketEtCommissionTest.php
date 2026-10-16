@@ -104,11 +104,6 @@ class TicketEtCommissionTest extends TestCase
         ]);
         $response->assertStatus(200);
         $response->assertJsonStructure(['html', 'pagination', 'totals', 'kpis']);
-
-        // 3. Calcul des commissions
-        $response = $this->postJson('/vente/commissions/calculate');
-        $response->assertStatus(200);
-        $response->assertJson(['message' => 'Calcul effectué.']);
     }
 
     /**

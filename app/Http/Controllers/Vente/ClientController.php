@@ -168,14 +168,6 @@ class ClientController extends Controller
     }
 
     /**
-     * Affiche les détails d'un client.
-     */
-    public function show($id)
-    {
-        // Détails du client
-    }
-
-    /**
      * Met à jour les informations du client.
      */
     public function update(Request $request, $id)
