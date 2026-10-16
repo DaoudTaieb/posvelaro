@@ -92,9 +92,9 @@ class CommissionController extends Controller
 
         if ($request->ajax()) {
 
-            $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
-            $totalCommission = (clone $query)->sum(DB::raw('(ctickets.totalnetht * vendeurs.tauxcommission / 100)'));
-            $nbVentes = (clone $query)->count();
+            // Totaux en une seule requête d'agrégat
+            $t = (clone $query)->reorder()->select(DB::raw('COALESCE(SUM(ctickets.totalnetht), 0) as netht'), DB::raw('COALESCE(SUM(ctickets.totalnetht * vendeurs.tauxcommission / 100), 0) as commission'), DB::raw('COUNT(*) as nb'))->first();
+            [$totalNetHt, $totalCommission, $nbVentes] = [(float) $t->netht, (float) $t->commission, (int) $t->nb];
 
             $commissions = $query->paginate(15);
             $html = view('vente.commissions.partials.table_body', compact('commissions'))->render();
@@ -118,9 +118,9 @@ class CommissionController extends Controller
         $commissions = $query->paginate(15);
         
         // Calculate initial totals to pass to the view to avoid layout flickers
-        $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
-        $totalCommission = (clone $query)->sum(DB::raw('(ctickets.totalnetht * vendeurs.tauxcommission / 100)'));
-        $nbVentes = (clone $query)->count();
+        // Totaux en une seule requête d'agrégat
+        $t = (clone $query)->reorder()->select(DB::raw('COALESCE(SUM(ctickets.totalnetht), 0) as netht'), DB::raw('COALESCE(SUM(ctickets.totalnetht * vendeurs.tauxcommission / 100), 0) as commission'), DB::raw('COUNT(*) as nb'))->first();
+        [$totalNetHt, $totalCommission, $nbVentes] = [(float) $t->netht, (float) $t->commission, (int) $t->nb];
 
         $totals = [
             'net_ht' => number_format((float)($totalNetHt ?? 0), 3, ',', ' '),

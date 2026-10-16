@@ -5,7 +5,28 @@
  * Valeurs serveur (routes, jeton CSRF, client et vendeur par défaut) : objet GP défini par
  * resources/views/caisse/partials/config-js.blade.php.
  */
-    console.log("=== GOLDEN POS POS SCRIPT START ===");
+    // Recherches à la frappe : une seule requête en vol par recherche (la précédente est annulée,
+    // donc jamais de résultat périmé affiché) et attente de la fin de la frappe avant d'interroger le serveur.
+    const _requetesEnCours = {};
+    const _delaisRecherche = {};
+    function fetchDernier(cle, url) {
+        if (_requetesEnCours[cle]) _requetesEnCours[cle].abort();
+        const controle = new AbortController();
+        _requetesEnCours[cle] = controle;
+        return fetch(url, { signal: controle.signal }).finally(() => {
+            if (_requetesEnCours[cle] === controle) delete _requetesEnCours[cle];
+        });
+    }
+    function differer(cle, fn, delaiMs = 250) {
+        clearTimeout(_delaisRecherche[cle]);
+        _delaisRecherche[cle] = setTimeout(fn, delaiMs);
+    }
+    function ignorerAnnulation(err) {
+        if (err && err.name === 'AbortError') return;
+        console.error(err);
+    }
+    function rechercheClientsDifferee() { differer('clients', () => searchClients(1)); }
+    function rechercheVendeursDifferee(q) { differer('vendeurs', () => searchVendeurs(q)); }
 
     // Échappe les données (noms clients, articles...) avant insertion via innerHTML
     function escHtml(s) {
@@ -696,7 +717,7 @@
             if (filters[key]) params.append(key, filters[key]);
         }
 
-        fetch(`${GP.routes['vente.caisse.pos.search_clients']}?${params.toString()}`)
+        fetchDernier('clients', `${GP.routes['vente.caisse.pos.search_clients']}?${params.toString()}`)
             .then(r => r.json())
             .then(data => {
                 let tbody = document.getElementById('clientsTbody');
@@ -756,7 +777,8 @@
                         }
                     }
                 }
-            });
+            })
+            .catch(ignorerAnnulation);
     }
 
     function createNewClient() {
@@ -1462,7 +1484,7 @@
     }
 
     function searchVendeurs(q) {
-        fetch(`${GP.routes['vente.caisse.pos.search_vendeurs']}?q=${encodeURIComponent(q)}`)
+        fetchDernier('vendeurs', `${GP.routes['vente.caisse.pos.search_vendeurs']}?q=${encodeURIComponent(q)}`)
             .then(r => r.json())
             .then(vendeurs => {
                 let tbody = document.getElementById('vendeursTbody');
@@ -1491,7 +1513,8 @@
                     `;
                     tbody.appendChild(tr);
                 });
-            });
+            })
+            .catch(ignorerAnnulation);
     }
 
     function selectVendeur(vendeur) {

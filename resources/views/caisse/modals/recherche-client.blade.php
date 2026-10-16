@@ -37,7 +37,7 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                    <input type="text" id="clientSearchInput" placeholder="Enter text to search..." style="width: 100%; padding: 6px 8px 6px 25px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" oninput="searchClients(1)">
+                    <input type="text" id="clientSearchInput" placeholder="Enter text to search..." style="width: 100%; padding: 6px 8px 6px 25px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" oninput="rechercheClientsDifferee()">
                 </div>
             </div>
             
@@ -55,14 +55,14 @@
                             <th style="padding: 8px; border-bottom: 1px solid #e5e7eb; border-top: 1px solid #e5e7eb;">Solde</th>
                         </tr>
                         <tr>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_code" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_nom" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_tel" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_adresse" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_mf" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_remise" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_plafonremise" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
-                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_solde" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="searchClients(1)"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_code" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_nom" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_tel" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_adresse" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_mf" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_remise" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_plafonremise" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
+                            <th style="padding: 4px; border-bottom: 2px solid #e5e7eb;"><input type="text" id="f_solde" class="client-filter" style="width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px;" oninput="rechercheClientsDifferee()"></th>
                         </tr>
                     </thead>
                     <tbody id="clientsTbody"></tbody>

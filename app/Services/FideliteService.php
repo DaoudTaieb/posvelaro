@@ -101,6 +101,82 @@ class FideliteService
         return $etat;
     }
 
+    /**
+     * État de la carte pour toute une liste de clients en 2 requêtes (au lieu de 3 ou 4 par client) :
+     * utilisé par la recherche clients de la caisse. Mêmes règles que etat().
+     *
+     * @param  iterable<object> $clients
+     * @return array<int, array{eligible: bool, ventes: int, palier: int, debut: ?Carbon, expiree: bool, bons_disponibles: float, bons: Collection}>
+     */
+    public function etatsEnLot(iterable $clients, ?Carbon $now = null): array
+    {
+        $now = $now ?? now();
+        $p = $this->parametres();
+        $eligibles = [];
+        $resultats = [];
+        foreach ($clients as $client) {
+            $resultats[(int) $client->clientid] = ['eligible' => false, 'ventes' => 0, 'palier' => 0, 'debut' => null, 'expiree' => false, 'bons_disponibles' => 0.0, 'bons' => collect()];
+            if ($this->estEligible($client)) {
+                $eligibles[(int) $client->clientid] = $client;
+            }
+        }
+        if (!$eligibles) {
+            return $resultats;
+        }
+
+        // Dates des ventes validées (tickets positifs) de tous les clients éligibles
+        $ventes = DB::table('ctickets')
+            ->whereIn('clientid', array_keys($eligibles))
+            ->where('enattente', false)
+            ->where('totalttc', '>', 0)
+            ->get(['clientid', 'cticketdate'])
+            ->groupBy('clientid')
+            ->map(fn ($lignes) => $lignes->map(fn ($l) => Carbon::parse($l->cticketdate))->all());
+
+        // Bons d'achat utilisables, groupés par client
+        $bons = DB::table('bons_achat')
+            ->whereIn('clientid', array_keys($eligibles))
+            ->where('utilise', false)
+            ->where('annule', false)
+            ->where('montant', '>', 0)
+            ->whereDate('date_expiration', '>=', $now->toDateString())
+            ->orderBy('date_expiration')
+            ->get()
+            ->map(function ($bon) {
+                $bon->numero = $this->numeroBon((int) $bon->id);
+                return $bon;
+            })
+            ->groupBy('clientid');
+
+        $compter = fn (array $dates, Carbon $debut, ?Carbon $fin) => count(array_filter($dates, fn (Carbon $d) => $d->gte($debut) && ($fin === null || $d->lt($fin))));
+
+        foreach ($eligibles as $clientid => $client) {
+            $dates = $ventes[$clientid] ?? [];
+            $etat = &$resultats[$clientid];
+            $etat['eligible'] = true;
+            $etat['bons'] = ($bons[$clientid] ?? collect())->values();
+            $etat['bons_disponibles'] = round((float) $etat['bons']->sum('montant'), 3);
+
+            $debut = !empty($client->fidelite_debut) ? Carbon::parse($client->fidelite_debut) : null;
+            if ($debut) {
+                $k = 0;
+                while ($k < 200 && $debut->copy()->addYears($k + 1)->lte($now)) {
+                    $k++;
+                }
+                if ($k >= 1 && $compter($dates, $debut->copy()->addYears($k - 1), $debut->copy()->addYears($k)) < $p['ventes_par_an']) {
+                    $etat['expiree'] = true;
+                    $debut = null;
+                }
+            }
+            $etat['debut'] = $debut;
+            $etat['ventes'] = $debut ? $compter($dates, $debut, null) : 0;
+            $etat['palier'] = $this->palierPourVentes($etat['ventes'], $p['paliers']);
+            unset($etat);
+        }
+
+        return $resultats;
+    }
+
     /** Remise (%) à appliquer aux articles fidélité pour la prochaine vente de ce client. */
     public function palier(?object $client): int
     {

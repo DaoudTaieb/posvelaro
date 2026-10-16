@@ -222,20 +222,7 @@ class TicketController extends Controller
 
         if ($request->ajax()) {
 
-            $totalQte = (clone $query)->sum('ctickets.totalqte');
-            $totalBrutHt = (clone $query)->sum('ctickets.totalbrutht');
-            $totalRemise = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('ctickets.totalbrutht - ctickets.totalnetht'));
-            $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
-            $totalTva = (clone $query)->sum('ctickets.totaltva');
-            $totalTtc = (clone $query)->sum('ctickets.totalttc');
-            $totalAcompte = (clone $query)->sum('ctickets.acompte');
-            $totalReste = (clone $query)->sum('ctickets.netapayer');
-
-            // KPI Calculations
-            $nbTickets = (clone $query)->count();
-            // A ticket is paid if netapayer <= 0 and totalttc > 0 (or simply we can sum the amounts paid: totalttc - netapayer)
-            // But let's use standard logic: total payé = totalttc - netapayer. Unpaid = netapayer.
-            $kpiTotalPaye = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(ctickets.totalttc, 0) - COALESCE(ctickets.netapayer, 0)'));
+            [$totalQte, $totalBrutHt, $totalRemise, $totalNetHt, $totalTva, $totalTtc, $totalAcompte, $totalReste, $nbTickets, $kpiTotalPaye] = $this->totaux($query);
             $kpiTotalNonPaye = $totalReste;
 
             $tickets = $query->paginate(15);
@@ -267,18 +254,7 @@ class TicketController extends Controller
         $tickets = $query->paginate(15);
         
         // Calculate initial totals to pass to the view to avoid layout flickers
-        $totalQte = (clone $query)->sum('ctickets.totalqte');
-        $totalBrutHt = (clone $query)->sum('ctickets.totalbrutht');
-        $totalRemise = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('ctickets.totalbrutht - ctickets.totalnetht'));
-        $totalNetHt = (clone $query)->sum('ctickets.totalnetht');
-        $totalTva = (clone $query)->sum('ctickets.totaltva');
-        $totalTtc = (clone $query)->sum('ctickets.totalttc');
-        $totalAcompte = (clone $query)->sum('ctickets.acompte');
-        $totalReste = (clone $query)->sum('ctickets.netapayer');
-
-        // KPI Calculations
-        $nbTickets = (clone $query)->count();
-        $kpiTotalPaye = (clone $query)->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(ctickets.totalttc, 0) - COALESCE(ctickets.netapayer, 0)'));
+        [$totalQte, $totalBrutHt, $totalRemise, $totalNetHt, $totalTva, $totalTtc, $totalAcompte, $totalReste, $nbTickets, $kpiTotalPaye] = $this->totaux($query);
         $kpiTotalNonPaye = $totalReste;
 
         $totals = [
@@ -440,5 +416,29 @@ class TicketController extends Controller
             </script>
         </body>
         </html>";
+    }
+
+    /**
+     * Totaux et indicateurs de la liste filtrée, en une seule requête d'agrégat.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float, 4: float, 5: float, 6: float, 7: float, 8: int, 9: float}
+     */
+    private function totaux($query): array
+    {
+        $t = (clone $query)->reorder()->select(
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalqte), 0) as qte'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalbrutht), 0) as brutht'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalbrutht - ctickets.totalnetht), 0) as remise'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalnetht), 0) as netht'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totaltva), 0) as tva'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.totalttc), 0) as ttc'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.acompte), 0) as acompte'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(ctickets.netapayer), 0) as reste'),
+            \Illuminate\Support\Facades\DB::raw('COUNT(*) as nb'),
+            \Illuminate\Support\Facades\DB::raw('COALESCE(SUM(COALESCE(ctickets.totalttc, 0) - COALESCE(ctickets.netapayer, 0)), 0) as paye')
+        )->first();
+
+        return [(float) $t->qte, (float) $t->brutht, (float) $t->remise, (float) $t->netht, (float) $t->tva,
+            (float) $t->ttc, (float) $t->acompte, (float) $t->reste, (int) $t->nb, (float) $t->paye];
     }
 }

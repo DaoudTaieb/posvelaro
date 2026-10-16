@@ -110,12 +110,15 @@ class MouvementsArticlesController extends Controller
             $query->whereRaw("to_char(vdetmvtstcs.dateoperation, 'HH24:MI') LIKE ?", ['%' . $request->input('f_heure') . '%']);
         }
 
-        // Calcul des agrégats query-wide
-        $sumAchat = (clone $query)->sum('vdetmvtstcs.qteachat');
-        $sumVente = (clone $query)->sum('vdetmvtstcs.qtevente');
-        $adjustments = (clone $query)->select(DB::raw('COALESCE(vdetmvtstcs.qtetransfert, 0) + COALESCE(vdetmvtstcs.qteinout, 0) + COALESCE(vdetmvtstcs.qteecart, 0) as adj'))->get();
-        $sumEntrer = $adjustments->filter(fn($x) => $x->adj > 0)->sum('adj');
-        $sumSortie = $adjustments->filter(fn($x) => $x->adj < 0)->map(fn($x) => abs($x->adj))->sum();
+        // Agrégats de toute la sélection, en une seule requête (au lieu de 3 dont une lisant toutes les lignes)
+        $ajustement = 'COALESCE(vdetmvtstcs.qtetransfert, 0) + COALESCE(vdetmvtstcs.qteinout, 0) + COALESCE(vdetmvtstcs.qteecart, 0)';
+        $t = (clone $query)->reorder()->select(
+            DB::raw('COALESCE(SUM(vdetmvtstcs.qteachat), 0) as achat'),
+            DB::raw('COALESCE(SUM(vdetmvtstcs.qtevente), 0) as vente'),
+            DB::raw("COALESCE(SUM(CASE WHEN ($ajustement) > 0 THEN ($ajustement) ELSE 0 END), 0) as entrer"),
+            DB::raw("COALESCE(SUM(CASE WHEN ($ajustement) < 0 THEN -($ajustement) ELSE 0 END), 0) as sortie")
+        )->first();
+        [$sumAchat, $sumVente, $sumEntrer, $sumSortie] = [(float) $t->achat, (float) $t->vente, (float) $t->entrer, (float) $t->sortie];
 
         $mouvements = $query->orderBy('vdetmvtstcs.dateoperation', 'desc')->paginate(50);
 

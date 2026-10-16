@@ -126,17 +126,29 @@ class EtatStockController extends Controller
 
         // Calcul des agrégats pour la requête filtrée
         if ($hasFilter) {
-            $totalsQuery = clone $query;
-            $sumEntrer = $totalsQuery->sum('mouvements.total_entrer');
-            $sumSortie = $totalsQuery->sum('mouvements.total_sortie');
-            $sumAchat = $totalsQuery->sum('mouvements.total_achat');
-            $sumRetAchat = $totalsQuery->sum('mouvements.total_ret_achat');
-            $sumVente = $totalsQuery->sum('mouvements.total_vente');
-            $sumRetVente = $totalsQuery->sum('mouvements.total_ret_vente');
-            $sumDispo = $totalsQuery->sum('vproduit2stocks.qtestock');
-            $sumPv = $totalsQuery->sum('vproduit2stocks.ttc_vente');
-            $sumValPv = $totalsQuery->sum(DB::raw('COALESCE(vproduit2stocks.qtestock, 0) * COALESCE(vproduit2stocks.ttc_vente, 0)'));
-            $articlesCount = $totalsQuery->count();
+            // Tous les totaux en une seule requête (la vue des mouvements n'est calculée qu'une fois)
+            $t = (clone $query)->reorder()->select(
+                DB::raw('COALESCE(SUM(mouvements.total_entrer), 0) as entrer'),
+                DB::raw('COALESCE(SUM(mouvements.total_sortie), 0) as sortie'),
+                DB::raw('COALESCE(SUM(mouvements.total_achat), 0) as achat'),
+                DB::raw('COALESCE(SUM(mouvements.total_ret_achat), 0) as ret_achat'),
+                DB::raw('COALESCE(SUM(mouvements.total_vente), 0) as vente'),
+                DB::raw('COALESCE(SUM(mouvements.total_ret_vente), 0) as ret_vente'),
+                DB::raw('COALESCE(SUM(vproduit2stocks.qtestock), 0) as dispo'),
+                DB::raw('COALESCE(SUM(vproduit2stocks.ttc_vente), 0) as pv'),
+                DB::raw('COALESCE(SUM(COALESCE(vproduit2stocks.qtestock, 0) * COALESCE(vproduit2stocks.ttc_vente, 0)), 0) as val_pv'),
+                DB::raw('COUNT(*) as nb')
+            )->first();
+            $sumEntrer = (float) $t->entrer;
+            $sumSortie = (float) $t->sortie;
+            $sumAchat = (float) $t->achat;
+            $sumRetAchat = (float) $t->ret_achat;
+            $sumVente = (float) $t->vente;
+            $sumRetVente = (float) $t->ret_vente;
+            $sumDispo = (float) $t->dispo;
+            $sumPv = (float) $t->pv;
+            $sumValPv = (float) $t->val_pv;
+            $articlesCount = (int) $t->nb;
         } else {
             $sumEntrer = $sumSortie = $sumAchat = $sumRetAchat = $sumVente = $sumRetVente = $sumDispo = $sumPv = $sumValPv = $articlesCount = 0;
         }

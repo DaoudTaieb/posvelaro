@@ -58,6 +58,18 @@ colonne existante `clients.barcode`.
   `caisseconfigs` (`ticketprinter` du bureau, lignes `goldenpos_*`) ; envoi Windows par
   `resources/scripts/impression-brute.ps1` (spouleur, RAW) ou réseau (port 9100).
 
+## Performance
+
+- **Aucune ressource internet** : polices (Inter, Press Start 2P), Chart.js 4.4.9, jQuery 3.6.0 et
+  Select2 4.1.0-rc.0 sont copiés dans `public/vendor` (versions figées dans `package.json`). Ne pas
+  réintroduire de lien CDN : le magasin doit fonctionner même sans connexion internet.
+- Chart.js n'est chargé que par le tableau de bord.
+- Totaux des listes (tickets, commissions, état de stock, mouvements) : une seule requête
+  d'agrégat ; recherche clients de la caisse : fidélité calculée en lot (`FideliteService::etatsEnLot`).
+- Recherches à la frappe de la caisse : `differer()` (250 ms) et `fetchDernier()` (annule la requête
+  précédente) dans `public/js/caisse/caisse.js`.
+- Apache (`deploy/apache/golden-pos.conf`) : compression gzip et cache navigateur des fichiers statiques.
+
 ## Commandes
 
 ```bash

@@ -735,8 +735,19 @@ class PosController extends Controller
             ->orderBy('nom')
             ->paginate(15);
 
-        // Palier de remise et solde des bons d'achat disponibles, calculés par FideliteService
-        $clients->getCollection()->transform(fn ($client) => $this->enrichirClient($client));
+        // Palier de remise et bons d'achat disponibles : calcul groupé pour toute la page (2 requêtes)
+        $etats = $this->fidelite->etatsEnLot($clients->getCollection());
+        $clients->getCollection()->transform(function ($client) use ($etats) {
+            $etat = $etats[(int) $client->clientid];
+            $client->loyalty_tier = $etat['palier'];
+            $client->fidelite_ventes = $etat['ventes'];
+            $client->fidelite_expiree = $etat['expiree'];
+            $client->num_fidelite = $client->barcode ?? null;
+            $client->soldefidelite = $etat['bons_disponibles'];
+            $client->bons_disponibles = $etat['eligible'] ? $etat['bons'] : [];
+
+            return $client;
+        });
 
         return response()->json($clients);
     }

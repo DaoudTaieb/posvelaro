@@ -518,6 +518,8 @@
 @endsection
 
 @section('scripts')
+{{-- Chart.js hébergé localement, chargé seulement sur le tableau de bord --}}
+<script src="{{ asset('vendor/chartjs/chart.umd.min.js') }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // --- 1. Main Sales Chart ---

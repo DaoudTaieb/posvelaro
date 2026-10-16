@@ -216,6 +216,43 @@ class FideliteTest extends TestCase
         $this->assertEquals(0.0, (float) $this->client($client->clientid)->soldefidelite);
     }
 
+    public function test_calcul_groupe_identique_au_calcul_unitaire(): void
+    {
+        // Cas variés : carte neuve, 3 ventes, 4 ventes avec bon, carte expirée, non fidèle, passager
+        $lignes = [['produitid' => $this->produitFidelite, 'qte' => 1]];
+        $neuf = $this->creerClient();
+        $trois = $this->creerClient();
+        $quatre = $this->creerClient();
+        $expire = $this->creerClient();
+        $nonFidele = $this->creerClient(false);
+        $base = Carbon::parse('2026-10-01 10:00:00');
+        foreach ([[$trois, 3], [$quatre, 4]] as [$client, $n]) {
+            for ($i = 0; $i < $n; $i++) {
+                $d = $base->copy()->addDays($i);
+                $this->fidelite->appliquerVente($this->client($client->clientid), $lignes, $this->creerTicket($client->clientid, $d), $d);
+            }
+        }
+        $d = Carbon::parse('2024-05-01 10:00:00');
+        $this->fidelite->appliquerVente($this->client($expire->clientid), $lignes, $this->creerTicket($expire->clientid, $d), $d);
+
+        $now = Carbon::parse('2026-10-16 12:00:00');
+        $clients = collect([$neuf, $trois, $quatre, $expire, $nonFidele])->map(fn ($c) => $this->client($c->clientid))
+            ->push(DB::table('clients')->where('clientid', config('pos.client_passager_id'))->first());
+
+        $lot = $this->fidelite->etatsEnLot($clients, $now);
+        foreach ($clients as $client) {
+            $unitaire = $this->fidelite->etat($client, $now);
+            $groupe = $lot[(int) $client->clientid];
+            foreach (['eligible', 'ventes', 'palier', 'expiree', 'bons_disponibles'] as $cle) {
+                $this->assertEquals($unitaire[$cle], $groupe[$cle], "client {$client->clientid} : {$cle}");
+            }
+            $this->assertEquals($unitaire['debut']?->toDateTimeString(), $groupe['debut']?->toDateTimeString());
+        }
+        $this->assertSame(30, $lot[(int) $quatre->clientid]['palier']);
+        $this->assertCount(1, $lot[(int) $quatre->clientid]['bons']);
+        $this->assertTrue($lot[(int) $expire->clientid]['expiree']);
+    }
+
     public function test_client_passager_et_non_fidele_sans_remise(): void
     {
         $passager = DB::table('clients')->where('clientid', config('pos.client_passager_id'))->first();
