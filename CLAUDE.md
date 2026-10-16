@@ -50,7 +50,13 @@ colonne existante `clients.barcode`.
   `SiteCourant`, `RetailConfig`, `TaxeProduit`, `Code128` (code-barres des bons d'achat).
 - Droits sur les routes : middleware `droit:` (`routes/web.php`) et directive Blade `@peut`.
 - Caisse : `resources/views/caisse/pos.blade.php` assemble `caisse/partials`, `caisse/modals`
-  (une modale par fichier) et `caisse/scripts` (JavaScript, ordre significatif).
+  (une modale par fichier) et les scripts `public/js/caisse/*.js` (scripts classiques, ordre
+  significatif : fonctions globales appelées par les `onclick`). Les valeurs serveur (routes,
+  jeton CSRF, client et vendeur par défaut) sont dans l'objet `GP` (`caisse/partials/config-js`).
+  Après modification d'un script : `node --check public/js/caisse/<fichier>.js`.
+- Impression : `ImpressionTicketService` et `App\Support\EscPos` ; réglages par caisse dans
+  `caisseconfigs` (`ticketprinter` du bureau, lignes `goldenpos_*`) ; envoi Windows par
+  `resources/scripts/impression-brute.ps1` (spouleur, RAW) ou réseau (port 9100).
 
 ## Commandes
 

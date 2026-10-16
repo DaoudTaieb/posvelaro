@@ -44,7 +44,7 @@ Date : 16 octobre 2026. Base analysée : PostgreSQL 17, base `velaro` (127.0.0.1
 État au 16/10/2026 : **fait**. 99 tests Feature au vert, smoke test sans erreur.
 
 - ✅ **Contrôleur caisse découpé** : `StoreTicketRequest` (validation), `TicketService` (lignes, TVA, totaux, variante), `NumerotationService` (numéro sous verrou), `ReglementService`, `FideliteService`, `JourneeCaisseService`. Refus métier via l'exception `VenteRefusee`. Ouverture et clôture de journée validées par `StoreOuvertureRequest` / `StoreClotureRequest`.
-- ✅ **Vue caisse découpée** : `pos.blade.php` (5 270 lignes) devient un fichier d'assemblage de 80 lignes ; 25 modales dans `caisse/modals/`, l'écran et l'en-tête dans `caisse/partials/`, le JavaScript en 6 fichiers dans `caisse/scripts/`. HTML rendu vérifié identique avant/après (4 949 lignes). Le JavaScript reste en Blade (il utilise `route()` et `csrf_token()`) : le passage en modules Vite est reporté.
+- ✅ **Vue caisse découpée** : `pos.blade.php` (5 270 lignes) devient un fichier d'assemblage de 80 lignes ; 25 modales dans `caisse/modals/`, l'écran et l'en-tête dans `caisse/partials/`, le JavaScript en 6 fichiers dans `caisse/scripts/`. HTML rendu vérifié identique avant/après (4 949 lignes). **Mise à jour** : le JavaScript est sorti de Blade dans `public/js/caisse/*.js` (6 fichiers) ; les valeurs serveur passent par l'objet `GP` (`caisse/partials/config-js`). Scripts classiques plutôt que modules Vite : les 112 attributs `onclick` et les variables partagées entre fichiers exigent une portée globale, et aucune compilation n'est nécessaire en production. Page caisse : 158 Ko au lieu de 310 Ko, scripts mis en cache par le navigateur. Vérifié dans le navigateur : console sans erreur, recherches, consultation, reprise, aperçu, ajout d'article.
 - ✅ **Modèle User** : relations vers des classes inexistantes remplacées par des accès lecture seule (`siteRecord`, `employeeRecord`, `roleRecord`).
 - ✅ **Code mort** : `CaisseController::index`, `ClientController::show`, `CommissionController::calculate` et leurs routes supprimés ; double inclusion des boîtes de dialogue (identifiants HTML en double) corrigée dans la caisse et le layout.
 - ✅ **Tests** : décision du 16/10/2026, tout reste sur la base `velaro` (pas de base de test séparée) ; les tests s'exécutent en transactions annulées. Pas de CI externe (la base n'est accessible que sur le poste).
@@ -52,14 +52,14 @@ Date : 16 octobre 2026. Base analysée : PostgreSQL 17, base `velaro` (127.0.0.1
 
 ## 5. Phase 3 — Fonctionnel et expérience utilisateur
 
-État au 16/10/2026 : **fait**, sauf l'impression thermique. 105 tests Feature au vert, smoke test sans erreur.
+État au 16/10/2026 : **fait**. 111 tests Feature au vert, smoke test sans erreur.
 
 - ✅ **Choix du site à la connexion** : proposé à tout rôle qui a le droit « Modifier Site doc vente » (`updatesitevente`, réglable dans Gestion des Droits), et plus seulement au login « admin ». Le contrôle est fait côté serveur : un rôle bloqué ne peut plus forcer un autre site en envoyant le formulaire à la main. Le site habituel est présélectionné.
 - ✅ **Stocks négatifs** : écran Stock > Stocks négatifs (quantité, dernière vente de la variante, recherche) et alerte en caisse quand la quantité du ticket dépasse le stock du site.
 - ✅ **Contrôle des données** : Paramètres > Contrôle des données (droit `config`), en lecture seule : tickets dont l'entête diffère des lignes, tickets sans ligne, tickets sur-payés, restes à payer, journées ouvertes depuis plus d'un jour, tickets en attente de plus de 7 jours, bons d'achat expirés, stocks négatifs.
 - ✅ **Mots de passe** : page « Changer mon mot de passe » (clic sur le nom en haut à droite), contrôle de l'ancien mot de passe, 6 caractères minimum pour tout nouveau mot de passe (aussi en Gestion des utilisateurs). Stockage inchangé (le logiciel de bureau lit en clair).
 - ✅ **Demandes de transfert** : conservées (fonctionnelles et testées), même si le magasin ne les utilise pas encore.
-- ⏳ **Impression thermique** : `stations.urlapilbtprint` est vide sur les 3 postes ; à brancher quand l'API d'impression du bureau sera configurée. L'impression navigateur (`window.print()`) reste en place.
+- ✅ **Impression thermique** : ticket ESC/POS envoyé directement à la validation, et bouton « Imprimer » dans l'aperçu. Trois modes par caisse dans Paramètres > Impression des tickets : navigateur (par défaut, comportement d'avant), imprimante Windows (nom repris de `caisseconfigs.ticketprinter`, le réglage du bureau : EPSON TM-T20II Receipt / 80mm Series Printer), imprimante réseau (port 9100). Accents PC858 en option, tiroir-caisse ouvert sur paiement en espèces, code-barres du ticket et des bons d'achat, coupe du papier. Un échec d'imprimante n'annule jamais la vente : la caisse revient au reçu navigateur. Testé avec une imprimante réseau simulée ; le mode Windows est à valider sur le poste de caisse avec « Imprimer un ticket de test » (pas d'imprimante thermique sur le poste de développement).
 
 ## 6. Phase 4 — Déploiement et exploitation
 

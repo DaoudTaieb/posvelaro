@@ -2,7 +2,8 @@
     Écran de caisse (POS). Fichier d'assemblage : le contenu est réparti dans
       caisse/partials/  en-tête (styles) et écran principal ;
       caisse/modals/    une modale par fichier ;
-      caisse/scripts/   le JavaScript, dans l'ordre d'exécution d'origine.
+      public/js/caisse/ le JavaScript (scripts classiques), dans l'ordre d'exécution d'origine ;
+      caisse/partials/config-js : valeurs serveur lues par ces scripts (objet GP).
     L'ordre des @include est significatif (les scripts utilisent les modales déjà déclarées).
 --}}
 <!DOCTYPE html>
@@ -11,6 +12,8 @@
 <body>
 @include('partials.ui-dialogs')
 @include('caisse.partials.ecran')
+
+@include('caisse.partials.config-js')
 
 @include('caisse.modals.creation-client')
 
@@ -32,7 +35,7 @@
 
 @include('caisse.modals.variantes')
 
-@include('caisse.scripts.caisse')
+@include('caisse.partials.script', ['fichier' => 'caisse'])
 
 @include('caisse.modals.recherche-client')
 
@@ -46,17 +49,17 @@
 
 @include('caisse.modals.consultation-tickets')
 
-@include('caisse.scripts.tickets-paiements')
+@include('caisse.partials.script', ['fichier' => 'tickets-paiements'])
 
 @include('caisse.modals.cheque')
 
-@include('caisse.scripts.cheque')
+@include('caisse.partials.script', ['fichier' => 'cheque'])
 
 @include('caisse.modals.remise-globale')
 
 @include('caisse.modals.paiement-rapide')
 
-@include('caisse.scripts.remise-paiement-rapide')
+@include('caisse.partials.script', ['fichier' => 'remise-paiement-rapide'])
 
 @include('caisse.modals.paiement-multiple')
 
@@ -68,13 +71,13 @@
 
 @include('caisse.modals.coupon')
 
-@include('caisse.scripts.cheques-cadeaux-coupon')
+@include('caisse.partials.script', ['fichier' => 'cheques-cadeaux-coupon'])
 
 @include('caisse.modals.reprise')
 
 @include('caisse.modals.complement-acompte')
 
-@include('caisse.scripts.complement-acompte')
+@include('caisse.partials.script', ['fichier' => 'complement-acompte'])
 
 </body>
 </html>

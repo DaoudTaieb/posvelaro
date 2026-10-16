@@ -1,5 +1,10 @@
-<!-- JAVASCRIPT FOR LOGIC -->
-<script>
+/*
+ * Golden Pos - caisse : caisse
+ * Extrait de resources/views/caisse/scripts/caisse.blade.php (script classique, non module :
+ * fonctions et variables globales partagées avec les autres fichiers et les attributs onclick).
+ * Valeurs serveur (routes, jeton CSRF, client et vendeur par défaut) : objet GP défini par
+ * resources/views/caisse/partials/config-js.blade.php.
+ */
     console.log("=== GOLDEN POS POS SCRIPT START ===");
 
     // Échappe les données (noms clients, articles...) avant insertion via innerHTML
@@ -14,9 +19,9 @@
         formData.append('message', msg);
         if (ctx && ctx.clientid) formData.append('clientid', ctx.clientid);
         if (ctx && ctx.cticketid) formData.append('cticketid', ctx.cticketid);
-        formData.append('_token', '{{ csrf_token() }}');
+        formData.append('_token', GP.csrf);
 
-        fetch("{{ route('vente.caisse.pos.send_sms') }}", {
+        fetch(GP.routes['vente.caisse.pos.send_sms'], {
             method: 'POST',
             body: formData,
             headers: {
@@ -52,11 +57,11 @@
         if (currentRepriseId && !data.reprise_cticketid) {
             data.reprise_cticketid = currentRepriseId;
         }
-        fetch(`{{ route('vente.caisse.store') }}`, {
+        fetch(`${GP.routes['vente.caisse.store']}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                'X-CSRF-TOKEN': GP.csrf
             },
             body: JSON.stringify(data)
         })
@@ -84,7 +89,7 @@
                 // Vider le panier AVANT d'ouvrir le reçu : le ticket est enregistré,
                 // il ne doit plus pouvoir être re-validé même si l'ouverture du reçu échoue.
                 ticketLines = [];
-                currentClientId = {{ $client ? $client->clientid : 1 }};
+                currentClientId = GP.clientParDefautId;
                 document.getElementById('clientName').innerText = 'PASSAGER';
                 document.getElementById('clientSoldeInfo').style.display = 'none';
                 document.getElementById('clientCode').value = '4110001';
@@ -98,7 +103,13 @@
                 
                 renderTable();
 
-                if (res.print_url) {
+                // Impression thermique directe faite par le serveur : pas de fenêtre d'impression.
+                // Mode navigateur, ou échec de l'imprimante : on ouvre le reçu comme avant.
+                const imprimeDirect = res.impression && res.impression.ok;
+                if (res.impression && !res.impression.ok && res.impression.mode !== 'navigateur') {
+                    notifier(res.impression.message + ' Le reçu s\'ouvre dans le navigateur.', 'warning', 8000);
+                }
+                if (res.print_url && !imprimeDirect) {
                     const recu = window.open(res.print_url, '_blank');
                     if (recu) {
                         recu.focus();
@@ -107,7 +118,7 @@
                     }
                 }
                 
-                fetch(`{{ route('vente.caisse.en_attente') }}`)
+                fetch(`${GP.routes['vente.caisse.en_attente']}`)
                     .then(r => r.json())
                     .then(r => { console.log('En attente count:', r.count); })
                     .catch(e => console.error(e));
@@ -158,7 +169,7 @@
         if (e.key === 'Enter' && this.value.trim() !== '') {
             let ref = this.value.trim();
             
-            fetch(`{{ route('vente.caisse.pos.scan_product') }}?code=${encodeURIComponent(ref)}`)
+            fetch(`${GP.routes['vente.caisse.pos.scan_product']}?code=${encodeURIComponent(ref)}`)
                 .then(response => response.json())
                 .then(product => {
                     if (product && product.choisir_variante) {
@@ -274,7 +285,7 @@
             document.getElementById('product-info-name').innerText = `${line.designation || ''}`;
             document.getElementById('product-info-stock').innerText = `Stock ${line.stock || 0}`;
         } else {
-            document.getElementById('display-qte-prix').innerText = '***BIENVENUE CHEZ {{ strtoupper($siteName) }}***';
+            document.getElementById('display-qte-prix').innerText = '***BIENVENUE CHEZ ' + GP.siteNom + '***';
             document.getElementById('display-remise').innerText = '';
             document.getElementById('display-total').innerText = '';
             
@@ -485,7 +496,7 @@
             page: page
         });
 
-        fetch(`{{ route('vente.caisse.pos.search_products') }}?${params.toString()}`)
+        fetch(`${GP.routes['vente.caisse.pos.search_products']}?${params.toString()}`)
             .then(res => res.json())
             .then(response => {
                 const data = response.data || [];
@@ -565,7 +576,7 @@
         const tbody = document.getElementById('variants-tbody');
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">Chargement des variantes...</td></tr>';
         
-        fetch(`{{ route('vente.caisse.pos.variants') }}?produitid=${parentProduct.produitid}`)
+        fetch(`${GP.routes['vente.caisse.pos.variants']}?produitid=${parentProduct.produitid}`)
             .then(res => res.json())
             .then(data => {
                 currentVariants = data;
@@ -634,7 +645,7 @@
     }
 
     // === CLIENT SEARCH ===
-    let currentClientId = {{ $client ? $client->clientid : 1 }};
+    let currentClientId = GP.clientParDefautId;
     let selectedClientTemp = null;
     let currentClientPage = 1;
 
@@ -685,7 +696,7 @@
             if (filters[key]) params.append(key, filters[key]);
         }
 
-        fetch(`{{ route('vente.caisse.pos.search_clients') }}?${params.toString()}`)
+        fetch(`${GP.routes['vente.caisse.pos.search_clients']}?${params.toString()}`)
             .then(r => r.json())
             .then(data => {
                 let tbody = document.getElementById('clientsTbody');
@@ -756,11 +767,11 @@
             return;
         }
 
-        fetch(`{{ route('vente.caisse.pos.store_client') }}`, {
+        fetch(`${GP.routes['vente.caisse.pos.store_client']}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-CSRF-TOKEN': GP.csrf,
                 'Accept': 'application/json'
             },
             body: JSON.stringify({ raison: raison, telephone: tel })
@@ -861,7 +872,7 @@
         
         let formData = new FormData(document.getElementById('createClientForm'));
         
-        fetch("{{ route('vente.caisse.pos.store_client') }}", {
+        fetch(GP.routes['vente.caisse.pos.store_client'], {
             method: 'POST',
             body: formData,
             headers: {
@@ -893,7 +904,7 @@
         document.getElementById('ec_error').style.display = 'none';
 
         // Fetch current client data
-        fetch(`{{ url('vente/caisse/pos/client') }}/${currentClientId}`)
+        fetch(`${GP.urls['vente/caisse/pos/client']}/${currentClientId}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -940,7 +951,7 @@
         
         let formData = new FormData(document.getElementById('editClientForm'));
         
-        fetch(`{{ url('vente/caisse/pos/client') }}/${currentClientId}`, {
+        fetch(`${GP.urls['vente/caisse/pos/client']}/${currentClientId}`, {
             method: 'POST',
             body: formData,
             headers: {
@@ -974,7 +985,7 @@
         document.getElementById('clientHistoryTableBody').innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Chargement...</td></tr>';
         document.getElementById('clientHistoryModal').style.display = 'flex';
 
-        fetch(`{{ url('vente/caisse/pos/client-history') }}/${currentClientId}`)
+        fetch(`${GP.urls['vente/caisse/pos/client-history']}/${currentClientId}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -1026,7 +1037,7 @@
         let tbody = document.getElementById('articleHistoryTableBody');
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">Recherche en cours...</td></tr>';
 
-        fetch(`{{ route('vente.caisse.pos.article_history') }}?q=${encodeURIComponent(q)}`)
+        fetch(`${GP.routes['vente.caisse.pos.article_history']}?q=${encodeURIComponent(q)}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -1069,7 +1080,7 @@
         
         // Auto fill if client is selected
         if (currentClientId) {
-            fetch(`{{ url('vente/caisse/pos/client') }}/${currentClientId}`)
+            fetch(`${GP.urls['vente/caisse/pos/client']}/${currentClientId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success && data.client && data.client.tel) {
@@ -1106,9 +1117,9 @@
         let formData = new FormData();
         formData.append('telephone', tel);
         formData.append('message', msg);
-        formData.append('_token', '{{ csrf_token() }}');
+        formData.append('_token', GP.csrf);
 
-        fetch("{{ route('vente.caisse.pos.send_sms') }}", {
+        fetch(GP.routes['vente.caisse.pos.send_sms'], {
             method: 'POST',
             body: formData,
             headers: {
@@ -1135,11 +1146,35 @@
         });
     }
 
+    let ticketPreviewId = null;
+
+    // Réimpression du ticket affiché : imprimante thermique de la caisse, ou reçu navigateur selon le réglage
+    function reimprimerTicketPreview() {
+        if (!ticketPreviewId) return;
+        fetch(`${GP.routes['vente.caisse.imprimer'].replace(/\/0$/, '')}/${ticketPreviewId}`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': GP.csrf, 'Accept': 'application/json' }
+        })
+            .then(r => r.json())
+            .then(res => {
+                if (res.ok) {
+                    notifier(res.message, 'success');
+                    return;
+                }
+                if (res.mode && res.mode !== 'navigateur') {
+                    notifier(res.message + ' Le reçu s\'ouvre dans le navigateur.', 'warning', 8000);
+                }
+                if (res.print_url) window.open(res.print_url, '_blank');
+            })
+            .catch(() => notifier('Erreur réseau lors de l\'impression.', 'error'));
+    }
+
     function showTicketPreview(ticketId) {
+        ticketPreviewId = ticketId;
         document.getElementById('ticketPreviewContent').innerHTML = '<div style="background: white; padding: 20px; border-radius: 4px;">Chargement du ticket...</div>';
         document.getElementById('ticketPreviewModal').style.display = 'flex';
 
-        fetch(`{{ url('vente/tickets') }}/${ticketId}`, {
+        fetch(`${GP.urls['vente/tickets']}/${ticketId}`, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
             }
@@ -1198,7 +1233,7 @@
         if(couleur) qs.append('couleur', couleur);
         if(taille) qs.append('taille', taille);
         
-        fetch(`{{ route('vente.caisse.pos.advanced_check_stock') }}?` + qs.toString())
+        fetch(`${GP.routes['vente.caisse.pos.advanced_check_stock']}?` + qs.toString())
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -1296,7 +1331,7 @@
         
         let clientName = document.getElementById('displayClientName') ? document.getElementById('displayClientName').textContent : 'PASSAGER';
         let dateStr = new Date().toLocaleString('fr-FR');
-        let vendeur = '{{ $defaultVendeur ? $defaultVendeur->nom . ' ' . $defaultVendeur->prenom : 'Non spécifié' }}';
+        let vendeur = GP.vendeurParDefaut.nom;
         
         let ticketHTML = `
             <html>
@@ -1312,7 +1347,7 @@
                 </style>
             </head>
             <body>
-                <div class="center bold" style="font-size: 16px;">{{ strtoupper($siteName) }}</div>
+                <div class="center bold" style="font-size: 16px;">${escHtml(GP.siteNom)}</div>
                 <div class="center">Ticket Provisoire</div>
                 <div class="line"></div>
                 <div>Date: ${dateStr}</div>
@@ -1380,7 +1415,7 @@
     }
 
     function searchClientById(id) {
-        fetch(`{{ route('vente.caisse.pos.search_clients') }}?q=${encodeURIComponent(id)}`)
+        fetch(`${GP.routes['vente.caisse.pos.search_clients']}?q=${encodeURIComponent(id)}`)
             .then(r => r.json())
             .then(clients => {
                 if (clients.length > 0) {
@@ -1395,7 +1430,7 @@
     }
 
     // === VENDEUR SEARCH ===
-    let currentVendeurId = {{ $defaultVendeur ? $defaultVendeur->employeeid : 'null' }};
+    let currentVendeurId = GP.vendeurParDefaut.id;
     let selectedVendeurTemp = null;
 
     function openVendeurModal() {
@@ -1427,7 +1462,7 @@
     }
 
     function searchVendeurs(q) {
-        fetch(`{{ route('vente.caisse.pos.search_vendeurs') }}?q=${encodeURIComponent(q)}`)
+        fetch(`${GP.routes['vente.caisse.pos.search_vendeurs']}?q=${encodeURIComponent(q)}`)
             .then(r => r.json())
             .then(vendeurs => {
                 let tbody = document.getElementById('vendeursTbody');
@@ -1465,4 +1500,3 @@
         closeVendeurModal();
     }
 
-</script>

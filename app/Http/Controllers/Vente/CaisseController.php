@@ -9,6 +9,7 @@ use App\Support\Droits;
 use App\Exceptions\VenteRefusee;
 use App\Http\Requests\StoreTicketRequest;
 use App\Services\FideliteService;
+use App\Services\ImpressionTicketService;
 use App\Services\JourneeCaisseService;
 use App\Services\NumerotationService;
 use App\Services\ReglementService;
@@ -29,6 +30,7 @@ class CaisseController extends Controller
         private readonly ReglementService $reglementsService,
         private readonly TicketService $tickets,
         private readonly NumerotationService $numerotation,
+        private readonly ImpressionTicketService $impression,
     ) {
     }
 
@@ -311,8 +313,17 @@ class CaisseController extends Controller
             }
 
             DB::commit();
+
+            // Impression thermique directe (après l'enregistrement : un échec d'impression n'annule pas la vente).
+            // Mode navigateur ou échec : la caisse ouvre print_url comme avant.
+            $impression = $enAttente ? null : $this->impression->imprimerTicket(
+                (int) $cticketid,
+                !$remboursement && collect($reglements)->contains(fn ($r) => (int) ($r['modereglementid'] ?? 0) === 1)
+            );
+
             return response()->json([
                 'success' => true,
+                'impression' => $impression,
                 'message' => $enAttente
                     ? 'Ticket mis en attente.'
                     : ($remboursement
@@ -344,6 +355,25 @@ class CaisseController extends Controller
             \Log::error('Erreur Caisse Store: ' . $e->getMessage() . ' - Ligne: ' . $e->getLine());
             return response()->json(['success' => false, 'message' => 'Erreur: ' . $e->getMessage()]);
         }
+    }
+
+    /**
+     * Réimpression d'un ticket validé du site sur l'imprimante thermique de sa caisse.
+     */
+    public function imprimer($id)
+    {
+        $ticket = ctype_digit((string) $id)
+            ? DB::table('ctickets')->where('cticketid', $id)->where('siteid', SiteCourant::id())->where('enattente', false)
+                ->when(Droits::bloque('cons.allticket'), fn ($q) => $q->where('caissierid', auth()->user()->userid))
+                ->first()
+            : null;
+        if (!$ticket) {
+            return response()->json(['ok' => false, 'mode' => null, 'message' => 'Ticket introuvable.'], 404);
+        }
+
+        return response()->json($this->impression->imprimerTicket((int) $ticket->cticketid) + [
+            'print_url' => route('vente.tickets.show', $ticket->cticketid),
+        ]);
     }
 
     /**

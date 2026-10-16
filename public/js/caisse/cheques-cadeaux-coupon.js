@@ -1,4 +1,10 @@
-<script>
+/*
+ * Golden Pos - caisse : cheques-cadeaux-coupon
+ * Extrait de resources/views/caisse/scripts/cheques-cadeaux-coupon.blade.php (script classique, non module :
+ * fonctions et variables globales partagées avec les autres fichiers et les attributs onclick).
+ * Valeurs serveur (routes, jeton CSRF, client et vendeur par défaut) : objet GP défini par
+ * resources/views/caisse/partials/config-js.blade.php.
+ */
     function openChequeCadeauxModal() {
         if (ticketDejaRegle()) return;
         if (ticketLines.length === 0 && !complementMode) {
@@ -212,4 +218,3 @@
         }
         closeCouponModal();
     }
-</script>

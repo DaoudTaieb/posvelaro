@@ -1,4 +1,10 @@
-<script>
+/*
+ * Golden Pos - caisse : tickets-paiements
+ * Extrait de resources/views/caisse/scripts/tickets-paiements.blade.php (script classique, non module :
+ * fonctions et variables globales partagées avec les autres fichiers et les attributs onclick).
+ * Valeurs serveur (routes, jeton CSRF, client et vendeur par défaut) : objet GP défini par
+ * resources/views/caisse/partials/config-js.blade.php.
+ */
     let allConsultationTickets = [];
     
     function openConsultationModal() {
@@ -11,7 +17,7 @@
     }
     
     function fetchConsultationData() {
-        fetch(`{{ route('vente.caisse.journal_data') }}`)
+        fetch(`${GP.routes['vente.caisse.journal_data']}`)
             .then(res => res.json())
             .then(data => {
                 if(data.tickets) {
@@ -405,13 +411,13 @@
     // Bons d'achat fidélité disponibles pour le client du ticket (cliquer pour l'ajouter)
     function baChargerBonsClient() {
         const cont = document.getElementById('baBonsClient');
-        const passagerId = {{ (int) config('pos.client_passager_id') }};
+        const passagerId = GP.clientPassagerId;
         if (!currentClientId || parseInt(currentClientId) === passagerId) {
             cont.innerHTML = '<span style="color:#666;">Sélectionnez un client fidélité pour voir ses bons disponibles, ou scannez le bon.</span>';
             return;
         }
         cont.innerHTML = '<span style="color:#666;">Chargement des bons du client...</span>';
-        fetch(`{{ url('vente/caisse/pos/bons-client') }}/${currentClientId}`)
+        fetch(`${GP.urls['vente/caisse/pos/bons-client']}/${currentClientId}`)
             .then(r => r.json())
             .then(d => {
                 if (!d.success || !d.bons || d.bons.length === 0) {
@@ -448,11 +454,11 @@
             notifier('Ce bon d\'achat est déjà ajouté.', 'warning');
             return;
         }
-        const passagerId = {{ (int) config('pos.client_passager_id') }};
+        const passagerId = GP.clientPassagerId;
         const params = new URLSearchParams({ code: code });
         if (currentClientId && parseInt(currentClientId) !== passagerId) params.append('clientid', currentClientId);
 
-        fetch(`{{ route('vente.caisse.pos.check_bon_achat') }}?${params.toString()}`)
+        fetch(`${GP.routes['vente.caisse.pos.check_bon_achat']}?${params.toString()}`)
             .then(r => r.json())
             .then(d => {
                 document.getElementById('baCodeInput').value = '';
@@ -667,7 +673,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    'X-CSRF-TOKEN': GP.csrf
                 },
                 body: JSON.stringify({ 
                     cticketid: complementTicketId, 
@@ -707,7 +713,7 @@
     }
 
     function openRepriseModal() {
-        fetch(`{{ route('vente.caisse.en_attente') }}`)
+        fetch(`${GP.routes['vente.caisse.en_attente']}`)
             .then(r => r.json())
             .then(res => {
                 if (res.success) {
@@ -749,9 +755,9 @@
             }
         }
 
-        fetch(`{{ url('vente/caisse/reprise') }}/${id}`, {
+        fetch(`${GP.urls['vente/caisse/reprise']}/${id}`, {
             method: 'POST',
-            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+            headers: { 'X-CSRF-TOKEN': GP.csrf, 'Accept': 'application/json' }
         })
             .then(r => r.json())
             .then(res => {
@@ -762,7 +768,7 @@
                     
                     // Récupérer les infos du client si ce n'est pas le passager
                     if (currentClientId && currentClientId != 1) {
-                        fetch(`{{ url('vente/caisse/pos/client') }}/${currentClientId}`)
+                        fetch(`${GP.urls['vente/caisse/pos/client']}/${currentClientId}`)
                             .then(cRes => cRes.json())
                             .then(cData => {
                                 if (cData.success) {
@@ -859,7 +865,7 @@
         if (!num) return;
         
         // Fetch ticket details from backend
-        fetch(`{{ url('/vente/caisse/ticket-details') }}/${encodeURIComponent(num)}?par=numero`)
+        fetch(`${GP.urls['/vente/caisse/ticket-details']}/${encodeURIComponent(num)}?par=numero`)
             .then(r => r.json())
             .then(res => {
                 if (res.success && res.ticket) {
@@ -976,7 +982,7 @@
         let au = document.getElementById('mvtFilterAu').value;
         let clientid = document.getElementById('mvtFilterClient').value;
         
-        fetch(`{{ route('vente.caisse.mouvements') }}?du=${du}&au=${au}&clientid=${clientid}`)
+        fetch(`${GP.routes['vente.caisse.mouvements']}?du=${du}&au=${au}&clientid=${clientid}`)
             .then(r => r.json())
             .then(res => {
                 if (res.success) {
@@ -1066,4 +1072,3 @@
         closeMouvementsModal();
     }
 
-</script>

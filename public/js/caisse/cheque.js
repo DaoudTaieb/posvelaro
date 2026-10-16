@@ -1,4 +1,10 @@
-<script>
+/*
+ * Golden Pos - caisse : cheque
+ * Extrait de resources/views/caisse/scripts/cheque.blade.php (script classique, non module :
+ * fonctions et variables globales partagées avec les autres fichiers et les attributs onclick).
+ * Valeurs serveur (routes, jeton CSRF, client et vendeur par défaut) : objet GP défini par
+ * resources/views/caisse/partials/config-js.blade.php.
+ */
     let chqLines = [];
 
     function openChequeModal() {
@@ -164,4 +170,3 @@
             }
         }
     }
-</script>

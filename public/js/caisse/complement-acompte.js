@@ -1,4 +1,10 @@
-<script>
+/*
+ * Golden Pos - caisse : complement-acompte
+ * Extrait de resources/views/caisse/scripts/complement-acompte.blade.php (script classique, non module :
+ * fonctions et variables globales partagées avec les autres fichiers et les attributs onclick).
+ * Valeurs serveur (routes, jeton CSRF, client et vendeur par défaut) : objet GP défini par
+ * resources/views/caisse/partials/config-js.blade.php.
+ */
     // ===== COMPLEMENT ACOMPTE LOGIC =====
     let pendingComplementAcompte = false;
     let compAcompteTicketsData = [];
@@ -141,7 +147,7 @@
         if (montantCustom > reste) montantCustom = reste;
 
         // Charger les détails du ticket dans le panier
-        fetch(`{{ url('/vente/caisse/ticket-details') }}/${cticketid}`)
+        fetch(`${GP.urls['/vente/caisse/ticket-details']}/${cticketid}`)
             .then(r => r.json())
             .then(res => {
                 if (res.success) {
@@ -257,7 +263,7 @@
         document.getElementById('ticketNumber').value = '';
 
         // Reset le client
-        currentClientId = {{ $client ? $client->clientid : 1 }};
+        currentClientId = GP.clientParDefautId;
         document.getElementById('clientName').innerText = 'PASSAGER';
         document.getElementById('clientSoldeInfo').style.display = 'none';
         document.getElementById('clientCode').value = '4110001';
@@ -301,4 +307,3 @@
             notifier('Erreur réseau.');
         });
     }
-</script>

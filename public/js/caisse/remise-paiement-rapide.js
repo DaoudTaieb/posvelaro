@@ -1,4 +1,10 @@
-<script>
+/*
+ * Golden Pos - caisse : remise-paiement-rapide
+ * Extrait de resources/views/caisse/scripts/remise-paiement-rapide.blade.php (script classique, non module :
+ * fonctions et variables globales partagées avec les autres fichiers et les attributs onclick).
+ * Valeurs serveur (routes, jeton CSRF, client et vendeur par défaut) : objet GP défini par
+ * resources/views/caisse/partials/config-js.blade.php.
+ */
     // GLOBAL DISCOUNT LOGIC
     function openGlobalDiscountModal() {
         if (ticketExistantVerrouille()) return;
@@ -172,4 +178,3 @@
             window.submitTicketToBackend(payload, false);
         }
     }
-</script>

@@ -100,10 +100,14 @@ class PosController extends Controller
             ->where('confirmer', false)
             ->count();
 
+        // Mode d'impression de la caisse de la journée (affiché dans la caisse ; l'impression elle-même est faite par le serveur)
+        $configImpression = app(\App\Services\ImpressionTicketService::class)->configuration((int) $journalCaisse->caisseid);
+        $impression = ['mode' => $configImpression['mode']];
+
         return view('caisse.pos', compact(
-            'client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques', 
-            'defaultVendeur', 'draftId', 'typeChequeCadeaus', 'siteName', 
-            'demandeTransfCount', 'bonTransfCount'
+            'client', 'familles', 'sousFamilles', 'saisons', 'categories', 'marques',
+            'defaultVendeur', 'draftId', 'typeChequeCadeaus', 'siteName',
+            'demandeTransfCount', 'bonTransfCount', 'impression'
         ));
     }
 

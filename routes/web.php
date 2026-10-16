@@ -81,6 +81,9 @@ Route::middleware(['auth'])->group(function () {
     // -- Section PARAMETRES --
     Route::prefix('parametre')->name('parametre.')->middleware('droit:backoffice')->group(function () {
         Route::middleware('droit:config.caisses')->group(function () {
+            Route::get('/impression', [\App\Http\Controllers\Parametre\ImpressionController::class, 'index'])->name('impression.index');
+            Route::put('/impression/{id}', [\App\Http\Controllers\Parametre\ImpressionController::class, 'update'])->whereNumber('id')->name('impression.update');
+            Route::post('/impression/{id}/test', [\App\Http\Controllers\Parametre\ImpressionController::class, 'test'])->whereNumber('id')->middleware('throttle:10,1')->name('impression.test');
             Route::post('/caisse/liberer/{id}', [\App\Http\Controllers\Parametre\CaisseController::class, 'liberer'])->name('caisse.liberer');
             Route::get('/caisse/configuration', [\App\Http\Controllers\Parametre\CaisseController::class, 'index'])->name('caisse.index');
             Route::post('/caisse/configuration', [\App\Http\Controllers\Parametre\CaisseController::class, 'store'])->name('caisse.store');
@@ -146,6 +149,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/caisse/ticket-details/{numero}', [CaisseController::class, 'ticketDetails'])->whereNumber('numero')->name('caisse.ticket_details');
             Route::get('/caisse/mouvements', [CaisseController::class, 'getMouvements'])->name('caisse.mouvements');
             Route::get('/caisse/tickets-reste', [CaisseController::class, 'getTicketsWithReste'])->middleware('droit:comp.acompte')->name('caisse.tickets_reste');
+            Route::post('/caisse/imprimer/{id}', [CaisseController::class, 'imprimer'])->whereNumber('id')->middleware('throttle:30,1')->name('caisse.imprimer');
             Route::post('/caisse/store-complement-acompte', [CaisseController::class, 'storeComplementAcompte'])->middleware('droit:comp.acompte')->name('caisse.store_complement_acompte');
         });
 
