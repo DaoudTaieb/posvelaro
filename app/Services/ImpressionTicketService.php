@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Support\EscPos;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
@@ -35,6 +36,7 @@ class ImpressionTicketService
     ];
 
     private const CLE_CACHE = 'goldenpos.caisseconfigs.';
+    private const CLE_IMPRIMANTES = 'goldenpos.imprimantes_windows';
 
     /** @return array{caisseid: int, mode: string, imprimante: string, reseau: string, colonnes: int, accents: bool, tiroir: bool} */
     public function configuration(int $caisseid): array
@@ -126,6 +128,70 @@ class ImpressionTicketService
         } catch (\Throwable $e) {
             return ['ok' => false, 'mode' => $config['mode'], 'message' => 'Impression impossible : ' . $e->getMessage()];
         }
+    }
+
+    /** Ouverture du tiroir-caisse seule (vérifie le câble RJ11 entre le tiroir et l'imprimante). */
+    public function testerTiroir(int $caisseid): array
+    {
+        $config = $this->configuration($caisseid);
+        if ($config['mode'] === 'navigateur') {
+            return ['ok' => false, 'mode' => 'navigateur', 'message' => 'Le tiroir-caisse est commandé par l\'imprimante : choisissez d\'abord une imprimante Windows ou réseau.'];
+        }
+
+        try {
+            $this->envoyer($config, (new EscPos($config['colonnes'], $config['accents']))->tiroir()->flux());
+            return ['ok' => true, 'mode' => $config['mode'], 'message' => 'Commande d\'ouverture envoyée au tiroir-caisse.'];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'mode' => $config['mode'], 'message' => 'Ouverture impossible : ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Imprimantes installées sur le poste qui fait tourner Golden Pos (mode Windows).
+     * Lecture par PowerShell (environ une seconde) : gardée en cache une minute.
+     *
+     * @return array{disponible: bool, message: ?string, imprimantes: array<int, array{nom: string, pilote: ?string, port: ?string, etat: string, defaut: bool, reseau: bool}>}
+     */
+    public function imprimantesWindows(bool $actualiser = false): array
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return ['disponible' => false, 'message' => 'Le serveur Golden Pos ne tourne pas sous Windows : utilisez une imprimante réseau.', 'imprimantes' => []];
+        }
+        if ($actualiser) {
+            Cache::forget(self::CLE_IMPRIMANTES);
+        }
+
+        return Cache::remember(self::CLE_IMPRIMANTES, 60, function () {
+            try {
+                $resultat = $this->executerPowerShell('liste-imprimantes.ps1', [], 20);
+                if (!$resultat->successful()) {
+                    throw new \RuntimeException($this->messageProcessus($resultat) ?: 'Erreur de PowerShell.');
+                }
+                $liste = json_decode(trim($resultat->output()), true);
+                if (!is_array($liste)) {
+                    throw new \RuntimeException('Réponse illisible.');
+                }
+                // Un seul résultat : PowerShell renvoie un objet au lieu d'une liste
+                if (isset($liste['nom'])) {
+                    $liste = [$liste];
+                }
+                $imprimantes = array_values(array_filter(array_map(fn ($i) => [
+                    'nom' => (string) ($i['nom'] ?? ''),
+                    'pilote' => $i['pilote'] ?? null,
+                    'port' => $i['port'] ?? null,
+                    'etat' => (string) ($i['etat'] ?? 'inconnu'),
+                    'defaut' => (bool) ($i['defaut'] ?? false),
+                    'reseau' => (bool) ($i['reseau'] ?? false),
+                ], $liste), fn ($i) => $i['nom'] !== ''));
+                usort($imprimantes, fn ($a, $b) => strcasecmp($a['nom'], $b['nom']));
+
+                return ['disponible' => true, 'message' => null, 'imprimantes' => $imprimantes];
+            } catch (\Throwable $e) {
+                Log::warning('Liste des imprimantes Windows : ' . $e->getMessage());
+
+                return ['disponible' => false, 'message' => 'Liste des imprimantes indisponible : ' . mb_strimwidth($e->getMessage(), 0, 200, '…'), 'imprimantes' => []];
+            }
+        });
     }
 
     /** Flux ESC/POS complet d'un ticket (même contenu que le reçu navigateur vente.tickets.show). */
@@ -273,19 +339,56 @@ class ImpressionTicketService
         $fichier = tempnam(sys_get_temp_dir(), 'gpticket');
         file_put_contents($fichier, $flux);
         try {
-            $resultat = Process::timeout(30)->run([
-                'powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-                '-File', resource_path('scripts/impression-brute.ps1'),
-                '-Imprimante', $imprimante,
-                '-Fichier', $fichier,
-            ]);
+            $resultat = $this->executerPowerShell('impression-brute.ps1', ['-Imprimante', $imprimante, '-Fichier', $fichier], 30);
             if (!$resultat->successful()) {
-                $message = trim($resultat->errorOutput()) ?: trim($resultat->output());
+                $message = $this->messageProcessus($resultat);
                 throw new \RuntimeException($message !== '' ? mb_strimwidth($message, 0, 300, '…') : 'Erreur du spouleur Windows.');
             }
         } finally {
             @unlink($fichier);
         }
+    }
+
+    /**
+     * Lance un script PowerShell de resources/scripts.
+     *
+     * Dans une requête web, Symfony Process ne transmet au processus enfant que les variables
+     * d'environnement présentes aussi dans $_SERVER : PowerShell démarre alors sans SystemRoot et
+     * échoue (« Erreur Windows PowerShell interne… 8009001d »). Les variables Windows nécessaires
+     * sont donc transmises explicitement, et PowerShell est appelé par son chemin complet.
+     */
+    private function executerPowerShell(string $script, array $arguments, int $timeout): \Illuminate\Contracts\Process\ProcessResult
+    {
+        $environnement = [];
+        foreach (['SystemRoot', 'windir', 'SystemDrive', 'ComSpec', 'PATH', 'PATHEXT', 'TEMP', 'TMP',
+                  'USERPROFILE', 'USERNAME', 'USERDOMAIN', 'COMPUTERNAME', 'APPDATA', 'LOCALAPPDATA',
+                  'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)', 'CommonProgramFiles', 'PSModulePath',
+                  'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'OS'] as $nom) {
+            $valeur = getenv($nom);
+            if ($valeur !== false && $valeur !== '') {
+                $environnement[$nom] = $valeur;
+            }
+        }
+        $systemRoot = $environnement['SystemRoot'] ?? $environnement['windir'] ?? 'C:\\Windows';
+        $environnement['SystemRoot'] ??= $systemRoot;
+        $powershell = $systemRoot . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+
+        return Process::timeout($timeout)->env($environnement)->run(array_merge([
+            is_file($powershell) ? $powershell : 'powershell',
+            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+            '-File', resource_path('scripts/' . $script),
+        ], $arguments));
+    }
+
+    /** Message d'erreur d'un processus, remis en UTF-8 (PowerShell écrit ses propres erreurs en page de code OEM 850). */
+    private function messageProcessus(\Illuminate\Contracts\Process\ProcessResult $resultat): string
+    {
+        $message = trim($resultat->errorOutput()) ?: trim($resultat->output());
+        if ($message !== '' && !mb_check_encoding($message, 'UTF-8')) {
+            $message = mb_convert_encoding($message, 'UTF-8', 'CP850');
+        }
+
+        return $message;
     }
 
     private function ecrire(int $caisseid, string $libelle, string $valeur, ?string $caption = null, ?int $type = null): void

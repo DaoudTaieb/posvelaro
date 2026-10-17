@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 /**
  * Vérification complète du module Paramètres (8 écrans) sur la base velaro :
- * Général, Contrôle des données, Caisse, Impression des tickets, Gestion des utilisateurs,
+ * Général, Contrôle des données, Caisse, Imprimantes et douchettes, Gestion des utilisateurs,
  * Gestion des droits, Gestion des vendeurs, Libération de caisse.
  * Toutes les écritures sont annulées en fin de test (DatabaseTransactions).
  */
@@ -51,7 +51,7 @@ class ParametresVerificationTest extends TestCase
             'parametre.configuration.general' => 'Configuration Générale',
             'parametre.controle.index' => 'Contrôle des données',
             'parametre.caisse.index' => 'Caisse',
-            'parametre.impression.index' => 'Impression des tickets',
+            'parametre.impression.index' => 'Imprimantes et douchettes',
             'parametre.utilisateur.index' => 'Vendeur associé',
             'parametre.droit.index' => 'Permissions',
             'parametre.vendeur.index' => 'Vendeur',
@@ -61,7 +61,7 @@ class ParametresVerificationTest extends TestCase
         }
         // Le menu affiche bien les 8 entrées
         $menu = $this->get(route('parametre.configuration.general'))->getContent();
-        foreach (['General', 'Contrôle des données', 'Impression des tickets', 'Gestion des utilisateur', 'Gestion des Droits', 'Gestion des Vendeurs', 'Libération de caisse'] as $entree) {
+        foreach (['General', 'Contrôle des données', 'Imprimantes et douchettes', 'Gestion des utilisateur', 'Gestion des Droits', 'Gestion des Vendeurs', 'Libération de caisse'] as $entree) {
             $this->assertStringContainsString($entree, $menu);
         }
     }

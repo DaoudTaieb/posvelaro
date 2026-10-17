@@ -1100,7 +1100,7 @@
                     @peut('config')<li><a href="{{ route('parametre.configuration.general') }}" class="menu-item {{ request()->routeIs('parametre.configuration.general') ? 'active' : '' }}">General</a></li>@endpeut
                     @peut('config')<li><a href="{{ route('parametre.controle.index') }}" class="menu-item {{ request()->routeIs('parametre.controle.*') ? 'active' : '' }}">Contrôle des données</a></li>@endpeut
                     @peut('config.caisses')<li><a href="{{ route('parametre.caisse.index') }}" class="menu-item {{ request()->routeIs('parametre.caisse.index') ? 'active' : '' }}">Caisse</a></li>@endpeut
-                    @peut('config.caisses')<li><a href="{{ route('parametre.impression.index') }}" class="menu-item {{ request()->routeIs('parametre.impression.*') ? 'active' : '' }}">Impression des tickets</a></li>@endpeut
+                    @peut('config.caisses')<li><a href="{{ route('parametre.impression.index') }}" class="menu-item {{ request()->routeIs('parametre.impression.*') ? 'active' : '' }}">Imprimantes et douchettes</a></li>@endpeut
                     @peut('gestion.users')<li><a href="{{ route('parametre.utilisateur.index') }}" class="menu-item {{ request()->routeIs('parametre.utilisateur.*') ? 'active' : '' }}">Gestion des utilisateur</a></li>@endpeut
                     @peut('gestion.droits')<li><a href="{{ route('parametre.droit.index') }}" class="menu-item {{ request()->routeIs('parametre.droit.*') ? 'active' : '' }}">Gestion des Droits</a></li>@endpeut
                     @peut('gestion.vendeur')<li><a href="{{ route('parametre.vendeur.index') }}" class="menu-item {{ request()->routeIs('parametre.vendeur.*') ? 'active' : '' }}">Gestion des Vendeurs</a></li>@endpeut

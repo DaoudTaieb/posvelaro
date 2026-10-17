@@ -174,8 +174,8 @@ class ImpressionTicketTest extends TestCase
         $this->postJson(route('vente.caisse.imprimer', $ticket->cticketid))->assertJson(['ok' => true]);
         $this->assertStringContainsString('TICKET No ' . $ticket->cticketnumero, $this->recu());
 
-        // Écran Paramètres > Impression des tickets, enregistrement et ticket de test
-        $this->get(route('parametre.impression.index'))->assertOk()->assertSee('Impression des tickets');
+        // Écran Paramètres > Imprimantes et douchettes, enregistrement et ticket de test
+        $this->get(route('parametre.impression.index'))->assertOk()->assertSee('Imprimantes et douchettes');
         $adresse = stream_socket_get_name($this->serveur, false);
         $this->put(route('parametre.impression.update', $this->journal->caisseid), ['mode' => 'reseau', 'reseau' => $adresse, 'colonnes' => 42])
             ->assertRedirect(route('parametre.impression.index'));

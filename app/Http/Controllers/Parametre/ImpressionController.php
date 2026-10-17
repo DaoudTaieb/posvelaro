@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
- * Paramètres > Impression des tickets : imprimante thermique de chaque caisse du site.
+ * Paramètres > Imprimantes et douchettes : imprimante thermique et tiroir-caisse de chaque caisse
+ * du site, liste des imprimantes Windows du poste, test de la douchette (lecteur de codes-barres).
  */
 class ImpressionController extends Controller
 {
@@ -62,6 +63,43 @@ class ImpressionController extends Controller
         $resultat = $this->impression->imprimerTest($this->caisseDuSite($id));
 
         return redirect()->route('parametre.impression.index')->with($resultat['ok'] ? 'success' : 'error', $resultat['message']);
+    }
+
+    public function tiroir($id)
+    {
+        $resultat = $this->impression->testerTiroir($this->caisseDuSite($id));
+
+        return redirect()->route('parametre.impression.index')->with($resultat['ok'] ? 'success' : 'error', $resultat['message']);
+    }
+
+    /** Imprimantes installées sur le poste serveur (chargées après l'affichage de la page). */
+    public function imprimantes(Request $request)
+    {
+        return response()->json($this->impression->imprimantesWindows($request->boolean('actualiser')));
+    }
+
+    /** Test de la douchette : ce que la caisse ferait du code lu. */
+    public function douchette(Request $request, \App\Services\DouchetteService $douchette)
+    {
+        $recu = \App\Support\CodeBarre::nettoyer($request->input('code', ''));
+        if ($recu === '' || mb_strlen($recu) > 64) {
+            return response()->json(['type' => null, 'code' => $recu, 'message' => 'Code vide ou trop long.']);
+        }
+        $resultat = $douchette->identifier($recu, $this->userSiteId());
+
+        // Réponse réduite à ce que la page affiche
+        return response()->json([
+            'type' => $resultat['type'],
+            'code' => $resultat['code'],
+            'corrige' => $resultat['corrige'] ?? false,
+            'qwerty' => \App\Support\CodeBarre::semblePermute($recu),
+            'libelle' => match ($resultat['type']) {
+                'produit' => trim(($resultat['produit']->reference ?? '') . ' ' . ($resultat['produit']->produitlibelle ?? '') . ' ' . ($resultat['produit']->taillelibelle ?? '') . ' ' . ($resultat['produit']->couleurlibelle ?? '')),
+                'client' => trim(($resultat['client']->nom ?? '') . ' ' . ($resultat['client']->prenom ?? '')),
+                'bon' => $resultat['bon']['numero'] . ' : ' . number_format($resultat['bon']['montant'], 3, '.', '') . ' DT',
+                default => $resultat['message'] ?? 'Code inconnu',
+            },
+        ]);
     }
 
     private function caisseDuSite($id): int

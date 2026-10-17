@@ -12,6 +12,7 @@ class PosController extends Controller
     public function __construct(
         private readonly FideliteService $fidelite,
         private readonly SmsService $sms,
+        private readonly \App\Services\DouchetteService $douchette,
     ) {
     }
 
@@ -29,15 +30,7 @@ class PosController extends Controller
      */
     private function enrichirClient(object $client): object
     {
-        $etat = $this->fidelite->etat($client);
-        $client->loyalty_tier = $etat['palier'];
-        $client->fidelite_ventes = $etat['ventes'];
-        $client->fidelite_expiree = $etat['expiree'];
-        $client->num_fidelite = $client->barcode ?? null; // n° de carte = colonne barcode (partagée avec le bureau)
-        $client->soldefidelite = $etat['bons_disponibles'];
-        $client->bons_disponibles = $etat['eligible'] ? $this->fidelite->bonsDisponibles((int) $client->clientid)->values() : [];
-
-        return $client;
+        return $this->douchette->enrichirClient($client);
     }
 
     public function index()
@@ -195,61 +188,31 @@ class PosController extends Controller
      */
     public function scanProduct(Request $request)
     {
-        $siteid = \App\Support\SiteCourant::id();
-        $code = $request->input('code', '');
-
-        if (empty($code)) {
+        $code = \App\Support\CodeBarre::nettoyer($request->input('code', ''));
+        if ($code === '') {
             return response()->json(null);
         }
 
-        // Chercher par barcode2, produitcode, ou reference (correspondance exacte)
-        $product = DB::table('produit2s')
-            ->join('produits', 'produits.produitid', '=', 'produit2s.produitid')
-            ->leftJoin('couleurs', 'produit2s.couleurid', '=', 'couleurs.couleurid')
-            ->leftJoin('tailles', 'produit2s.tailleid', '=', 'tailles.tailleid')
-            ->leftJoin('sousfamilles', 'produits.sousfamilleid', '=', 'sousfamilles.sousfamilleid')
-            ->leftJoin('vproduit2stocks', function($join) use ($siteid) {
-                $join->on('vproduit2stocks.produit2id', '=', 'produit2s.produit2id')
-                     ->where('vproduit2stocks.siteid', '=', $siteid);
-            })
-            ->where(function($q) use ($code) {
-                $q->where('produits.barcode2', $code)
-                  ->orWhere('produits.produitcode', $code)
-                  ->orWhere('produits.reference', $code)
-                  ->orWhere('produit2s.barcode2', $code)
-                  ->orWhere('produit2s.produit2code', $code);
-            })
-            ->select(
-                'produit2s.produit2id',
-                'produits.produitid',
-                'produits.reference',
-                'produits.produitcode',
-                'produits.produitlibelle',
-                'produits.familleid',
-                'couleurs.couleurlibelle as couleur',
-                'tailles.taillelibelle as taille',
-                'couleurs.couleurlibelle',
-                'tailles.taillelibelle',
-                'produits.ttc_vente',
-                DB::raw('COALESCE(vproduit2stocks.qtestock, 0) as total_stock'),
-                'sousfamilles.is_loyalty_enabled'
-            )
-            // Variante exacte et nombre de variantes lus dans la même requête (un seul aller-retour par scan)
-            ->selectRaw('COALESCE(produit2s.barcode2 = ? OR produit2s.produit2code = ?, false) AS gp_variante_exacte', [$code, $code])
-            ->selectRaw('(SELECT count(*) FROM produit2s v WHERE v.produitid = produits.produitid) AS gp_nb_variantes')
-            ->orderByRaw('CASE WHEN produit2s.barcode2 = ? OR produit2s.produit2code = ? THEN 0 ELSE 1 END', [$code, $code])
-            ->first();
+        return response()->json($this->douchette->produit($code, \App\Support\SiteCourant::id()));
+    }
 
-        // Code commun à toutes les variantes (référence / code article) : laisser le caissier choisir
-        if ($product) {
-            if ($product->produit2id && !$product->gp_variante_exacte && (int) $product->gp_nb_variantes > 1) {
-                $product->choisir_variante = true;
-            }
-            unset($product->gp_variante_exacte, $product->gp_nb_variantes);
+    /**
+     * Douchette : un code lu est un article, une carte fidélité ou un bon d'achat.
+     *
+     * Le code reçu est essayé en premier, puis ses relectures QWERTY (douchette réglée en clavier
+     * américain sur un poste AZERTY : « &é"'( » au lieu de « 12345 »). Réponse :
+     * { type: produit|client|bon|null, code: code reconnu, corrige: bool, produit|client|bon }.
+     */
+    public function scanner(Request $request)
+    {
+        $recu = \App\Support\CodeBarre::nettoyer($request->input('code', ''));
+        if ($recu === '' || mb_strlen($recu) > 64) {
+            return response()->json(['type' => null, 'code' => $recu, 'message' => 'Code vide ou trop long.']);
         }
 
-        return response()->json($product);
+        return response()->json($this->douchette->identifier($recu, \App\Support\SiteCourant::id()));
     }
+
     public function getProductVariants(Request $request)
     {
         $siteid = \App\Support\SiteCourant::id();

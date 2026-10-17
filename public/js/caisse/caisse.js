@@ -185,30 +185,127 @@
     let currentVariants = []; // Store variants to allow filtering
     let currentClientLoyaltyTier = 0;
 
-    // Simulate adding an item when pressing enter on the ref input
-    document.getElementById('scanInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value.trim() !== '') {
-            let ref = this.value.trim();
-            
-            fetch(`${GP.routes['vente.caisse.pos.scan_product']}?code=${encodeURIComponent(ref)}`)
-                .then(response => response.json())
-                .then(product => {
-                    if (product && product.choisir_variante) {
+    // ===================== DOUCHETTE (lecteur de codes-barres) =====================
+    // La douchette se comporte comme un clavier : elle tape le code puis Entrée (ou Tab).
+    // - Dans le champ Réf : Entrée ou Tab envoie le code.
+    // - Hors de tout champ (focus perdu après un clic) : une frappe très rapide terminée par Entrée/Tab
+    //   est reconnue comme une lecture de douchette et traitée comme si elle était dans le champ Réf.
+    // Le serveur reconnaît l'article, la carte fidélité ou le bon d'achat, et corrige un code tapé en
+    // QWERTY sur un poste AZERTY (« &é"'( » => « 12345 »).
+
+    // Bip court (succès) ou double bip grave (erreur) : le caissier n'a pas besoin de regarder l'écran
+    let gpAudio = null;
+    function bipDouchette(ok) {
+        try {
+            gpAudio = gpAudio || new (window.AudioContext || window.webkitAudioContext)();
+            const sons = ok ? [[1800, 0, 0.07]] : [[300, 0, 0.12], [300, 0.18, 0.12]];
+            sons.forEach(([frequence, debut, duree]) => {
+                const osc = gpAudio.createOscillator();
+                const gain = gpAudio.createGain();
+                osc.frequency.value = frequence;
+                gain.gain.value = 0.08;
+                osc.connect(gain).connect(gpAudio.destination);
+                osc.start(gpAudio.currentTime + debut);
+                osc.stop(gpAudio.currentTime + debut + duree);
+            });
+        } catch (e) { /* pas de son disponible : sans conséquence */ }
+    }
+
+    let scanEnCours = false;
+    function traiterScan(codeLu) {
+        const code = String(codeLu || '').trim();
+        const champ = document.getElementById('scanInput');
+        if (code === '' || scanEnCours) return;
+        scanEnCours = true;
+
+        fetch(`${GP.routes['vente.caisse.pos.scanner']}?code=${encodeURIComponent(code)}`, { headers: { 'Accept': 'application/json' } })
+            .then(response => response.json())
+            .then(r => {
+                champ.value = '';
+                if (r.corrige) {
+                    notifier(`Code lu « ${code} » corrigé en « ${r.code} » : la douchette est réglée en clavier QWERTY (voir Paramètres > Imprimantes et douchettes).`, 'info', 6000);
+                }
+                if (r.type === 'produit') {
+                    bipDouchette(true);
+                    if (r.produit.choisir_variante) {
                         // Code commun à plusieurs tailles/couleurs : choisir la variante
-                        openVariantsModal(product);
-                    } else if(product) {
-                        addProductToTicket(product);
+                        openVariantsModal(r.produit);
                     } else {
-                        notifier('Produit non trouvé');
+                        addProductToTicket(r.produit);
                     }
-                    this.value = '';
-                })
-                .catch(error => {
-                    console.error('Erreur:', error);
-                    notifier('Erreur lors de la recherche du produit');
-                });
+                } else if (r.type === 'client') {
+                    bipDouchette(true);
+                    selectClient(r.client);
+                    notifier(`Carte fidélité : ${(r.client.nom || '') + ' ' + (r.client.prenom || '')}`.trim(), 'success', 3000);
+                } else if (r.type === 'bon') {
+                    bipDouchette(r.bon.utilisable);
+                    notifier(r.bon.utilisable
+                        ? `Bon d'achat ${r.bon.numero} (${parseFloat(r.bon.montant).toFixed(3)} DT) : utilisez-le au moment du paiement (règlement « Bon d'achat »).`
+                        : `Le bon d'achat ${r.bon.numero} n'est plus utilisable (déjà utilisé, annulé ou expiré).`, r.bon.utilisable ? 'info' : 'warning', 7000);
+                } else {
+                    bipDouchette(false);
+                    notifier(r.message || 'Produit non trouvé', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                bipDouchette(false);
+                notifier('Erreur lors de la recherche du produit', 'error');
+            })
+            .finally(() => {
+                scanEnCours = false;
+                champ.focus();
+            });
+    }
+
+    // Champ Réf : Entrée ou Tab (suffixe de certaines douchettes) valide la saisie
+    document.getElementById('scanInput').addEventListener('keydown', function(e) {
+        if ((e.key === 'Enter' || e.key === 'Tab') && this.value.trim() !== '') {
+            e.preventDefault();
+            traiterScan(this.value);
         }
     });
+
+    // Lecture hors champ : tampon des frappes rapides (< 50 ms entre deux touches = douchette)
+    (function () {
+        let tampon = '';
+        let derniereFrappe = 0;
+        const DELAI_MAX_MS = 50;
+
+        function fenetreOuverte() {
+            return Array.from(document.querySelectorAll('.modal-overlay, [id$="Modal"]'))
+                .some(m => getComputedStyle(m).display !== 'none');
+        }
+
+        document.addEventListener('keydown', function (e) {
+            const cible = e.target;
+            const dansUnChamp = cible && (cible.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(cible.tagName));
+            if (dansUnChamp || e.ctrlKey || e.altKey || e.metaKey) {
+                tampon = '';
+                return;
+            }
+
+            const maintenant = performance.now();
+            if (maintenant - derniereFrappe > DELAI_MAX_MS) {
+                tampon = '';
+            }
+            derniereFrappe = maintenant;
+
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                if (tampon.length >= 3 && !fenetreOuverte()) {
+                    e.preventDefault();
+                    const code = tampon;
+                    tampon = '';
+                    traiterScan(code);
+                }
+                tampon = '';
+                return;
+            }
+            if (e.key.length === 1) {
+                tampon += e.key;
+            }
+        }, true);
+    })();
 
     let isRetourMode = false;
 

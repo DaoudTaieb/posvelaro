@@ -56,7 +56,14 @@ colonne existante `clients.barcode`.
   Après modification d'un script : `node --check public/js/caisse/<fichier>.js`.
 - Impression : `ImpressionTicketService` et `App\Support\EscPos` ; réglages par caisse dans
   `caisseconfigs` (`ticketprinter` du bureau, lignes `goldenpos_*`) ; envoi Windows par
-  `resources/scripts/impression-brute.ps1` (spouleur, RAW) ou réseau (port 9100).
+  `resources/scripts/impression-brute.ps1` (spouleur, RAW, pilote compilé une fois dans le dossier
+  temporaire) ou réseau (port 9100). Les scripts PowerShell passent par `executerPowerShell()` : dans
+  une requête web, Symfony Process ne transmet pas `SystemRoot` et PowerShell échoue sans lui.
+  Imprimantes du poste : `liste-imprimantes.ps1` (page Paramètres > Imprimantes et douchettes).
+- Douchette : `DouchetteService::identifier()` (article, carte fidélité `clients.barcode`, bon d'achat
+  préfixé) essaie le code reçu puis ses relectures QWERTY (`App\Support\CodeBarre::variantes()`,
+  douchette réglée en clavier américain sur un poste AZERTY). Caisse : `traiterScan()` dans
+  `caisse.js`, lecture aussi hors du champ Réf (frappes à moins de 50 ms suivies d'Entrée ou Tab).
 
 ## Performance
 

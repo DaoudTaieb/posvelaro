@@ -6,7 +6,7 @@
     $routesCaisse = [
         'vente.caisse.store', 'vente.caisse.en_attente', 'vente.caisse.journal_data', 'vente.caisse.mouvements',
         'vente.caisse.pos.advanced_check_stock', 'vente.caisse.pos.article_history', 'vente.caisse.pos.check_bon_achat',
-        'vente.caisse.pos.scan_product', 'vente.caisse.pos.search_clients', 'vente.caisse.pos.search_products',
+        'vente.caisse.pos.scan_product', 'vente.caisse.pos.scanner', 'vente.caisse.pos.search_clients', 'vente.caisse.pos.search_products',
         'vente.caisse.pos.search_vendeurs', 'vente.caisse.pos.send_sms', 'vente.caisse.pos.store_client',
         'vente.caisse.pos.variants',
     ];

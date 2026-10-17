@@ -1,4 +1,4 @@
-<#
+﻿<#
     Golden Pos - envoi d'un fichier ESC/POS brut (RAW) à une imprimante Windows, par son nom.
     Utilise directement le spouleur (winspool.drv) : aucun partage d'imprimante n'est nécessaire.
 
@@ -11,8 +11,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Sorties lues par Golden Pos (PHP) : UTF-8, pour des messages avec accents lisibles
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Add-Type -TypeDefinition @"
+$source = @"
 using System;
 using System.Runtime.InteropServices;
 
@@ -70,10 +72,35 @@ public static class GoldenPosImpressionBrute
 }
 "@
 
+# Le pilote d'envoi est compilé une seule fois (environ 250 ms) puis réutilisé depuis le dossier
+# temporaire : chaque ticket ne paie plus que le démarrage de PowerShell.
+# Changer le numéro de version du fichier si le code C# ci-dessus est modifié.
+function Initialiser-PiloteImpression([string]$code) {
+    $dossier = Join-Path ([System.IO.Path]::GetTempPath()) 'GoldenPos'
+    $dll = Join-Path $dossier 'GoldenPosImpressionBrute-v1.dll'
+    try {
+        if (-not (Test-Path -LiteralPath $dll)) {
+            New-Item -ItemType Directory -Force -Path $dossier | Out-Null
+            $temporaire = Join-Path $dossier ('compilation-' + [guid]::NewGuid().ToString('N') + '.dll')
+            Add-Type -TypeDefinition $code -OutputAssembly $temporaire -OutputType Library
+            try { Move-Item -LiteralPath $temporaire -Destination $dll -ErrorAction Stop }
+            catch { Remove-Item -LiteralPath $temporaire -ErrorAction SilentlyContinue }
+        }
+        Add-Type -LiteralPath $dll
+    } catch {
+        # Dossier temporaire inaccessible ou fichier verrouillé : compilation en mémoire, comme avant
+        if (-not ('GoldenPosImpressionBrute' -as [type])) { Add-Type -TypeDefinition $code }
+    }
+}
+
 try {
+    Initialiser-PiloteImpression $source
     [GoldenPosImpressionBrute]::Envoyer($Imprimante, [System.IO.File]::ReadAllBytes($Fichier))
     exit 0
 } catch {
-    [Console]::Error.WriteLine($_.Exception.Message)
+    # Message utile seulement (sans l'enveloppe « Exception lors de l'appel de Envoyer… » de PowerShell)
+    $erreur = $_.Exception
+    while ($erreur.InnerException) { $erreur = $erreur.InnerException }
+    [Console]::Error.WriteLine($erreur.Message)
     exit 1
 }

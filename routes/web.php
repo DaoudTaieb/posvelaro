@@ -84,6 +84,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/impression', [\App\Http\Controllers\Parametre\ImpressionController::class, 'index'])->name('impression.index');
             Route::put('/impression/{id}', [\App\Http\Controllers\Parametre\ImpressionController::class, 'update'])->whereNumber('id')->name('impression.update');
             Route::post('/impression/{id}/test', [\App\Http\Controllers\Parametre\ImpressionController::class, 'test'])->whereNumber('id')->middleware('throttle:10,1')->name('impression.test');
+            Route::post('/impression/{id}/tiroir', [\App\Http\Controllers\Parametre\ImpressionController::class, 'tiroir'])->whereNumber('id')->middleware('throttle:10,1')->name('impression.tiroir');
+            Route::get('/impression/imprimantes', [\App\Http\Controllers\Parametre\ImpressionController::class, 'imprimantes'])->middleware('throttle:20,1')->name('impression.imprimantes');
+            Route::get('/impression/douchette', [\App\Http\Controllers\Parametre\ImpressionController::class, 'douchette'])->middleware('throttle:60,1')->name('impression.douchette');
             Route::post('/caisse/liberer/{id}', [\App\Http\Controllers\Parametre\CaisseController::class, 'liberer'])->name('caisse.liberer');
             Route::get('/caisse/configuration', [\App\Http\Controllers\Parametre\CaisseController::class, 'index'])->name('caisse.index');
             Route::post('/caisse/configuration', [\App\Http\Controllers\Parametre\CaisseController::class, 'store'])->name('caisse.store');
@@ -128,6 +131,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/caisse/pos', [\App\Http\Controllers\PosController::class, 'index'])->name('caisse.pos');
             Route::get('/caisse/pos/search-products', [\App\Http\Controllers\PosController::class, 'searchProducts'])->name('caisse.pos.search_products');
             Route::get('/caisse/pos/scan-product', [\App\Http\Controllers\PosController::class, 'scanProduct'])->name('caisse.pos.scan_product');
+            Route::get('/caisse/pos/scanner', [\App\Http\Controllers\PosController::class, 'scanner'])->name('caisse.pos.scanner');
             Route::get('/caisse/pos/variants', [\App\Http\Controllers\PosController::class, 'getProductVariants'])->name('caisse.pos.variants');
             Route::get('/caisse/pos/search-clients', [\App\Http\Controllers\PosController::class, 'searchClients'])->name('caisse.pos.search_clients');
             Route::post('/caisse/pos/store-client', [\App\Http\Controllers\PosController::class, 'storeClient'])->middleware('droit:aj.client')->name('caisse.pos.store_client');
